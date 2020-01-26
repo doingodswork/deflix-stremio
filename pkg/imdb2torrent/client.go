@@ -35,6 +35,8 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 		log.Println("No torrents found on YTS:", err)
 	} else if len(results) == 0 {
 		log.Println("No torrents found on YTS")
+	} else {
+		c.cache.set(imdbID, results)
 	}
 
 	return results, err
