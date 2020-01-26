@@ -83,36 +83,50 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 			return
 		}
 
+		potentialStreams := []stremio.StreamItem{}
 		// First check our catalog streams, because we prepared them
-		stream, ok := catalogStreams[requestedID]
-		if !ok {
+		if stream, ok := catalogStreams[requestedID]; ok {
+			potentialStreams = append(potentialStreams, stream)
+		} else {
 			// Otherwise search for magnet URL on torrent sites
-			res, err := searchClient.FindMagnet(requestedID)
+			results, err := searchClient.FindMagnets(requestedID)
 			if err != nil {
 				log.Println("Magnet not found:", err)
 				w.WriteHeader(http.StatusNotFound)
 				return
+			} else if len(results) == 0 {
+				log.Println("No magnets found")
+				w.WriteHeader(http.StatusNotFound)
+				return
 			}
-			stream = stremio.StreamItem{
-				Title: res.Name,
-				URL:   res.MagnetURL,
+			for _, result := range results {
+				stream = stremio.StreamItem{
+					// Stremio docs recommend to use the stream quality as title.
+					// See https://github.com/Stremio/stremio-addon-sdk/blob/ddaa3b80def8a44e553349734dd02ec9c3fea52c/docs/api/responses/stream.md#additional-properties-to-provide-information--behaviour-flags
+					Title: result.Quality,
+					URL:   result.MagnetURL,
+				}
+				potentialStreams = append(potentialStreams, stream)
 			}
 		}
 
 		// Turn magnet URL into debrid stream URL
-		streamURL, err := conversionClient.GetStreamURL(stream.URL, apiToken)
-		if err != nil {
-			log.Println("Couldn't get stream URL:", err)
-			w.WriteHeader(http.StatusNotFound)
-			return
+		actualStreams := []stremio.StreamItem{}
+		for _, stream := range potentialStreams {
+			streamURL, err := conversionClient.GetStreamURL(stream.URL, apiToken)
+			if err != nil {
+				log.Println("Couldn't get stream URL:", err)
+			} else {
+				stream.URL = streamURL
+				actualStreams = append(actualStreams, stream)
+			}
 		}
-		stream.URL = streamURL
 
-		streamJSON, _ := json.Marshal(stream)
-		log.Printf(`Responding with: {"streams":[`+"%s]}\n", streamJSON)
+		streamJSON, _ := json.Marshal(actualStreams)
+		log.Printf(`Responding with: {"streams":`+"%s}\n", streamJSON)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"streams": [`))
+		w.Write([]byte(`{"streams": `))
 		w.Write(streamJSON)
-		w.Write([]byte(`]}`))
+		w.Write([]byte(`}`))
 	}
 }
