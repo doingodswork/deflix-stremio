@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/mux"
 
@@ -110,15 +111,36 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 			}
 		}
 
-		// Turn magnet URL into debrid stream URL
+		// Filter out the ones that are not available, and also only keep ONE 720p and ONE 1080p stream.
+		// The streams should already be roughtly ordered by the quality of their source (e.g. YTS on top), so we can skip as soon as we have one of each.
+		found720p := false
+		found1080p := false
 		actualStreams := []stremio.StreamItem{}
 		for _, stream := range potentialStreams {
+			// Skip if we already have the quality
+			if (found720p && strings.Contains(stream.Title, "720p")) ||
+				found1080p && strings.Contains(stream.Title, "1080p") {
+				continue
+			}
+
+			availableMagnets := conversionClient.CheckInstantAvailability(apiToken, stream.URL)
+			if len(availableMagnets) == 0 {
+				log.Println("Torrent not instantly available on real-debrid.com")
+				// TODO: queue for download on real-debrid, or log somewhere for an asynchronous process to go through them and queue them?
+				continue
+			}
+
 			streamURL, err := conversionClient.GetStreamURL(stream.URL, apiToken)
 			if err != nil {
 				log.Println("Couldn't get stream URL:", err)
 			} else {
 				stream.URL = streamURL
 				actualStreams = append(actualStreams, stream)
+				if strings.Contains(stream.Title, "720p") {
+					found720p = true
+				} else {
+					found1080p = true
+				}
 			}
 		}
 

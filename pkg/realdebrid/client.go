@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +16,10 @@ import (
 
 const (
 	rdBaseURL = "https://api.real-debrid.com/rest/1.0"
+)
+
+var (
+	magnet2InfoHashRegex = regexp.MustCompile("btih:.+?&") // The "?" makes the ".+" non-greedy
 )
 
 type Client struct {
@@ -40,6 +45,31 @@ func (c Client) TestToken(apiToken string) error {
 	}
 	log.Println("Token OK")
 	return nil
+}
+
+func (c Client) CheckInstantAvailability(apiToken string, magnetURLs ...string) []string {
+	result := []string{}
+	for _, magnet := range magnetURLs {
+		// look for "btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c&" via regex and then cut out the hash
+		match := magnet2InfoHashRegex.Find([]byte(magnet))
+		infoHash := strings.TrimPrefix(string(match), "btih:")
+		infoHash = strings.TrimSuffix(infoHash, "&")
+		resBytes, err := c.get(rdBaseURL+"/torrents/instantAvailability/"+infoHash, apiToken)
+		if err != nil {
+			log.Println("Couldn't check torrent's instant availability on real-debrid.com:", err)
+		} else {
+			// Note: our info_hash is uppercase, real-debrid.com returns a lowercase one
+			rds := gjson.GetBytes(resBytes, strings.ToLower(infoHash)).Get("rd").Array()
+			if len(rds) == 0 {
+				log.Println("Torrent not instantly available on real-debrid.com")
+			} else {
+				// We don't care about the exact contents for now.
+				// If something was found we can assume the instantly available file of the torrent is the streamable video.
+				result = append(result, magnet)
+			}
+		}
+	}
+	return result
 }
 
 func (c Client) GetStreamURL(magnetURL, apiToken string) (string, error) {
