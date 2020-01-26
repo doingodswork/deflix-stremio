@@ -30,16 +30,47 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 		return results, nil
 	}
 
+	combinedResults := []Result{}
+
+	// YTS
 	results, err := c.checkYTS(imdbID)
 	if err != nil {
-		log.Println("No torrents found on YTS:", err)
+		log.Println("Couldn't find torrents on YTS:", err)
 	} else if len(results) == 0 {
 		log.Println("No torrents found on YTS")
 	} else {
-		c.cache.set(imdbID, results)
+		combinedResults = append(combinedResults, results...)
 	}
 
-	return results, err
+	// TPB
+	results, err = c.checkTPB(imdbID)
+	if err != nil {
+		log.Println("Couldn't find torrents on TPB:", err)
+	} else if len(results) == 0 {
+		log.Println("No torrents found on TPB")
+	} else {
+		combinedResults = append(combinedResults, results...)
+	}
+
+	// TODO: Check other torrent sites
+
+	// Remove duplicates
+	noDupResults := []Result{}
+	infoHashes := map[string]struct{}{}
+	for _, result := range combinedResults {
+		if _, ok := infoHashes[result.InfoHash]; !ok {
+			noDupResults = append(noDupResults, result)
+			infoHashes[result.InfoHash] = struct{}{}
+		}
+	}
+
+	if len(noDupResults) <= 0 {
+		log.Println("Couldn't find ANY torrents for IMDb ID", imdbID)
+	} else {
+		c.cache.set(imdbID, noDupResults)
+	}
+
+	return noDupResults, err
 }
 
 type Result struct {
