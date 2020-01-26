@@ -39,7 +39,7 @@ func (c Client) checkYTS(imdbID string) ([]Result, error) {
 	// Extract data from JSON
 	torrents := gjson.GetBytes(resBody, "data.movies.0.torrents").Array()
 	if len(torrents) == 0 {
-		return nil, fmt.Errorf("Couldn't find torrents")
+		return nil, fmt.Errorf("No torrents in API response")
 	}
 	title := gjson.GetBytes(resBody, "data.movies.0.title").String()
 	results := []Result{}
