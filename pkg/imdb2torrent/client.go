@@ -33,7 +33,7 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 		log.Println("No torrents found on YTS:", err)
 	}
 
-	return results, nil
+	return results, err
 }
 
 type Result struct {
