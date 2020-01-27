@@ -43,24 +43,6 @@ func createManifestHandler(conversionClient realdebrid.Client) http.HandlerFunc 
 	}
 }
 
-func catalogHandler(w http.ResponseWriter, r *http.Request) {
-	log.Printf("catalogHandler called: %+v\n", r)
-
-	params := mux.Vars(r)
-	requestedType := params["type"]
-	//requestedID := params["id"]
-
-	// Currently movies only
-	if requestedType != "movie" {
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-
-	log.Printf("Responding with: %s\n", catalogResponse)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(catalogResponse)
-}
-
 func createStreamHandler(searchClient imdb2torrent.Client, conversionClient realdebrid.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("streamHandler called: %+v\n", r)
@@ -84,31 +66,25 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 			return
 		}
 
+		results, err := searchClient.FindMagnets(requestedID)
+		if err != nil {
+			log.Println("Magnet not found:", err)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		} else if len(results) == 0 {
+			log.Println("No magnets found")
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		potentialStreams := []stremio.StreamItem{}
-		// First check our catalog streams, because we prepared them
-		if stream, ok := catalogStreams[requestedID]; ok {
+		for _, result := range results {
+			stream := stremio.StreamItem{
+				// Stremio docs recommend to use the stream quality as title.
+				// See https://github.com/Stremio/stremio-addon-sdk/blob/ddaa3b80def8a44e553349734dd02ec9c3fea52c/docs/api/responses/stream.md#additional-properties-to-provide-information--behaviour-flags
+				Title: result.Quality,
+				URL:   result.MagnetURL,
+			}
 			potentialStreams = append(potentialStreams, stream)
-		} else {
-			// Otherwise search for magnet URL on torrent sites
-			results, err := searchClient.FindMagnets(requestedID)
-			if err != nil {
-				log.Println("Magnet not found:", err)
-				w.WriteHeader(http.StatusNotFound)
-				return
-			} else if len(results) == 0 {
-				log.Println("No magnets found")
-				w.WriteHeader(http.StatusNotFound)
-				return
-			}
-			for _, result := range results {
-				stream = stremio.StreamItem{
-					// Stremio docs recommend to use the stream quality as title.
-					// See https://github.com/Stremio/stremio-addon-sdk/blob/ddaa3b80def8a44e553349734dd02ec9c3fea52c/docs/api/responses/stream.md#additional-properties-to-provide-information--behaviour-flags
-					Title: result.Quality,
-					URL:   result.MagnetURL,
-				}
-				potentialStreams = append(potentialStreams, stream)
-			}
 		}
 
 		// Filter out the ones that are not available, and also only keep ONE 720p and ONE 1080p stream.
