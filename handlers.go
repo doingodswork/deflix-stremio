@@ -143,7 +143,7 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 		}
 
 		streams := []stremio.StreamItem{}
-		for i := 2; i > 0; i-- {
+		for i := 0; i < 2; i++ {
 			stream := <-streamChan
 			if stream.URL != "" {
 				streams = append(streams, stream)

@@ -38,6 +38,7 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 
 	// YTS
 	go func() {
+		log.Println("Started searching torrents on YTS...")
 		results, err := c.checkYTS(imdbID)
 		if err != nil {
 			log.Println("Couldn't find torrents on YTS:", err)
@@ -46,12 +47,14 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 			if len(results) == 0 {
 				log.Println("No torrents found on YTS")
 			}
+			log.Println("Found", len(results), "torrents on YTS")
 			resChan <- results
 		}
 	}()
 
 	// TPB
 	go func() {
+		log.Println("Started searching torrents on TPB...")
 		results, err := c.checkTPB(imdbID)
 		if err != nil {
 			log.Println("Couldn't find torrents on TPB:", err)
@@ -60,6 +63,7 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 			if len(results) == 0 {
 				log.Println("No torrents found on TPB")
 			}
+			log.Println("Found", len(results), "torrents on TPB")
 			resChan <- results
 		}
 	}()
@@ -69,7 +73,7 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 	combinedResults := []Result{}
 	errs := []error{}
 	dupRemovalRequired := false
-	for i := torrentSiteCount; i > 0; i-- {
+	for i := 0; i < torrentSiteCount; i++ {
 		// No timeout for the goroutines because their HTTP client has a timeout already
 		select {
 		case err := <-errChan:
@@ -81,6 +85,8 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 			}
 		}
 	}
+	close(resChan)
+	close(errChan)
 
 	// Return error (only) if all torrent sites returned actual errors (and not just empty results)
 	if len(errs) == torrentSiteCount {
