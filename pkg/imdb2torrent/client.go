@@ -44,9 +44,6 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 			log.Println("Couldn't find torrents on YTS:", err)
 			errChan <- err
 		} else {
-			if len(results) == 0 {
-				log.Println("No torrents found on YTS")
-			}
 			log.Println("Found", len(results), "torrents on YTS")
 			resChan <- results
 		}
@@ -60,9 +57,6 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 			log.Println("Couldn't find torrents on TPB:", err)
 			errChan <- err
 		} else {
-			if len(results) == 0 {
-				log.Println("No torrents found on TPB")
-			}
 			log.Println("Found", len(results), "torrents on TPB")
 			resChan <- results
 		}
