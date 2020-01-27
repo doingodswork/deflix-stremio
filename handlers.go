@@ -66,61 +66,56 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 			return
 		}
 
-		results, err := searchClient.FindMagnets(requestedID)
+		torrents, err := searchClient.FindMagnets(requestedID)
 		if err != nil {
 			log.Println("Magnet not found:", err)
 			w.WriteHeader(http.StatusNotFound)
 			return
-		} else if len(results) == 0 {
+		} else if len(torrents) == 0 {
 			log.Println("No magnets found")
 			w.WriteHeader(http.StatusNotFound)
 			return
-		}
-		potentialStreams := []stremio.StreamItem{}
-		for _, result := range results {
-			stream := stremio.StreamItem{
-				// Stremio docs recommend to use the stream quality as title.
-				// See https://github.com/Stremio/stremio-addon-sdk/blob/ddaa3b80def8a44e553349734dd02ec9c3fea52c/docs/api/responses/stream.md#additional-properties-to-provide-information--behaviour-flags
-				Title: result.Quality,
-				URL:   result.MagnetURL,
-			}
-			potentialStreams = append(potentialStreams, stream)
 		}
 
 		// Filter out the ones that are not available, and also only keep ONE 720p and ONE 1080p stream.
 		// The streams should already be roughtly ordered by the quality of their source (e.g. YTS on top), so we can skip as soon as we have one of each.
 		found720p := false
 		found1080p := false
-		actualStreams := []stremio.StreamItem{}
-		for _, stream := range potentialStreams {
+		streams := []stremio.StreamItem{}
+		for _, torrent := range torrents {
 			// Skip if we already have the quality
-			if (found720p && strings.Contains(stream.Title, "720p")) ||
-				found1080p && strings.Contains(stream.Title, "1080p") {
+			if (found720p && strings.Contains(torrent.Quality, "720p")) ||
+				found1080p && strings.Contains(torrent.Quality, "1080p") {
 				continue
 			}
 
-			availableMagnets := conversionClient.CheckInstantAvailability(apiToken, stream.URL)
-			if len(availableMagnets) == 0 {
+			availableInfoHashes := conversionClient.CheckInstantAvailability(apiToken, torrent.InfoHash)
+			if len(availableInfoHashes) == 0 {
 				log.Println("Torrent not instantly available on real-debrid.com")
 				// TODO: queue for download on real-debrid, or log somewhere for an asynchronous process to go through them and queue them?
 				continue
 			}
 
-			streamURL, err := conversionClient.GetStreamURL(stream.URL, apiToken)
+			streamURL, err := conversionClient.GetStreamURL(torrent.MagnetURL, apiToken)
 			if err != nil {
 				log.Println("Couldn't get stream URL:", err)
 			} else {
-				stream.URL = streamURL
-				actualStreams = append(actualStreams, stream)
-				if strings.Contains(stream.Title, "720p") {
+				if strings.Contains(torrent.Quality, "720p") {
 					found720p = true
 				} else {
 					found1080p = true
 				}
+				stream := stremio.StreamItem{
+					// Stremio docs recommend to use the stream quality as title.
+					// See https://github.com/Stremio/stremio-addon-sdk/blob/ddaa3b80def8a44e553349734dd02ec9c3fea52c/docs/api/responses/stream.md#additional-properties-to-provide-information--behaviour-flags
+					Title: torrent.Quality,
+					URL:   streamURL,
+				}
+				streams = append(streams, stream)
 			}
 		}
 
-		streamJSON, _ := json.Marshal(actualStreams)
+		streamJSON, _ := json.Marshal(streams)
 		log.Printf(`Responding with: {"streams":`+"%s}\n", streamJSON)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"streams": `))
