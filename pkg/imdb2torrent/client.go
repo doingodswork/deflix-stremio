@@ -73,10 +73,10 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 		case err := <-errChan:
 			errs = append(errs, err)
 		case results := <-resChan:
-			combinedResults = append(combinedResults, results...)
 			if !dupRemovalRequired && len(combinedResults) > 0 && len(results) > 0 {
 				dupRemovalRequired = true
 			}
+			combinedResults = append(combinedResults, results...)
 		}
 	}
 	close(resChan)
