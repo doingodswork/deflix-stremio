@@ -92,7 +92,7 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 	if len(errs) == torrentSiteCount {
 		errsMsg := "Couldn't find torrents on any site: "
 		for i := 1; i <= torrentSiteCount; i++ {
-			errsMsg += fmt.Sprintf("%v.: %v; ", i, errs[i])
+			errsMsg += fmt.Sprintf("%v.: %v; ", i, errs[i-1])
 		}
 		errsMsg = strings.TrimSuffix(errsMsg, "; ")
 		return nil, fmt.Errorf(errsMsg)
