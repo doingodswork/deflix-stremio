@@ -19,6 +19,8 @@ const (
 
 type Client struct {
 	httpClient *http.Client
+	// For API token validity and info_hash instant availability
+	cache *cache
 }
 
 func NewClient(timeout time.Duration) Client {
@@ -26,11 +28,19 @@ func NewClient(timeout time.Duration) Client {
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
+		cache: newCache(),
 	}
 }
 
 func (c Client) TestToken(apiToken string) error {
 	log.Println("Testing token...")
+
+	// Check cache first
+	if c.cache.exists(apiToken) {
+		log.Println("Token cached as valid")
+		return nil
+	}
+
 	resBytes, err := c.get(rdBaseURL+"/user", apiToken)
 	if err != nil {
 		return fmt.Errorf("Couldn't fetch user info from real-debrid.com with the provided token: %v", err)
@@ -39,6 +49,8 @@ func (c Client) TestToken(apiToken string) error {
 		return fmt.Errorf("Couldn't parse user info response from real-debrid.com")
 	}
 	log.Println("Token OK")
+	c.cache.setExists(apiToken)
+
 	return nil
 }
 
@@ -49,24 +61,36 @@ func (c Client) CheckInstantAvailability(apiToken string, infoHashes ...string) 
 	}
 
 	url := rdBaseURL + "/torrents/instantAvailability"
-	for _, infoHash := range infoHashes {
-		url += "/" + infoHash
-	}
+	// Only check the ones of who we don't know that they're valid.
+	// We don't cache unavailable ones, because that might change often!
 	result := []string{}
-	resBytes, err := c.get(url, apiToken)
-	if err != nil {
-		log.Println("Couldn't check torrents' instant availability on real-debrid.com:", err)
-	} else {
-		gjson.ParseBytes(resBytes).ForEach(func(key gjson.Result, value gjson.Result) bool {
-			// We don't care about the exact contents for now.
-			// If something was found we can assume the instantly available file of the torrent is the streamable video.
-			if value.Get("rd").Exists() {
-				infoHash := key.String()
-				infoHash = strings.ToUpper(infoHash)
-				result = append(result, infoHash)
-			}
-			return true
-		})
+	requestRequired := false
+	for _, infoHash := range infoHashes {
+		if c.cache.exists(infoHash) {
+			result = append(result, infoHash)
+		} else {
+			requestRequired = true
+			url += "/" + infoHash
+		}
+	}
+	// Only make HTTP request if we didn't find all hashes in the cache yet
+	if requestRequired {
+		resBytes, err := c.get(url, apiToken)
+		if err != nil {
+			log.Println("Couldn't check torrents' instant availability on real-debrid.com:", err)
+		} else {
+			gjson.ParseBytes(resBytes).ForEach(func(key gjson.Result, value gjson.Result) bool {
+				// We don't care about the exact contents for now.
+				// If something was found we can assume the instantly available file of the torrent is the streamable video.
+				if value.Get("rd").Exists() {
+					infoHash := key.String()
+					infoHash = strings.ToUpper(infoHash)
+					result = append(result, infoHash)
+					c.cache.setExists(infoHash)
+				}
+				return true
+			})
+		}
 	}
 	return result
 }
