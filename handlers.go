@@ -78,7 +78,7 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 		}
 
 		// Filter out the ones that are not available
-		infoHashes := []string{}
+		var infoHashes []string
 		for _, torrent := range torrents {
 			infoHashes = append(infoHashes, torrent.InfoHash)
 		}
@@ -109,8 +109,8 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 		// We want to parallelize the requests, but also only want to make as few requests as possible (one successful for 720p, one successful for 1080p).
 		// Going through the full list in parallel could lead for example to two successful 720p requests.
 		// Solution: Make separate lists for 720p and 1080p, go through both lists in parallel, but sequentially *per* list.
-		torrents720p := []imdb2torrent.Result{}
-		torrents1080p := []imdb2torrent.Result{}
+		var torrents720p []imdb2torrent.Result
+		var torrents1080p []imdb2torrent.Result
 		for _, torrent := range torrents {
 			// TODO: If we know 100% the quality starts with the searched string, strings.HasPrefix() might be faster.
 			if strings.Contains(torrent.Quality, "720p") {
@@ -142,7 +142,7 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 			}(torrentList)
 		}
 
-		streams := []stremio.StreamItem{}
+		var streams []stremio.StreamItem
 		for i := 0; i < 2; i++ {
 			stream := <-streamChan
 			if stream.URL != "" {

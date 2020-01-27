@@ -63,7 +63,7 @@ func (c Client) CheckInstantAvailability(apiToken string, infoHashes ...string) 
 	url := rdBaseURL + "/torrents/instantAvailability"
 	// Only check the ones of who we don't know that they're valid.
 	// We don't cache unavailable ones, because that might change often!
-	result := []string{}
+	var result []string
 	requestRequired := false
 	for _, infoHash := range infoHashes {
 		if c.cache.exists(infoHash) {
@@ -115,6 +115,7 @@ func (c Client) GetStreamURL(magnetURL, apiToken string) (string, error) {
 	}
 	torrentID := gjson.GetBytes(resBytes, "id").String()
 	fileResults := gjson.GetBytes(resBytes, "files").Array()
+	// TODO: Not required if we pass the instant available file ID from the availability check, but probably no huge performance implication
 	fileID, err := selectFileID(fileResults)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't find proper file in torrent: %v", err)

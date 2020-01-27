@@ -21,6 +21,8 @@ var (
 		"udp://tracker.leechers-paradise.org:6969"}
 )
 
+// checkYTS uses YTS' API to find torrents for the given IMDb ID.
+// If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
 func (c Client) checkYTS(imdbID string) ([]Result, error) {
 	url := "https://yts.lt/api/v2/list_movies.json?query_term=" + imdbID
 	res, err := c.httpClient.Get(url)
@@ -39,10 +41,11 @@ func (c Client) checkYTS(imdbID string) ([]Result, error) {
 	// Extract data from JSON
 	torrents := gjson.GetBytes(resBody, "data.movies.0.torrents").Array()
 	if len(torrents) == 0 {
-		return nil, fmt.Errorf("No torrents in API response")
+		// Nil slice is ok, because it can be checked with len()
+		return nil, nil
 	}
 	title := gjson.GetBytes(resBody, "data.movies.0.title").String()
-	results := []Result{}
+	var results []Result
 	for _, torrent := range torrents {
 		quality := torrent.Get("quality").String()
 		if quality == "720p" || quality == "1080p" {

@@ -13,6 +13,8 @@ var (
 	magnet2InfoHashRegex = regexp.MustCompile("btih:.+?&") // The "?" makes the ".+" non-greedy
 )
 
+// checkTPB scrapes TPB to find torrents for the given IMDb ID.
+// If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
 func (c Client) checkTPB(imdbID string) ([]Result, error) {
 	// "/0/7/207" suffix is: ? / sort by seeders / category "HD - Movies"
 	url := "https://thepiratebay.org/search/" + imdbID + "/0/7/207"
@@ -33,7 +35,7 @@ func (c Client) checkTPB(imdbID string) ([]Result, error) {
 
 	// Find the review items
 	// Note: Uses "double" and not "single" view!
-	results := []Result{}
+	var results []Result
 	doc.Find("tbody tr").Each(func(i int, s *goquery.Selection) {
 		title := s.Find(".detLink").Text()
 		quality := ""

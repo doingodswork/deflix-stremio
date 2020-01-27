@@ -70,8 +70,8 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 
 	// TODO: Check other torrent sites
 
-	combinedResults := []Result{}
-	errs := []error{}
+	var combinedResults []Result
+	var errs []error
 	dupRemovalRequired := false
 	for i := 0; i < torrentSiteCount; i++ {
 		// No timeout for the goroutines because their HTTP client has a timeout already
@@ -100,7 +100,7 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 
 	// Remove duplicates.
 	// Only necessary if we got non-empty results from more than one torrent site.
-	noDupResults := []Result{}
+	var noDupResults []Result
 	if dupRemovalRequired {
 		infoHashes := map[string]struct{}{}
 		for _, result := range combinedResults {
@@ -113,7 +113,7 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 		noDupResults = combinedResults
 	}
 
-	if len(noDupResults) <= 0 {
+	if len(noDupResults) == 0 {
 		log.Println("Couldn't find ANY torrents for IMDb ID", imdbID)
 	} else {
 		c.cache.set(imdbID, noDupResults)
