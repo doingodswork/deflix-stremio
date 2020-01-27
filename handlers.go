@@ -105,34 +105,51 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 		// Turn torrents into streams.
 		// Only keep *one* 720p and *one* 1080p stream.
 		// The streams should already be roughtly ordered by the quality of their source (e.g. YTS on top), so we can skip as soon as we have one of each.
-		found720p := false
-		found1080p := false
-		streams := []stremio.StreamItem{}
+		//
+		// We want to parallelize the requests, but also only want to make as few requests as possible (one successful for 720p, one successful for 1080p).
+		// Going through the full list in parallel could lead for example to two successful 720p requests.
+		// Solution: Make separate lists for 720p and 1080p, go through both lists in parallel, but sequentially *per* list.
+		torrents720p := []imdb2torrent.Result{}
+		torrents1080p := []imdb2torrent.Result{}
 		for _, torrent := range torrents {
-			// Skip if we already have the quality
-			if (found720p && strings.Contains(torrent.Quality, "720p")) ||
-				found1080p && strings.Contains(torrent.Quality, "1080p") {
-				continue
-			}
-
-			streamURL, err := conversionClient.GetStreamURL(torrent.MagnetURL, apiToken)
-			if err != nil {
-				log.Println("Couldn't get stream URL:", err)
+			// TODO: If we know 100% the quality starts with the searched string, strings.HasPrefix() might be faster.
+			if strings.Contains(torrent.Quality, "720p") {
+				torrents720p = append(torrents720p, torrent)
 			} else {
-				if strings.Contains(torrent.Quality, "720p") {
-					found720p = true
-				} else {
-					found1080p = true
+				torrents1080p = append(torrents1080p, torrent)
+			}
+		}
+
+		streamChan := make(chan stremio.StreamItem, 2)
+		for _, torrentList := range [][]imdb2torrent.Result{torrents720p, torrents1080p} {
+			go func(goroutineTorrentList []imdb2torrent.Result) {
+				for _, torrent := range goroutineTorrentList {
+					streamURL, err := conversionClient.GetStreamURL(torrent.MagnetURL, apiToken)
+					if err != nil {
+						log.Println("Couldn't get stream URL:", err)
+						streamChan <- stremio.StreamItem{}
+					} else {
+						streamChan <- stremio.StreamItem{
+							// Stremio docs recommend to use the stream quality as title.
+							// See https://github.com/Stremio/stremio-addon-sdk/blob/ddaa3b80def8a44e553349734dd02ec9c3fea52c/docs/api/responses/stream.md#additional-properties-to-provide-information--behaviour-flags
+							Title: torrent.Quality,
+							URL:   streamURL,
+						}
+						// Stop the goroutine!
+						return
+					}
 				}
-				stream := stremio.StreamItem{
-					// Stremio docs recommend to use the stream quality as title.
-					// See https://github.com/Stremio/stremio-addon-sdk/blob/ddaa3b80def8a44e553349734dd02ec9c3fea52c/docs/api/responses/stream.md#additional-properties-to-provide-information--behaviour-flags
-					Title: torrent.Quality,
-					URL:   streamURL,
-				}
+			}(torrentList)
+		}
+
+		streams := []stremio.StreamItem{}
+		for i := 2; i > 0; i-- {
+			stream := <-streamChan
+			if stream.URL != "" {
 				streams = append(streams, stream)
 			}
 		}
+		close(streamChan)
 
 		streamJSON, _ := json.Marshal(streams)
 		log.Printf(`Responding with: {"streams":`+"%s}\n", streamJSON)
