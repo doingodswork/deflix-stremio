@@ -77,7 +77,33 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 			return
 		}
 
-		// Filter out the ones that are not available, and also only keep ONE 720p and ONE 1080p stream.
+		// Filter out the ones that are not available
+		infoHashes := []string{}
+		for _, torrent := range torrents {
+			infoHashes = append(infoHashes, torrent.InfoHash)
+		}
+		availableInfoHashes := conversionClient.CheckInstantAvailability(apiToken, infoHashes...)
+		if len(availableInfoHashes) == 0 {
+			// TODO: queue for download on real-debrid, or log somewhere for an asynchronous process to go through them and queue them?
+			log.Println("None of the found torrents are instantly available on real-debrid.com")
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		// https://github.com/golang/go/wiki/SliceTricks#filter-in-place
+		n := 0
+		for _, torrent := range torrents {
+			for _, availableInfoHash := range availableInfoHashes {
+				if torrent.InfoHash == availableInfoHash {
+					torrents[n] = torrent
+					n++
+					break
+				}
+			}
+		}
+		torrents = torrents[:n]
+
+		// Turn torrents into streams.
+		// Only keep *one* 720p and *one* 1080p stream.
 		// The streams should already be roughtly ordered by the quality of their source (e.g. YTS on top), so we can skip as soon as we have one of each.
 		found720p := false
 		found1080p := false
@@ -86,13 +112,6 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 			// Skip if we already have the quality
 			if (found720p && strings.Contains(torrent.Quality, "720p")) ||
 				found1080p && strings.Contains(torrent.Quality, "1080p") {
-				continue
-			}
-
-			availableInfoHashes := conversionClient.CheckInstantAvailability(apiToken, torrent.InfoHash)
-			if len(availableInfoHashes) == 0 {
-				log.Println("Torrent not instantly available on real-debrid.com")
-				// TODO: queue for download on real-debrid, or log somewhere for an asynchronous process to go through them and queue them?
 				continue
 			}
 

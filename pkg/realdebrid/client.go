@@ -43,22 +43,30 @@ func (c Client) TestToken(apiToken string) error {
 }
 
 func (c Client) CheckInstantAvailability(apiToken string, infoHashes ...string) []string {
-	result := []string{}
+	// Precondition check
+	if len(infoHashes) == 0 {
+		return nil
+	}
+
+	url := rdBaseURL + "/torrents/instantAvailability"
 	for _, infoHash := range infoHashes {
-		resBytes, err := c.get(rdBaseURL+"/torrents/instantAvailability/"+infoHash, apiToken)
-		if err != nil {
-			log.Println("Couldn't check torrent's instant availability on real-debrid.com:", err)
-		} else {
-			// Note: our info_hash is uppercase, real-debrid.com returns a lowercase one
-			rds := gjson.GetBytes(resBytes, strings.ToLower(infoHash)).Get("rd").Array()
-			if len(rds) == 0 {
-				log.Println("Torrent not instantly available on real-debrid.com")
-			} else {
-				// We don't care about the exact contents for now.
-				// If something was found we can assume the instantly available file of the torrent is the streamable video.
+		url += "/" + infoHash
+	}
+	result := []string{}
+	resBytes, err := c.get(url, apiToken)
+	if err != nil {
+		log.Println("Couldn't check torrents' instant availability on real-debrid.com:", err)
+	} else {
+		gjson.ParseBytes(resBytes).ForEach(func(key gjson.Result, value gjson.Result) bool {
+			// We don't care about the exact contents for now.
+			// If something was found we can assume the instantly available file of the torrent is the streamable video.
+			if value.Get("rd").Exists() {
+				infoHash := key.String()
+				infoHash = strings.ToUpper(infoHash)
 				result = append(result, infoHash)
 			}
-		}
+			return true
+		})
 	}
 	return result
 }
