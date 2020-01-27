@@ -127,7 +127,6 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 					streamURL, err := conversionClient.GetStreamURL(torrent.MagnetURL, apiToken)
 					if err != nil {
 						log.Println("Couldn't get stream URL:", err)
-						streamChan <- stremio.StreamItem{}
 					} else {
 						streamChan <- stremio.StreamItem{
 							// Stremio docs recommend to use the stream quality as title.
@@ -139,6 +138,8 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 						return
 					}
 				}
+				// List is empty or no RealDebrid request worked
+				streamChan <- stremio.StreamItem{}
 			}(torrentList)
 		}
 
