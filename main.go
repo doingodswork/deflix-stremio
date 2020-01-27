@@ -27,11 +27,12 @@ var (
 		ResourceItems: resources,
 		Types:         []string{"movie"},
 		// An empty slice is required for serializing to a JSON that Stremio expects
-		Catalogs:      []stremio.CatalogItem{},
+		Catalogs: []stremio.CatalogItem{},
 
 		IDprefixes: []string{"tt"},
-		Background: "https://deflix.tv/images/Logo-1024px.png",
-		Logo:       "https://deflix.tv/images/Logo-250px.png",
+		// Must use www.deflix.tv instead of just deflix.tv because GitHub takes care of redirecting non-www to www and this leads to HTTPS certificate issues.
+		Background: "https://www.deflix.tv/images/Logo-1024px.png",
+		Logo:       "https://www.deflix.tv/images/Logo-250px.png",
 	}
 
 	resources = []stremio.ResourceItem{
