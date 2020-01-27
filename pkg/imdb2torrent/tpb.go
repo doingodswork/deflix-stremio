@@ -60,6 +60,7 @@ func (c Client) checkTPB(imdbID string) ([]Result, error) {
 		match := magnet2InfoHashRegex.Find([]byte(magnet))
 		infoHash := strings.TrimPrefix(string(match), "btih:")
 		infoHash = strings.TrimSuffix(infoHash, "&")
+		infoHash = strings.ToUpper(infoHash)
 
 		result := Result{
 			Title:     title,
