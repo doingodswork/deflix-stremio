@@ -52,7 +52,7 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 	// TPB
 	go func() {
 		log.Println("Started searching torrents on TPB...")
-		results, err := c.checkTPB(imdbID)
+		results, err := c.checkTPB(imdbID, 2)
 		if err != nil {
 			log.Println("Couldn't find torrents on TPB:", err)
 			errChan <- err

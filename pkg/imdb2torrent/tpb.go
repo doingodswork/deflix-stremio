@@ -2,7 +2,9 @@ package imdb2torrent
 
 import (
 	"fmt"
+	"log"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -14,13 +16,26 @@ var (
 )
 
 // checkTPB scrapes TPB to find torrents for the given IMDb ID.
+// TPB sometimes runs into a timeout, so let's allow multiple attempts *when a timeout occurs*.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c Client) checkTPB(imdbID string) ([]Result, error) {
+func (c Client) checkTPB(imdbID string, attempts int) ([]Result, error) {
+	if attempts == 0 {
+		return nil, fmt.Errorf("Cannot check TPB with 0 attempts")
+	}
 	// "/0/7/207" suffix is: ? / sort by seeders / category "HD - Movies"
-	url := "https://thepiratebay.org/search/" + imdbID + "/0/7/207"
-	res, err := c.httpClient.Get(url)
+	reqUrl := "https://thepiratebay.org/search/" + imdbID + "/0/7/207"
+	res, err := c.httpClient.Get(reqUrl)
 	if err != nil {
-		return nil, fmt.Errorf("Couldn't GET %v: %v", url, err)
+		// HTTP client errors are *always* `*url.Error`s
+		urlErr := err.(*url.Error)
+		if urlErr.Timeout() {
+			if attempts == 1 {
+				return nil, fmt.Errorf("Ran into a timeout for %v. This was the last attempt.", reqUrl)
+			}
+			return c.checkTPB(imdbID, attempts-1)
+		} else {
+			return nil, fmt.Errorf("Couldn't GET %v: %v", reqUrl, err)
+		}
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
@@ -36,8 +51,12 @@ func (c Client) checkTPB(imdbID string) ([]Result, error) {
 	// Find the review items
 	// Note: Uses "double" and not "single" view!
 	var results []Result
-	doc.Find("tbody tr").Each(func(i int, s *goquery.Selection) {
+	doc.Find("tbody tr").Each(func(_ int, s *goquery.Selection) {
 		title := s.Find(".detLink").Text()
+		if title == "" {
+			log.Println("Scraped movie title is empty, did the HTML change?")
+			return
+		}
 		quality := ""
 		if strings.Contains(title, "720p") {
 			quality = "720p"
@@ -50,12 +69,16 @@ func (c Client) checkTPB(imdbID string) ([]Result, error) {
 
 		// https://en.wikipedia.org/wiki/Pirated_movie_release_types
 		if strings.Contains(title, "HDCAM") {
-			quality += (" (cam)")
+			quality += (" (⚠️cam)")
 		} else if strings.Contains(title, "HDTS") {
-			quality += (" (telesync)")
+			quality += (" (⚠️telesync)")
 		}
 
 		magnet, _ := s.Find(".detName").Next().Attr("href")
+		if !strings.HasPrefix(magnet, "magnet:") {
+			log.Println("Scraped magnet URL doesn't look like a magnet URL. Did the HTML change?")
+			return
+		}
 		// look for "btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c&" via regex and then cut out the hash
 		match := magnet2InfoHashRegex.Find([]byte(magnet))
 		infoHash := strings.TrimPrefix(string(match), "btih:")
