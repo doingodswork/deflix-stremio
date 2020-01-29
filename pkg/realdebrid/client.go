@@ -82,7 +82,8 @@ func (c Client) CheckInstantAvailability(apiToken string, infoHashes ...string) 
 			gjson.ParseBytes(resBytes).ForEach(func(key gjson.Result, value gjson.Result) bool {
 				// We don't care about the exact contents for now.
 				// If something was found we can assume the instantly available file of the torrent is the streamable video.
-				if value.Get("rd").Exists() {
+				// Note though that
+				if len(value.Get("rd").Array()) > 0 {
 					infoHash := key.String()
 					infoHash = strings.ToUpper(infoHash)
 					result = append(result, infoHash)
