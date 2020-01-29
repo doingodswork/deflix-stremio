@@ -24,24 +24,22 @@ var (
 		Description: "Automatically turns torrents into debrid/cached streams, for high speed and no seeding. Currently supported providers: real-debrid.com (more coming soon™).",
 		Version:     version,
 
-		ResourceItems: resources,
-		Types:         []string{"movie"},
+		ResourceItems: []stremio.ResourceItem{
+			stremio.ResourceItem{
+				Name:  "stream",
+				Types: []string{"movie"},
+				// Not required as long as we define them globally in the manifest
+				//IDprefixes: []string{"tt"},
+			},
+		},
+		Types: []string{"movie"},
 		// An empty slice is required for serializing to a JSON that Stremio expects
 		Catalogs: []stremio.CatalogItem{},
 
 		IDprefixes: []string{"tt"},
 		// Must use www.deflix.tv instead of just deflix.tv because GitHub takes care of redirecting non-www to www and this leads to HTTPS certificate issues.
-		Background: "https://www.deflix.tv/images/Logo-1024px.png",
-		Logo:       "https://www.deflix.tv/images/Logo-250px.png",
-	}
-
-	resources = []stremio.ResourceItem{
-		stremio.ResourceItem{
-			Name:  "stream",
-			Types: []string{"movie"},
-			// Not required as long as we define them globally in the manifest
-			//IDprefixes: []string{"tt"},
-		},
+		Background:   "https://www.deflix.tv/images/Logo-1024px.png",
+		Logo:         "https://www.deflix.tv/images/Logo-250px.png",
 	}
 )
 
