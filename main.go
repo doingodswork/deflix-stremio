@@ -38,8 +38,8 @@ var (
 
 		IDprefixes: []string{"tt"},
 		// Must use www.deflix.tv instead of just deflix.tv because GitHub takes care of redirecting non-www to www and this leads to HTTPS certificate issues.
-		Background:   "https://www.deflix.tv/images/Logo-1024px.png",
-		Logo:         "https://www.deflix.tv/images/Logo-250px.png",
+		Background: "https://www.deflix.tv/images/Logo-1024px.png",
+		Logo:       "https://www.deflix.tv/images/Logo-250px.png",
 	}
 )
 
@@ -50,10 +50,14 @@ func main() {
 	conversionClient := realdebrid.NewClient(5 * time.Second)
 	searchClient := imdb2torrent.NewClient(5 * time.Second)
 
+	// Maps random IDs to RealDebrid streamable video URLs, used for being able to resolve torrents to streamable URLs in the background while already responding to a Stremio stream request.
+	redirectMap := make(map[string]string)
+
 	log.Println("Setting up server")
 	r := mux.NewRouter()
 	r.HandleFunc("/{apitoken}/manifest.json", createManifestHandler(conversionClient))
-	r.HandleFunc("/{apitoken}/stream/{type}/{id}.json", createStreamHandler(searchClient, conversionClient))
+	r.HandleFunc("/{apitoken}/stream/{type}/{id}.json", createStreamHandler(searchClient, conversionClient, redirectMap))
+	r.HandleFunc("/redirect/{id}", createRedirectHandler(redirectMap))
 	http.Handle("/", r)
 
 	// CORS configuration

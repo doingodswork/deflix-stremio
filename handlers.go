@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 
@@ -43,7 +44,7 @@ func createManifestHandler(conversionClient realdebrid.Client) http.HandlerFunc 
 	}
 }
 
-func createStreamHandler(searchClient imdb2torrent.Client, conversionClient realdebrid.Client) http.HandlerFunc {
+func createStreamHandler(searchClient imdb2torrent.Client, conversionClient realdebrid.Client, redirectMap map[string]string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("streamHandler called: %+v\n", r)
 
@@ -120,37 +121,39 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 			}
 		}
 
-		streamChan := make(chan stremio.StreamItem, 2)
-		for _, torrentList := range [][]imdb2torrent.Result{torrents720p, torrents1080p} {
-			go func(goroutineTorrentList []imdb2torrent.Result) {
-				for _, torrent := range goroutineTorrentList {
-					streamURL, err := conversionClient.GetStreamURL(torrent.MagnetURL, apiToken)
-					if err != nil {
-						log.Println("Couldn't get stream URL:", err)
-					} else {
-						streamChan <- stremio.StreamItem{
-							// Stremio docs recommend to use the stream quality as title.
-							// See https://github.com/Stremio/stremio-addon-sdk/blob/ddaa3b80def8a44e553349734dd02ec9c3fea52c/docs/api/responses/stream.md#additional-properties-to-provide-information--behaviour-flags
-							Title: torrent.Quality,
-							URL:   streamURL,
-						}
-						// Stop the goroutine!
-						return
-					}
-				}
-				// List is empty or no RealDebrid request worked
-				streamChan <- stremio.StreamItem{}
-			}(torrentList)
-		}
-
+		// We already respond with two URLs (for both qualities, as long as we have two), but they point to our server for now.
+		// After the response we will process the torrents on RealDebrid *in the background* and fill the redirectMap with the results!
+		// When the user clicks on a stream, we should have the final streamable video URL from RealDebrid by then and can *redirect* to it.
+		// This is important because it takes quite a while and we don't want to let the user wait so long for the stream buttons to appear.
+		var rand720p string
+		var rand1080p string
 		var streams []stremio.StreamItem
-		for i := 0; i < 2; i++ {
-			stream := <-streamChan
-			if stream.URL != "" {
-				streams = append(streams, stream)
+		if len(torrents720p) > 0 {
+			rand720p = randString(32)
+			stream := stremio.StreamItem{
+				URL: "http://localhost:8080/redirect/" + rand720p,
+				// Stremio docs recommend to use the stream quality as title.
+				// See https://github.com/Stremio/stremio-addon-sdk/blob/ddaa3b80def8a44e553349734dd02ec9c3fea52c/docs/api/responses/stream.md#additional-properties-to-provide-information--behaviour-flags
+				Title: "720p",
 			}
+			// We can only set the exact quality string if there's only one torrent.
+			// Otherwise maybe the upcoming RealDebrid conversion fails for one torrent, but works for the next, which has a slightly different quality string.
+			if len(torrents720p) == 1 {
+				stream.Title = torrents720p[0].Quality
+			}
+			streams = append(streams, stream)
 		}
-		close(streamChan)
+		if len(torrents1080p) > 0 {
+			rand1080p = randString(32)
+			stream := stremio.StreamItem{
+				URL:   "http://localhost:8080/redirect/" + rand1080p,
+				Title: "1080p",
+			}
+			if len(torrents720p) == 1 {
+				stream.Title = torrents1080p[0].Quality
+			}
+			streams = append(streams, stream)
+		}
 
 		streamJSON, _ := json.Marshal(streams)
 		log.Printf(`Responding with: {"streams":`+"%s}\n", streamJSON)
@@ -158,5 +161,52 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 		w.Write([]byte(`{"streams": `))
 		w.Write(streamJSON)
 		w.Write([]byte(`}`))
+
+		// Now process the torrents on RealDebrid in the background
+		for listNo, torrentList := range [][]imdb2torrent.Result{torrents720p, torrents1080p} {
+			go func(goroutineListNo int, goroutineTorrentList []imdb2torrent.Result) {
+				for _, torrent := range goroutineTorrentList {
+					streamURL, err := conversionClient.GetStreamURL(torrent.MagnetURL, apiToken)
+					if err != nil {
+						log.Println("Couldn't get stream URL:", err)
+					} else if goroutineListNo == 0 {
+						redirectMap[rand720p] = streamURL
+						// Stop the goroutine!
+						return
+					} else if goroutineListNo == 1 {
+						redirectMap[rand1080p] = streamURL
+						return
+					}
+				}
+			}(listNo, torrentList)
+		}
+	}
+}
+
+func createRedirectHandler(redirectMap map[string]string) http.HandlerFunc {
+	rdRequestCount := 5
+	rdRequestTimeout := 3
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("redirectHandler called: %+v\n", r)
+
+		params := mux.Vars(r)
+		redirectID := params["id"]
+		if redirectID == "" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		streamURL, ok := redirectMap[redirectID]
+		// Could be that the background job is still running, let's wait a bit and try multiple times
+		waitSeconds := time.Duration(rdRequestCount*rdRequestTimeout) * time.Second
+		for !ok && waitSeconds > 0 {
+			time.Sleep(time.Second)
+			waitSeconds--
+			streamURL, ok = redirectMap[redirectID]
+		}
+
+		log.Printf("Responding with redirect to: %s\n", streamURL)
+		w.Header().Set("Location", streamURL)
+		w.WriteHeader(http.StatusMovedPermanently)
 	}
 }
