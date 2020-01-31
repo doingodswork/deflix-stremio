@@ -59,6 +59,7 @@ func main() {
 
 	log.Println("Setting up server")
 	r := mux.NewRouter()
+	r.HandleFunc("/health", healthHandler)
 	r.HandleFunc("/{apitoken}/manifest.json", createManifestHandler(conversionClient))
 	r.HandleFunc("/{apitoken}/stream/{type}/{id}.json", createStreamHandler(searchClient, conversionClient, redirectMap))
 	r.HandleFunc("/redirect/{id}", createRedirectHandler(redirectMap))

@@ -22,6 +22,12 @@ import (
 // 	w.Write([]byte(`{"Path":"/"}`))
 // }
 
+var healthHandler = func(w http.ResponseWriter, r *http.Request) {
+	if _, err := w.Write([]byte("OK")); err != nil {
+		log.Println("Coldn't write response:", err)
+	}
+}
+
 func createManifestHandler(conversionClient realdebrid.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("manifestHandler called: %+v\n", r)
