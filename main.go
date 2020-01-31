@@ -49,18 +49,14 @@ var (
 )
 
 func init() {
+	// Timeout for global default HTTP client (for when using `http.Get()`)
+	http.DefaultClient.Timeout = 5 * time.Second
+	// Make predicting "random" numbers harder
 	rand.NewSource(time.Now().UnixNano())
 }
 
 func main() {
-	// Timeout for global default HTTP client (for when using `http.Get()`)
-	http.DefaultClient.Timeout = 5 * time.Second
-
-	conversionClient := realdebrid.NewClient(5 * time.Second)
-	searchClient := imdb2torrent.NewClient(5 * time.Second)
-
-	// Maps random IDs to RealDebrid streamable video URLs, used for being able to resolve torrents to streamable URLs in the background while already responding to a Stremio stream request.
-	redirectMap := make(map[string]string)
+	// Basic middleware and health endpoint
 
 	log.Println("Setting up server")
 	r := mux.NewRouter()
@@ -72,6 +68,12 @@ func main() {
 		loggingMiddleware)
 	s.HandleFunc("/health", healthHandler)
 
+	// Stremio endpoints
+
+	conversionClient := realdebrid.NewClient(5 * time.Second)
+	searchClient := imdb2torrent.NewClient(5 * time.Second)
+	// Maps random IDs to RealDebrid streamable video URLs, used for being able to resolve torrents to streamable URLs in the background while already responding to a Stremio stream request.
+	redirectMap := make(map[string]string)
 	// Use token middleware only for the Stremio endpoints
 	tokenMiddleware := createTokenMiddleware(conversionClient)
 	manifestHandler := createManifestHandler(conversionClient)
@@ -79,15 +81,10 @@ func main() {
 	s.HandleFunc("/{apitoken}/manifest.json", tokenMiddleware(manifestHandler).ServeHTTP)
 	s.HandleFunc("/{apitoken}/stream/{type}/{id}.json", tokenMiddleware(streamHandler).ServeHTTP)
 
-	s.HandleFunc("/redirect/{id}", createRedirectHandler(redirectMap))
+	// Additional endpoints
 
-	// Timed logger for easier debugging with logs
-	go func() {
-		for {
-			log.Println("...")
-			time.Sleep(time.Second)
-		}
-	}()
+	// Redirects stream URLs (previously sent to Stremio) to the actual RealDebrid stream URLs
+	s.HandleFunc("/redirect/{id}", createRedirectHandler(redirectMap))
 
 	srv := &http.Server{
 		Addr:    "0.0.0.0:8080",
@@ -103,6 +100,14 @@ func main() {
 	go func() {
 		if err := srv.ListenAndServe(); err != nil {
 			log.Fatal("Couldn't start server:", err)
+		}
+	}()
+
+	// Timed logger for easier debugging with logs
+	go func() {
+		for {
+			log.Println("...")
+			time.Sleep(time.Second)
 		}
 	}()
 
