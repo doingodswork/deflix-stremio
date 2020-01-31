@@ -119,7 +119,7 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 		if len(torrents720p) > 0 {
 			rand720p = randString(32)
 			stream := stremio.StreamItem{
-				URL: "http://localhost:8080/redirect/" + rand720p,
+				URL: streamURLaddr + "/redirect/" + rand720p,
 				// Stremio docs recommend to use the stream quality as title.
 				// See https://github.com/Stremio/stremio-addon-sdk/blob/ddaa3b80def8a44e553349734dd02ec9c3fea52c/docs/api/responses/stream.md#additional-properties-to-provide-information--behaviour-flags
 				Title: "720p",

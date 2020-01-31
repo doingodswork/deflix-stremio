@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"math/rand"
 	"net/http"
@@ -20,6 +21,11 @@ import (
 
 const (
 	version = "0.1.0"
+)
+
+// Flags
+var (
+	streamURLaddr = *flag.String("streamURLaddr", "http://localhost:8080", "Address to be used in a stream URL that's delivered to Stremio and later used to redirect to RealDebrid")
 )
 
 var (
@@ -51,11 +57,14 @@ var (
 func init() {
 	// Timeout for global default HTTP client (for when using `http.Get()`)
 	http.DefaultClient.Timeout = 5 * time.Second
+
 	// Make predicting "random" numbers harder
 	rand.NewSource(time.Now().UnixNano())
 }
 
 func main() {
+	flag.Parse()
+
 	// Basic middleware and health endpoint
 
 	log.Println("Setting up server")
