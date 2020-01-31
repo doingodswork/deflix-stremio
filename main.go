@@ -43,6 +43,10 @@ var (
 	}
 )
 
+func init() {
+	rand.NewSource(time.Now().UnixNano())
+}
+
 func main() {
 	// Timeout for global default HTTP client (for when using `http.Get()`)
 	http.DefaultClient.Timeout = 5 * time.Second
