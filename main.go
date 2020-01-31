@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -25,6 +26,8 @@ const (
 
 // Flags
 var (
+	bindAddr      = *flag.String("bindAddr", "localhost", "Local interface address to bind to. \"0.0.0.0\" binds to all interfaces.")
+	port          = *flag.Int("port", 8080, "Port to listen on")
 	streamURLaddr = *flag.String("streamURLaddr", "http://localhost:8080", "Address to be used in a stream URL that's delivered to Stremio and later used to redirect to RealDebrid")
 )
 
@@ -96,7 +99,7 @@ func main() {
 	s.HandleFunc("/redirect/{id}", createRedirectHandler(redirectMap))
 
 	srv := &http.Server{
-		Addr:    "0.0.0.0:8080",
+		Addr:    bindAddr + ":" + strconv.Itoa(port),
 		Handler: s,
 		// Timeouts to avoid Slowloris attacks
 		ReadTimeout:    time.Second * 5,
