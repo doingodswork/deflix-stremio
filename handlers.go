@@ -46,7 +46,9 @@ func createManifestHandler(conversionClient realdebrid.Client) http.HandlerFunc 
 		resBody, _ := json.Marshal(manifest)
 		log.Printf("Responding with: %s\n", resBody)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(resBody)
+		if _, err := w.Write(resBody); err != nil {
+			log.Println("Coldn't write response:", err)
+		}
 	}
 }
 
@@ -164,9 +166,13 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 		streamJSON, _ := json.Marshal(streams)
 		log.Printf(`Responding with: {"streams":`+"%s}\n", streamJSON)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"streams": `))
-		w.Write(streamJSON)
-		w.Write([]byte(`}`))
+		if _, err := w.Write([]byte(`{"streams": `)); err != nil {
+			log.Println("Coldn't write response:", err)
+		} else if _, err = w.Write(streamJSON); err != nil {
+			log.Println("Coldn't write response:", err)
+		} else if _, err = w.Write([]byte(`}`)); err != nil {
+			log.Println("Coldn't write response:", err)
+		}
 
 		// Now process the torrents on RealDebrid in the background
 		for listNo, torrentList := range [][]imdb2torrent.Result{torrents720p, torrents1080p} {

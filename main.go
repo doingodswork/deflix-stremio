@@ -1,12 +1,18 @@
 package main
 
 import (
+	"context"
 	"log"
+	"math/rand"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/justinas/alice"
 
 	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
 	"github.com/doingodswork/deflix-stremio/pkg/realdebrid"
@@ -59,24 +65,11 @@ func main() {
 
 	log.Println("Setting up server")
 	r := mux.NewRouter()
-	r.HandleFunc("/health", healthHandler)
-	r.HandleFunc("/{apitoken}/manifest.json", createManifestHandler(conversionClient))
-	r.HandleFunc("/{apitoken}/stream/{type}/{id}.json", createStreamHandler(searchClient, conversionClient, redirectMap))
-	r.HandleFunc("/redirect/{id}", createRedirectHandler(redirectMap))
-	http.Handle("/", r)
-
-	// CORS configuration
-	headersOk := handlers.AllowedHeaders([]string{
-		"Content-Type",
-		"X-Requested-With",
-		"Accept",
-		"Accept-Language",
-		"Accept-Encoding",
-		"Content-Language",
-		"Origin",
-	})
-	originsOk := handlers.AllowedOrigins([]string{"*"})
-	methodsOk := handlers.AllowedMethods([]string{"GET"})
+	s := r.Methods("GET").Subrouter()
+	s.HandleFunc("/health", healthHandler)
+	s.HandleFunc("/{apitoken}/manifest.json", createManifestHandler(conversionClient))
+	s.HandleFunc("/{apitoken}/stream/{type}/{id}.json", createStreamHandler(searchClient, conversionClient, redirectMap))
+	s.HandleFunc("/redirect/{id}", createRedirectHandler(redirectMap))
 
 	// Timed logger for easier debugging with logs
 	go func() {
@@ -86,9 +79,39 @@ func main() {
 		}
 	}()
 
-	// Listen
+	srv := &http.Server{
+		Addr: "0.0.0.0:8080",
+		Handler: alice.New(timerMiddleware,
+			corsMiddleware, // Stremio doesn't show stream responses when no CORS middleware is used!
+			handlers.ProxyHeaders,
+			recoveryMiddleware).Then(loggingMiddleware(s)),
+		// Timeouts to avoid Slowloris attacks
+		ReadTimeout:    time.Second * 5,
+		WriteTimeout:   time.Second * 15,
+		IdleTimeout:    time.Second * 60,
+		MaxHeaderBytes: 1 << 10, // 1 KB
+	}
+
 	log.Println("Starting server")
-	if err := http.ListenAndServe("0.0.0.0:8080", handlers.CORS(originsOk, headersOk, methodsOk)(r)); err != nil {
-		log.Fatal("Couldn't start server:", err)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil {
+			log.Fatal("Couldn't start server:", err)
+		}
+	}()
+
+	// Graceful shutdown
+
+	c := make(chan os.Signal, 1)
+	// Accept SIGINT (Ctrl+C) and SIGTERM (`docker stop`)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	sig := <-c
+	log.Printf("Received \"%v\" signal. Shutting down...\n", sig)
+	// Create a deadline to wait for.
+	// Use the same value as the server's `WriteTimeout`.
+	// No need to get the cancel func and defer calling it, because srv.Shutdown() will consider the timeout from the context.
+	ctx, _ := context.WithTimeout(context.Background(), 15*time.Second)
+	// Doesn't block if no connections, but will otherwise wait until the timeout deadline
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatal("Error shutting down server:", err)
 	}
 }
