@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/doingodswork/deflix-stremio/pkg/realdebrid"
 	"github.com/gorilla/handlers"
+	"github.com/gorilla/mux"
 )
 
 func timerMiddleware(next http.Handler) http.Handler {
@@ -45,6 +47,26 @@ func corsMiddleware(next http.Handler) http.Handler {
 }
 
 var recoveryMiddleware = handlers.RecoveryHandler(handlers.PrintRecoveryStack(true))
+
+func createTokenMiddleware(conversionClient realdebrid.Client) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			params := mux.Vars(r)
+			apiToken := params["apitoken"]
+			if apiToken == "" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			if err := conversionClient.TestToken(apiToken); err != nil {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+
+			newReq := r.WithContext(context.WithValue(r.Context(), "apitoken", apiToken))
+			next.ServeHTTP(w, newReq)
+		})
+	}
+}
 
 func loggingMiddleware(before http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -12,7 +12,6 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-	"github.com/justinas/alice"
 
 	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
 	"github.com/doingodswork/deflix-stremio/pkg/realdebrid"
@@ -66,9 +65,20 @@ func main() {
 	log.Println("Setting up server")
 	r := mux.NewRouter()
 	s := r.Methods("GET").Subrouter()
+	s.Use(timerMiddleware,
+		corsMiddleware, // Stremio doesn't show stream responses when no CORS middleware is used!
+		handlers.ProxyHeaders,
+		recoveryMiddleware,
+		loggingMiddleware)
 	s.HandleFunc("/health", healthHandler)
-	s.HandleFunc("/{apitoken}/manifest.json", createManifestHandler(conversionClient))
-	s.HandleFunc("/{apitoken}/stream/{type}/{id}.json", createStreamHandler(searchClient, conversionClient, redirectMap))
+
+	// Use token middleware only for the Stremio endpoints
+	tokenMiddleware := createTokenMiddleware(conversionClient)
+	manifestHandler := createManifestHandler(conversionClient)
+	streamHandler := createStreamHandler(searchClient, conversionClient, redirectMap)
+	s.HandleFunc("/{apitoken}/manifest.json", tokenMiddleware(manifestHandler).ServeHTTP)
+	s.HandleFunc("/{apitoken}/stream/{type}/{id}.json", tokenMiddleware(streamHandler).ServeHTTP)
+
 	s.HandleFunc("/redirect/{id}", createRedirectHandler(redirectMap))
 
 	// Timed logger for easier debugging with logs
@@ -80,11 +90,8 @@ func main() {
 	}()
 
 	srv := &http.Server{
-		Addr: "0.0.0.0:8080",
-		Handler: alice.New(timerMiddleware,
-			corsMiddleware, // Stremio doesn't show stream responses when no CORS middleware is used!
-			handlers.ProxyHeaders,
-			recoveryMiddleware).Then(loggingMiddleware(s)),
+		Addr:    "0.0.0.0:8080",
+		Handler: s,
 		// Timeouts to avoid Slowloris attacks
 		ReadTimeout:    time.Second * 5,
 		WriteTimeout:   time.Second * 15,

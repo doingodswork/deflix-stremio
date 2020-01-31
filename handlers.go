@@ -32,17 +32,6 @@ func createManifestHandler(conversionClient realdebrid.Client) http.HandlerFunc 
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("manifestHandler called: %+v\n", r)
 
-		params := mux.Vars(r)
-		apiToken := params["apitoken"]
-		if apiToken == "" {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		if err := conversionClient.TestToken(apiToken); err != nil {
-			w.WriteHeader(http.StatusForbidden)
-			return
-		}
-
 		resBody, _ := json.Marshal(manifest)
 		log.Printf("Responding with: %s\n", resBody)
 		w.Header().Set("Content-Type", "application/json")
@@ -57,21 +46,11 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 		log.Printf("streamHandler called: %+v\n", r)
 
 		params := mux.Vars(r)
-		apiToken := params["apitoken"]
 		requestedType := params["type"]
 		requestedID := params["id"]
 
 		if requestedType != "movie" {
 			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		if apiToken == "" {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		if err := conversionClient.TestToken(apiToken); err != nil {
-			w.WriteHeader(http.StatusForbidden)
 			return
 		}
 
@@ -91,6 +70,7 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 		for _, torrent := range torrents {
 			infoHashes = append(infoHashes, torrent.InfoHash)
 		}
+		apiToken := r.Context().Value("apitoken").(string)
 		availableInfoHashes := conversionClient.CheckInstantAvailability(apiToken, infoHashes...)
 		if len(availableInfoHashes) == 0 {
 			// TODO: queue for download on real-debrid, or log somewhere for an asynchronous process to go through them and queue them?
