@@ -3,22 +3,21 @@ package imdb2torrent
 import (
 	"fmt"
 	"log"
-	"net/http"
 	"strings"
 	"time"
 )
 
 type Client struct {
-	httpClient *http.Client
-	cache      *cache
+	ytsClient ytsClient
+	tpbClient tpbClient
+	cache     *cache
 }
 
 func NewClient(timeout time.Duration) Client {
 	return Client{
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
-		cache: newCache(),
+		ytsClient: newYTSclient(timeout),
+		tpbClient: newTPBclient(timeout),
+		cache:     newCache(),
 	}
 }
 
@@ -39,7 +38,7 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 	// YTS
 	go func() {
 		log.Println("Started searching torrents on YTS...")
-		results, err := c.checkYTS(imdbID)
+		results, err := c.ytsClient.check(imdbID)
 		if err != nil {
 			log.Println("Couldn't find torrents on YTS:", err)
 			errChan <- err
@@ -52,7 +51,7 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 	// TPB
 	go func() {
 		log.Println("Started searching torrents on TPB...")
-		results, err := c.checkTPB(imdbID, 2)
+		results, err := c.tpbClient.check(imdbID, 2)
 		if err != nil {
 			log.Println("Couldn't find torrents on TPB:", err)
 			errChan <- err

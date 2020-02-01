@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -15,10 +16,22 @@ var (
 	magnet2InfoHashRegex = regexp.MustCompile("btih:.+?&") // The "?" makes the ".+" non-greedy
 )
 
+type tpbClient struct {
+	httpClient *http.Client
+}
+
+func newTPBclient(timeout time.Duration) tpbClient {
+	return tpbClient{
+		httpClient: &http.Client{
+			Timeout: timeout,
+		},
+	}
+}
+
 // checkTPB scrapes TPB to find torrents for the given IMDb ID.
 // TPB sometimes runs into a timeout, so let's allow multiple attempts *when a timeout occurs*.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c Client) checkTPB(imdbID string, attempts int) ([]Result, error) {
+func (c tpbClient) check(imdbID string, attempts int) ([]Result, error) {
 	if attempts == 0 {
 		return nil, fmt.Errorf("Cannot check TPB with 0 attempts")
 	}
@@ -29,10 +42,15 @@ func (c Client) checkTPB(imdbID string, attempts int) ([]Result, error) {
 		// HTTP client errors are *always* `*url.Error`s
 		urlErr := err.(*url.Error)
 		if urlErr.Timeout() {
+			log.Println("Ran into a timeout for", reqUrl)
 			if attempts == 1 {
-				return nil, fmt.Errorf("Ran into a timeout for %v. This was the last attempt.", reqUrl)
+				return nil, fmt.Errorf("All attempted requests to %v timed out", reqUrl)
 			}
-			return c.checkTPB(imdbID, attempts-1)
+			// Just retrying again with the same HTTP client, which probably reuses the previous connection, doesn't work.
+			// Simple tests have shown that when a proper connection exists, all requests to TPB work, while when no proper connection exists all requests time out.
+			log.Println("Closig connections to TPB and retrying...")
+			c.httpClient.CloseIdleConnections()
+			return c.check(imdbID, attempts-1)
 		} else {
 			return nil, fmt.Errorf("Couldn't GET %v: %v", reqUrl, err)
 		}

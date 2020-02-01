@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/tidwall/gjson"
 )
@@ -21,9 +22,21 @@ var (
 		"udp://tracker.leechers-paradise.org:6969"}
 )
 
-// checkYTS uses YTS' API to find torrents for the given IMDb ID.
+type ytsClient struct {
+	httpClient *http.Client
+}
+
+func newYTSclient(timeout time.Duration) ytsClient {
+	return ytsClient{
+		httpClient: &http.Client{
+			Timeout: timeout,
+		},
+	}
+}
+
+// check uses YTS' API to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c Client) checkYTS(imdbID string) ([]Result, error) {
+func (c ytsClient) check(imdbID string) ([]Result, error) {
 	url := "https://yts.lt/api/v2/list_movies.json?query_term=" + imdbID
 	res, err := c.httpClient.Get(url)
 	if err != nil {
