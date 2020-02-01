@@ -84,8 +84,8 @@ func main() {
 
 	conversionClient := realdebrid.NewClient(5 * time.Second)
 	searchClient := imdb2torrent.NewClient(5 * time.Second)
-	// Maps random IDs to RealDebrid streamable video URLs, used for being able to resolve torrents to streamable URLs in the background while already responding to a Stremio stream request.
-	redirectMap := make(map[string]string)
+	// Maps random IDs to previously found torrent results
+	redirectMap := make(map[string][]imdb2torrent.Result)
 	// Use token middleware only for the Stremio endpoints
 	tokenMiddleware := createTokenMiddleware(conversionClient)
 	manifestHandler := createManifestHandler(conversionClient)
@@ -96,7 +96,7 @@ func main() {
 	// Additional endpoints
 
 	// Redirects stream URLs (previously sent to Stremio) to the actual RealDebrid stream URLs
-	s.HandleFunc("/redirect/{id}", createRedirectHandler(redirectMap))
+	s.HandleFunc("/redirect/{id}", createRedirectHandler(redirectMap, conversionClient))
 
 	srv := &http.Server{
 		Addr:    bindAddr + ":" + strconv.Itoa(port),
