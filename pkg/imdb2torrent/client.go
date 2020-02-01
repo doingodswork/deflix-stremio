@@ -10,14 +10,12 @@ import (
 type Client struct {
 	ytsClient ytsClient
 	tpbClient tpbClient
-	cache     *cache
 }
 
 func NewClient(timeout time.Duration) Client {
 	return Client{
 		ytsClient: newYTSclient(timeout),
 		tpbClient: newTPBclient(timeout),
-		cache:     newCache(),
 	}
 }
 
@@ -26,11 +24,6 @@ func NewClient(timeout time.Duration) Client {
 // It caches results once they're found.
 // It can return an empty slice and no error if no actual error occurred (for example if torrents where found but no >720p videos).
 func (c Client) FindMagnets(imdbID string) ([]Result, error) {
-	// Check cache first
-	if results := c.cache.get(imdbID); len(results) > 0 {
-		return results, nil
-	}
-
 	torrentSiteCount := 2
 	resChan := make(chan []Result, torrentSiteCount)
 	errChan := make(chan error, torrentSiteCount)
@@ -108,8 +101,6 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 
 	if len(noDupResults) == 0 {
 		log.Println("Couldn't find ANY torrents for IMDb ID", imdbID)
-	} else {
-		c.cache.set(imdbID, noDupResults)
 	}
 
 	return noDupResults, nil

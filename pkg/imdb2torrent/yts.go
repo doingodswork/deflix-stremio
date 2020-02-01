@@ -3,6 +3,7 @@ package imdb2torrent
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -24,6 +25,7 @@ var (
 
 type ytsClient struct {
 	httpClient *http.Client
+	cache      *cache
 }
 
 func newYTSclient(timeout time.Duration) ytsClient {
@@ -31,12 +33,19 @@ func newYTSclient(timeout time.Duration) ytsClient {
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
+		cache: newCache(),
 	}
 }
 
 // check uses YTS' API to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
 func (c ytsClient) check(imdbID string) ([]Result, error) {
+	// Check cache first
+	if results, ok := c.cache.get(imdbID); ok {
+		log.Printf("Hit YTS client cache, returning %v results\n", len(results))
+		return results, nil
+	}
+
 	url := "https://yts.lt/api/v2/list_movies.json?query_term=" + imdbID
 	res, err := c.httpClient.Get(url)
 	if err != nil {
@@ -72,6 +81,10 @@ func (c ytsClient) check(imdbID string) ([]Result, error) {
 			results = append(results, result)
 		}
 	}
+
+	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
+	// Any actual errors would have returned earlier.
+	c.cache.set(imdbID, results)
 
 	return results, nil
 }

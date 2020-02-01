@@ -14,6 +14,7 @@ func (c cache) set(imdbID string, magnets []Result) {
 	c.m[imdbID] = magnets
 }
 
-func (c cache) get(imdbID string) []Result {
-	return c.m[imdbID]
+func (c cache) get(imdbID string) ([]Result, bool) {
+	res, ok := c.m[imdbID]
+	return res, ok
 }

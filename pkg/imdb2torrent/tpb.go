@@ -18,6 +18,7 @@ var (
 
 type tpbClient struct {
 	httpClient *http.Client
+	cache      *cache
 }
 
 func newTPBclient(timeout time.Duration) tpbClient {
@@ -25,6 +26,7 @@ func newTPBclient(timeout time.Duration) tpbClient {
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
+		cache: newCache(),
 	}
 }
 
@@ -32,6 +34,12 @@ func newTPBclient(timeout time.Duration) tpbClient {
 // TPB sometimes runs into a timeout, so let's allow multiple attempts *when a timeout occurs*.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
 func (c tpbClient) check(imdbID string, attempts int) ([]Result, error) {
+	// Check cache first
+	if results, ok := c.cache.get(imdbID); ok {
+		log.Printf("Hit TPB client cache, returning %v results\n", len(results))
+		return results, nil
+	}
+
 	if attempts == 0 {
 		return nil, fmt.Errorf("Cannot check TPB with 0 attempts")
 	}
@@ -111,6 +119,10 @@ func (c tpbClient) check(imdbID string, attempts int) ([]Result, error) {
 		}
 		results = append(results, result)
 	})
+
+	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
+	// Any actual errors would have returned earlier.
+	c.cache.set(imdbID, results)
 
 	return results, nil
 }
