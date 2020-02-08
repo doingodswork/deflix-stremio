@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/tidwall/gjson"
 )
 
@@ -19,26 +20,37 @@ const (
 
 type Client struct {
 	httpClient *http.Client
-	// For API token validity and info_hash instant availability
-	cache *cache
+	// For API token validity
+	tokenCache *fastcache.Cache
+	// For info_hash instant availability
+	availabilityCache *fastcache.Cache
 }
 
-func NewClient(timeout time.Duration) Client {
+func NewClient(timeout time.Duration, tokenCache, availabilityCache *fastcache.Cache) Client {
 	return Client{
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
-		cache: newCache(),
+		tokenCache:        tokenCache,
+		availabilityCache: availabilityCache,
 	}
 }
 
 func (c Client) TestToken(apiToken string) error {
 	log.Println("Testing token...")
 
-	// Check cache first
-	if c.cache.exists(apiToken) {
-		log.Println("Token cached as valid")
-		return nil
+	// Check cache first.
+	// Note: Only when a token is valid a cache entry was created, because a token is probably valid for another 24 hours, while when a token is invalid it's likely that the user makes a payment to RealDebrid to extend his premium status and make his token valid again *within* 24 hours.
+	if tokenGob, ok := c.tokenCache.HasGet(nil, []byte(apiToken)); ok {
+		created, err := fromCacheEntry(tokenGob)
+		if err != nil {
+			log.Println("Couldn't decode token cache entry:", err)
+		} else if time.Since(created) < (24 * time.Hour) {
+			log.Println("Token cached as valid")
+			return nil
+		} else {
+			log.Println("Token cached as valid, but entry is expired since", time.Since(created.Add(24*time.Hour)))
+		}
 	}
 
 	resBytes, err := c.get(rdBaseURL+"/user", apiToken)
@@ -48,8 +60,15 @@ func (c Client) TestToken(apiToken string) error {
 	if !gjson.GetBytes(resBytes, "id").Exists() {
 		return fmt.Errorf("Couldn't parse user info response from real-debrid.com")
 	}
+
 	log.Println("Token OK")
-	c.cache.setExists(apiToken)
+
+	// Create cache entry
+	if tokenGob, err := newCacheEntry(); err != nil {
+		log.Println("Couldn't encode token cache entry:", err)
+	} else {
+		c.tokenCache.Set([]byte(apiToken), tokenGob)
+	}
 
 	return nil
 }
@@ -61,33 +80,51 @@ func (c Client) CheckInstantAvailability(apiToken string, infoHashes ...string) 
 	}
 
 	url := rdBaseURL + "/torrents/instantAvailability"
-	// Only check the ones of who we don't know that they're valid.
+	// Only check the ones of which we don't know that they're valid (or which our knowledge that they're valid is more than 24 hours old).
 	// We don't cache unavailable ones, because that might change often!
 	var result []string
 	requestRequired := false
 	for _, infoHash := range infoHashes {
-		if c.cache.exists(infoHash) {
-			result = append(result, infoHash)
+		if availabilityGob, ok := c.availabilityCache.HasGet(nil, []byte(infoHash)); ok {
+			created, err := fromCacheEntry(availabilityGob)
+			if err != nil {
+				log.Println("Couldn't decode availability cache entry:", err)
+				requestRequired = true
+				url += "/" + infoHash
+			} else if time.Since(created) < (24 * time.Hour) {
+				log.Println("Availability cached as valid")
+				result = append(result, infoHash)
+			} else {
+				log.Println("Availability cached as valid, but entry is expired since", time.Since(created.Add(24*time.Hour)))
+				requestRequired = true
+				url += "/" + infoHash
+			}
 		} else {
 			requestRequired = true
 			url += "/" + infoHash
 		}
 	}
+
 	// Only make HTTP request if we didn't find all hashes in the cache yet
 	if requestRequired {
 		resBytes, err := c.get(url, apiToken)
 		if err != nil {
 			log.Println("Couldn't check torrents' instant availability on real-debrid.com:", err)
 		} else {
+			// Note: This iterates through all elements with the key being the info_hash
 			gjson.ParseBytes(resBytes).ForEach(func(key gjson.Result, value gjson.Result) bool {
 				// We don't care about the exact contents for now.
 				// If something was found we can assume the instantly available file of the torrent is the streamable video.
-				// Note though that
 				if len(value.Get("rd").Array()) > 0 {
 					infoHash := key.String()
 					infoHash = strings.ToUpper(infoHash)
 					result = append(result, infoHash)
-					c.cache.setExists(infoHash)
+					// Create cache entry
+					if availabilityGob, err := newCacheEntry(); err != nil {
+						log.Println("Couldn't encode availability cache entry:", err)
+					} else {
+						c.availabilityCache.Set([]byte(infoHash), availabilityGob)
+					}
 				}
 				return true
 			})

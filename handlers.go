@@ -5,7 +5,9 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/gorilla/mux"
 
 	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
@@ -40,7 +42,7 @@ func createManifestHandler(conversionClient realdebrid.Client) http.HandlerFunc 
 	}
 }
 
-func createStreamHandler(searchClient imdb2torrent.Client, conversionClient realdebrid.Client, redirectMap map[string][]imdb2torrent.Result) http.HandlerFunc {
+func createStreamHandler(searchClient imdb2torrent.Client, conversionClient realdebrid.Client, redirectCache *fastcache.Cache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("streamHandler called: %+v\n", r)
 
@@ -123,7 +125,13 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 				stream.Title = torrents720p[0].Quality
 			}
 			streams = append(streams, stream)
-			redirectMap[redirectID] = torrents720p
+
+			// Cache for upcoming redirect request
+			if data, err := imdb2torrent.NewCacheEntry(torrents720p); err != nil {
+				log.Println("Couldn't create cache entry for torrent results:", err)
+			} else {
+				redirectCache.Set([]byte(redirectID), data)
+			}
 		}
 		if len(torrents1080p) > 0 {
 			redirectID += "1080p"
@@ -135,7 +143,13 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 				stream.Title = torrents1080p[0].Quality
 			}
 			streams = append(streams, stream)
-			redirectMap[redirectID] = torrents1080p
+
+			// Cache for upcoming redirect request
+			if data, err := imdb2torrent.NewCacheEntry(torrents1080p); err != nil {
+				log.Println("Couldn't create cache entry for torrent results:", err)
+			} else {
+				redirectCache.Set([]byte(redirectID), data)
+			}
 		}
 
 		streamJSON, _ := json.Marshal(streams)
@@ -151,8 +165,7 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 	}
 }
 
-func createRedirectHandler(redirectMap map[string][]imdb2torrent.Result, conversionClient realdebrid.Client) http.HandlerFunc {
-	cache := make(map[string]string)
+func createRedirectHandler(cache *fastcache.Cache, conversionClient realdebrid.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("redirectHandler called: %+v\n", r)
 
@@ -163,29 +176,55 @@ func createRedirectHandler(redirectMap map[string][]imdb2torrent.Result, convers
 			return
 		}
 
-		// Check cache first.
-		// Cache is important, because somehow Stremio sometimes calls this endpoint multiple times while waiting for the video stream to start!
-		if streamURL, ok := cache[redirectID]; ok {
-			log.Printf("Hit redirect cache. ID: %v; URL: %v\n", redirectID, streamURL)
-			log.Printf("Responding with redirect to: %s\n", streamURL)
-			w.Header().Set("Location", streamURL)
-			w.WriteHeader(http.StatusMovedPermanently)
-			return
-		}
-
-		torrentList, ok := redirectMap[redirectID]
-		if !ok {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
 		idParts := strings.Split(redirectID, "-")
 		// "<apiToken>-<imdbID>-<quality>"
 		if len(idParts) != 3 {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+
+		// Check cache first.
+		// Cache is important, because the video player (not Stremio!) sometimes calls this endpoint multiple times while waiting for the video stream to start!
+		// Different from the other redirect cache (filled by the stream handler), eviction is important here, because this cache is not overwritten in the stream handler.
+		// We only see "empty" cache entries as valid for 1 minute and full cache entries (for resuming paused streams for example) as valid for 24 hours.
+		cacheKey := redirectID + "-stream"
+		if streamURLgob, ok := cache.HasGet(nil, []byte(cacheKey)); ok {
+			log.Println("Hit redirect cache for ID", redirectID)
+			if streamURL, created, err := fromCacheEntry(streamURLgob); err != nil {
+				log.Println("Couldn't decode streamURL:", err)
+			} else if len(streamURL) == 0 && time.Since(created) > time.Minute {
+				log.Println("The torrents for this stream where previously tried to be converted into a stream but it didn't work. This was more than one minute ago though, so we'll try again.")
+			} else if len(streamURL) == 0 {
+				log.Println("The torrents for this stream where previously tried to be converted into a stream but it didn't work")
+				w.WriteHeader(http.StatusNotFound)
+				return
+			} else if time.Since(created) > 24*time.Hour {
+				log.Println("Found streamURL in cache, but expired since", time.Since(created.Add(24*time.Hour)))
+			} else {
+				log.Printf("Responding with redirect to: %s\n", streamURL)
+				w.Header().Set("Location", string(streamURL))
+				w.WriteHeader(http.StatusMovedPermanently)
+				return
+			}
+		}
+
+		// TODO: fastcache randomly removes cache entries when the cache grows bigger than its allowed size. This is ok for all typical cache usages, but here we *mis*use the cache as storage. The redirect entry *must* exist in the redirect handler after it was created by the stream handler.
+		torrentsGob, ok := cache.HasGet(nil, []byte(redirectID))
+		if !ok {
+			log.Println("No torrents found for the redirect ID", redirectID)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		// We ignore the cache entry creation date here, because the entry is not really *cached*, but we just (mis-)use the cache as size-limited storage and overwrite the value each time in the stream handler.
+		// This also has the advantage that if a user pauses a stream and later continues it, the stream handler isn't used and no value is overwritten, but this redirect endpoint is called, with the above stream cache maybe being evicted, the following would still lead to a result after 24 hours.
+		// *But* not sure how the player behaves when RealDebrid converts the torrents to a different stream URL (because for example the first torrent in the list isn't "instantly available" anymore) and the player seeks something like 5 minutes into the movie.
+		torrentList, _, err := imdb2torrent.FromCacheEntry(torrentsGob)
+		if err != nil {
+			log.Println("Couldn't decode torrent results:", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		var streamURL string
-		var err error
 		apiToken := idParts[0]
 		for _, torrent := range torrentList {
 			if streamURL, err = conversionClient.GetStreamURL(torrent.MagnetURL, apiToken); err != nil {
@@ -196,7 +235,11 @@ func createRedirectHandler(redirectMap map[string][]imdb2torrent.Result, convers
 		}
 
 		// Fill cache, even if no actual video stream was found, because it seems to be the current state on RealDebrid
-		cache[redirectID] = streamURL
+		if streamURLgob, err := newCacheEntry(streamURL); err != nil {
+			log.Println("Couldn't encode streamURL:", err)
+		} else {
+			cache.Set([]byte(cacheKey), []byte(streamURLgob))
+		}
 
 		if streamURL == "" {
 			w.WriteHeader(http.StatusNotFound)

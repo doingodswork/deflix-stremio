@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/VictoriaMetrics/fastcache"
 )
 
 var (
@@ -18,15 +19,15 @@ var (
 
 type tpbClient struct {
 	httpClient *http.Client
-	cache      *cache
+	cache      *fastcache.Cache
 }
 
-func newTPBclient(timeout time.Duration) tpbClient {
+func newTPBclient(timeout time.Duration, cache *fastcache.Cache) tpbClient {
 	return tpbClient{
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
-		cache: newCache(),
+		cache: cache,
 	}
 }
 
@@ -35,9 +36,17 @@ func newTPBclient(timeout time.Duration) tpbClient {
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
 func (c tpbClient) check(imdbID string, attempts int) ([]Result, error) {
 	// Check cache first
-	if results, ok := c.cache.get(imdbID); ok {
-		log.Printf("Hit TPB client cache, returning %v results\n", len(results))
-		return results, nil
+	cacheKey := imdbID + "-TPB"
+	if torrentsGob, ok := c.cache.HasGet(nil, []byte(cacheKey)); ok {
+		torrentList, created, err := FromCacheEntry(torrentsGob)
+		if err != nil {
+			log.Println("Couldn't decode TPB torrent results:", err)
+		} else if time.Since(created) < (24 * time.Hour) {
+			log.Printf("Hit cache for TPB torrents, returning %v results\n", len(torrentList))
+			return torrentList, nil
+		} else {
+			log.Println("Hit cache for TPB torrents, but entry is expired since", time.Since(created.Add(24*time.Hour)))
+		}
 	}
 
 	if attempts == 0 {
@@ -56,7 +65,7 @@ func (c tpbClient) check(imdbID string, attempts int) ([]Result, error) {
 			}
 			// Just retrying again with the same HTTP client, which probably reuses the previous connection, doesn't work.
 			// Simple tests have shown that when a proper connection exists, all requests to TPB work, while when no proper connection exists all requests time out.
-			log.Println("Closig connections to TPB and retrying...")
+			log.Println("Closing connections to TPB and retrying...")
 			c.httpClient.CloseIdleConnections()
 			return c.check(imdbID, attempts-1)
 		} else {
@@ -122,7 +131,11 @@ func (c tpbClient) check(imdbID string, attempts int) ([]Result, error) {
 
 	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
 	// Any actual errors would have returned earlier.
-	c.cache.set(imdbID, results)
+	if torrentsGob, err := NewCacheEntry(results); err != nil {
+		log.Println("Couldn't create cache entry for TPB torrents:", err)
+	} else {
+		c.cache.Set([]byte(cacheKey), torrentsGob)
+	}
 
 	return results, nil
 }

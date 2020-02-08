@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/tidwall/gjson"
 )
 
@@ -25,15 +26,15 @@ var (
 
 type ytsClient struct {
 	httpClient *http.Client
-	cache      *cache
+	cache      *fastcache.Cache
 }
 
-func newYTSclient(timeout time.Duration) ytsClient {
+func newYTSclient(timeout time.Duration, cache *fastcache.Cache) ytsClient {
 	return ytsClient{
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
-		cache: newCache(),
+		cache: cache,
 	}
 }
 
@@ -41,9 +42,17 @@ func newYTSclient(timeout time.Duration) ytsClient {
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
 func (c ytsClient) check(imdbID string) ([]Result, error) {
 	// Check cache first
-	if results, ok := c.cache.get(imdbID); ok {
-		log.Printf("Hit YTS client cache, returning %v results\n", len(results))
-		return results, nil
+	cacheKey := imdbID + "-YTS"
+	if torrentsGob, ok := c.cache.HasGet(nil, []byte(cacheKey)); ok {
+		torrentList, created, err := FromCacheEntry(torrentsGob)
+		if err != nil {
+			log.Println("Couldn't decode YTS torrent results:", err)
+		} else if time.Since(created) < (24 * time.Hour) {
+			log.Printf("Hit cache for YTS torrents, returning %v results\n", len(torrentList))
+			return torrentList, nil
+		} else {
+			log.Println("Hit cache for YTS torrents, but entry is expired since", time.Since(created.Add(24*time.Hour)))
+		}
 	}
 
 	url := "https://yts.lt/api/v2/list_movies.json?query_term=" + imdbID
@@ -84,7 +93,11 @@ func (c ytsClient) check(imdbID string) ([]Result, error) {
 
 	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
 	// Any actual errors would have returned earlier.
-	c.cache.set(imdbID, results)
+	if torrentsGob, err := NewCacheEntry(results); err != nil {
+		log.Println("Couldn't create cache entry for YTS torrents:", err)
+	} else {
+		c.cache.Set([]byte(cacheKey), torrentsGob)
+	}
 
 	return results, nil
 }

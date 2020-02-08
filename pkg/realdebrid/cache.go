@@ -1,20 +1,29 @@
 package realdebrid
 
-type cache struct {
-	m map[string]struct{}
-}
+import (
+	"bytes"
+	"encoding/gob"
+	"fmt"
+	"time"
+)
 
-func newCache() *cache {
-	return &cache{
-		m: map[string]struct{}{},
+// newCacheEntry turns the current time into bytes via gob encoding.
+func newCacheEntry() ([]byte, error) {
+	writer := bytes.Buffer{}
+	encoder := gob.NewEncoder(&writer)
+	if err := encoder.Encode(time.Now()); err != nil {
+		return nil, fmt.Errorf("Couldn't encode cacheEntry: %v", err)
 	}
+	return writer.Bytes(), nil
 }
 
-func (c cache) setExists(k string) {
-	c.m[k] = struct{}{}
-}
-
-func (c cache) exists(k string) bool {
-	_, ok := c.m[k]
-	return ok
+// fromCacheEntry turns gob-encoded bytes into a time object.
+func fromCacheEntry(data []byte) (time.Time, error) {
+	reader := bytes.NewReader(data)
+	decoder := gob.NewDecoder(reader)
+	var entry time.Time
+	if err := decoder.Decode(&entry); err != nil {
+		return time.Time{}, fmt.Errorf("Couldn't decode cacheEntry: %v", err)
+	}
+	return entry, nil
 }

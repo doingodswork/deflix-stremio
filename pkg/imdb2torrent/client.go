@@ -5,6 +5,8 @@ import (
 	"log"
 	"strings"
 	"time"
+
+	"github.com/VictoriaMetrics/fastcache"
 )
 
 type Client struct {
@@ -12,10 +14,10 @@ type Client struct {
 	tpbClient tpbClient
 }
 
-func NewClient(timeout time.Duration) Client {
+func NewClient(timeout time.Duration, cache *fastcache.Cache) Client {
 	return Client{
-		ytsClient: newYTSclient(timeout),
-		tpbClient: newTPBclient(timeout),
+		ytsClient: newYTSclient(timeout, cache),
+		tpbClient: newTPBclient(timeout, cache),
 	}
 }
 

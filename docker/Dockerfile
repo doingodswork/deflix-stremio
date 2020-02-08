@@ -10,6 +10,9 @@ FROM gcr.io/distroless/base
 
 COPY --from=builder /go/src/app/deflix-stremio /
 
+# distroless/base `os.UserCacheDir()` leads to "/root/.cache", so the persisted cache will be in "/root/.cache/deflix-stremio/"
+# Using a proper volume makes the data accessible outside the container and is apparently faster.
+VOLUME [ "/root/.cache/deflix-stremio" ]
 EXPOSE 8080
 
 ENTRYPOINT ["/deflix-stremio"]
