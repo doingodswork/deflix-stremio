@@ -144,7 +144,11 @@ func main() {
 	log.Println("Starting server")
 	go func() {
 		if err := srv.ListenAndServe(); err != nil {
-			log.Fatal("Couldn't start server:", err)
+			if !*stoppingPtr {
+				log.Fatal("Couldn't start server:", err)
+			} else {
+				log.Fatal("Error in srv.ListenAndServe() during server shutdown (probably context deadline expired before the server could shutdown cleanly):", err)
+			}
 		}
 	}()
 
