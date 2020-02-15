@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"log"
 	"math/rand"
 	"net/http"
@@ -25,18 +24,6 @@ import (
 
 const (
 	version = "0.1.0"
-)
-
-// Flags
-var (
-	bindAddr      = *flag.String("bindAddr", "localhost", "Local interface address to bind to. \"0.0.0.0\" binds to all interfaces.")
-	port          = *flag.Int("port", 8080, "Port to listen on")
-	streamURLaddr = *flag.String("streamURLaddr", "http://localhost:8080", "Address to be used in a stream URL that's delivered to Stremio and later used to redirect to RealDebrid")
-	cachePath     = *flag.String("cachePath", "", "Path for loading a persisted cache on startup and persisting the current cache in regular intervals. An empty value will lead to `os.UserCacheDir()+\"/deflix-stremio/\"`")
-	// 128*1024*1024 are 128 MB
-	// We split these on 4 caches à 32 MB
-	// Note: fastcache uses 32 MB as minimum, that's why we use `4*32 MB = 128 MB` as minimum.
-	cacheMaxBytes = *flag.Int("cacheMaxBytes", 128*1024*1024, "Max number of bytes to be used for the in-memory cache. Default (and minimum!) is 128 MB.")
 )
 
 var manifest = stremio.Manifest{
@@ -81,7 +68,7 @@ func init() {
 }
 
 func main() {
-	flag.Parse()
+	parseConfig()
 
 	// Load or create caches
 
@@ -141,7 +128,7 @@ func main() {
 	stopping := false
 	stoppingPtr := &stopping
 
-	log.Println("Starting server")
+	log.Println("Starting server on", srv.Addr)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil {
 			if !*stoppingPtr {
