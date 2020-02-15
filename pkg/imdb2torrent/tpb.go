@@ -5,16 +5,11 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/VictoriaMetrics/fastcache"
-)
-
-var (
-	magnet2InfoHashRegex = regexp.MustCompile("btih:.+?&") // The "?" makes the ".+" non-greedy
 )
 
 type tpbClient struct {
@@ -31,7 +26,7 @@ func newTPBclient(timeout time.Duration, cache *fastcache.Cache) tpbClient {
 	}
 }
 
-// checkTPB scrapes TPB to find torrents for the given IMDb ID.
+// check scrapes TPB to find torrents for the given IMDb ID.
 // TPB sometimes runs into a timeout, so let's allow multiple attempts *when a timeout occurs*.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
 func (c tpbClient) check(imdbID string, attempts int) ([]Result, error) {

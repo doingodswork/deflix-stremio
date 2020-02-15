@@ -3,21 +3,28 @@ package imdb2torrent
 import (
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
 )
 
+var (
+	magnet2InfoHashRegex = regexp.MustCompile("btih:.+?&") // The "?" makes the ".+" non-greedy
+)
+
 type Client struct {
-	ytsClient ytsClient
-	tpbClient tpbClient
+	ytsClient   ytsClient
+	tpbClient   tpbClient
+	leetxClient leetxClient
 }
 
 func NewClient(timeout time.Duration, cache *fastcache.Cache) Client {
 	return Client{
-		ytsClient: newYTSclient(timeout, cache),
-		tpbClient: newTPBclient(timeout, cache),
+		ytsClient:   newYTSclient(timeout, cache),
+		tpbClient:   newTPBclient(timeout, cache),
+		leetxClient: newLeetxclient(timeout, cache),
 	}
 }
 
@@ -26,7 +33,7 @@ func NewClient(timeout time.Duration, cache *fastcache.Cache) Client {
 // It caches results once they're found.
 // It can return an empty slice and no error if no actual error occurred (for example if torrents where found but no >720p videos).
 func (c Client) FindMagnets(imdbID string) ([]Result, error) {
-	torrentSiteCount := 2
+	torrentSiteCount := 3
 	resChan := make(chan []Result, torrentSiteCount)
 	errChan := make(chan error, torrentSiteCount)
 
@@ -56,7 +63,18 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 		}
 	}()
 
-	// TODO: Check other torrent sites
+	// 1337x
+	go func() {
+		log.Println("Started searching torrents on 1337x...")
+		results, err := c.leetxClient.check(imdbID)
+		if err != nil {
+			log.Println("Couldn't find torrents on 1337x:", err)
+			errChan <- err
+		} else {
+			log.Println("Found", len(results), "torrents on 1337x")
+			resChan <- results
+		}
+	}()
 
 	var combinedResults []Result
 	var errs []error
