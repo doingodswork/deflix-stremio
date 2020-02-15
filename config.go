@@ -2,7 +2,9 @@ package main
 
 import (
 	"flag"
+	"log"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -27,6 +29,7 @@ func parseConfig() {
 	}
 
 	// Only overwrite the values by their env var counterparts that have not been set (and that *are* set via env var).
+	var err error
 	if !isArgSet("bindAddr") {
 		if val, ok := os.LookupEnv(envPrefix + "BIND_ADDR"); ok {
 			bindAddr = val
@@ -34,22 +37,26 @@ func parseConfig() {
 	}
 	if !isArgSet("port") {
 		if val, ok := os.LookupEnv(envPrefix + "PORT"); ok {
-			bindAddr = val
+			if port, err = strconv.Atoi(val); err != nil {
+				log.Fatal("Couldn't convert environment variable PORT from string to int")
+			}
 		}
 	}
 	if !isArgSet("streamURLaddr") {
 		if val, ok := os.LookupEnv(envPrefix + "STREAM_URL_ADDR"); ok {
-			bindAddr = val
+			streamURLaddr = val
 		}
 	}
 	if !isArgSet("cachePath") {
 		if val, ok := os.LookupEnv(envPrefix + "CACHE_PATH"); ok {
-			bindAddr = val
+			cachePath = val
 		}
 	}
 	if !isArgSet("cacheMaxBytes") {
 		if val, ok := os.LookupEnv(envPrefix + "CACHE_MAX_BYTES"); ok {
-			bindAddr = val
+			if cacheMaxBytes, err = strconv.Atoi(val); err != nil {
+				log.Fatal("Couldn't convert environment variable CACHE_MAX_BYTES from string to int")
+			}
 		}
 	}
 }
