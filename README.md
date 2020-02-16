@@ -44,6 +44,13 @@ That's it!
 
 Optionally you can also add `-remote` to your token, which will lead to your "remote traffic" being used, which allows you to share your RealDebrid account (and API token) with friends. (⚠️When sharing your account and *not* using remote traffic, you might get suspended - see RealDebrid's [terms](https://real-debrid.com/terms) and [faq](https://real-debrid.com/faq)!)
 
+Warning
+-------
+
+Deflix doesn't download or upload any torrents, but it *does* send HTTP requests to YTS, The Pirate Bay and 1337x, which *might* be illegal in some countries. Streaming movies from RealDebrid *might* also be illegal in some countries.
+
+> To encrypt your traffic so that your ISP can't see where those HTTP requests are sent and to not expose your real IP address to RealDebrid you can use a VPN.
+
 Disclaimer
 ----------
 
