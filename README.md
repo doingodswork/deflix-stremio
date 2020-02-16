@@ -3,7 +3,7 @@ Deflix Stremio addon
 
 [Deflix](https://deflix.tv) addon for [Stremio](https://stremio.com)
 
-Automatically turns torrents into debrid/cached streams, for high speed and no seeding.
+Looks up your selected movie on YTS, The Pirate Bay and 1337x and automatically turns your selected torrent into a debrid/cached stream, for high speed and **no P2P uploading**.
 
 Currently supported providers:
 

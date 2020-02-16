@@ -29,7 +29,7 @@ const (
 var manifest = stremio.Manifest{
 	ID:          "tv.deflix.stremio",
 	Name:        "Deflix - Debrid flicks",
-	Description: "Automatically turns torrents into debrid/cached streams, for high speed and no seeding. Currently supported providers: real-debrid.com (more coming soon™).",
+	Description: "Looks up your selected movie on YTS, The Pirate Bay and 1337x and automatically turns your selected torrent into a debrid/cached stream, for high speed and no P2P uploading (!). Currently supported providers: real-debrid.com (more coming in the future!).",
 	Version:     version,
 
 	ResourceItems: []stremio.ResourceItem{
