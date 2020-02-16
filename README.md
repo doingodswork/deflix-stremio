@@ -20,7 +20,7 @@ You can use one of the precompiled binaries from GitHub:
 
 1. Download the binary for your OS from <https://github.com/doingodswork/deflix-stremio/releases>
 2. Simply run the executable binary
-3. To stop the program press `Ctrl-C` (or `⌘-C` on macOS)
+3. To stop the program press `Ctrl-C` (or `⌃-C` on macOS)
 
 Or use Docker:
 
