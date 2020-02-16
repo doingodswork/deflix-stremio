@@ -185,6 +185,23 @@ func (c leetxClient) check(imdbID string) ([]Result, error) {
 }
 
 func (c leetxClient) getMovieName(imdbID string) (string, string, error) {
+	// Check cache first
+	// TODO: Currently these entries will never be evicted. But in case the movie names of IMDb IDs can change (e.g. from some "working title" / codename to the actual release title) we should do that.
+	movieName := ""
+	movieYear := ""
+	if movieNameBytes, ok := c.cache.HasGet(nil, []byte(imdbID+"-name")); ok {
+		log.Println("Hit cache for movie name for IMDb ID", imdbID)
+		movieName = string(movieNameBytes)
+	}
+	if movieYearBytes, ok := c.cache.HasGet(nil, []byte(imdbID+"-year")); ok {
+		log.Println("Hit cache for movie year for IMDb ID", imdbID)
+		movieYear = string(movieYearBytes)
+	}
+	// movieName is the important one, return if it was found in cache
+	if movieName != "" {
+		return movieName, movieYear, nil
+	}
+
 	reqUrl := "https://v3-cinemeta.strem.io/meta/movie/" + imdbID + ".json"
 
 	res, err := c.httpClient.Get(reqUrl)
@@ -199,11 +216,15 @@ func (c leetxClient) getMovieName(imdbID string) (string, string, error) {
 	if err != nil {
 		return "", "", fmt.Errorf("Couldn't read response body: %v", err)
 	}
-	movieName := gjson.GetBytes(resBody, "meta.name").String()
+	movieName = gjson.GetBytes(resBody, "meta.name").String()
 	if movieName == "" {
 		return "", "", fmt.Errorf("Couldn't find movie name in Cinemata response")
 	}
-	movieYear := gjson.GetBytes(resBody, "meta.year").String()
+	movieYear = gjson.GetBytes(resBody, "meta.year").String()
+
+	// Fill cache
+	c.cache.Set([]byte(imdbID+"-name"), []byte(movieName))
+	c.cache.Set([]byte(imdbID+"-year"), []byte(movieYear))
 
 	return movieName, movieYear, nil
 }
