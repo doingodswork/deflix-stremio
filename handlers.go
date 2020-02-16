@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -110,9 +111,13 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 		// Only when the user clicks on a stream and arrives at our redirect endpoint, we go through the list of torrents for the selected quality and try to convert them into a streamable video URL via RealDebrid.
 		// There it should work for the first torrent we try, because we already checked the "instant availability" on RealDebrid here.
 		var streams []stremio.StreamItem
-		redirectID := apiToken + "-" + requestedID + "-"
+		remote := false
+		if remoteIface := r.Context().Value("remote"); remoteIface != nil {
+			remote = remoteIface.(bool)
+		}
+		remoteString := strconv.FormatBool(remote)
 		if len(torrents720p) > 0 {
-			redirectID += "720p"
+			redirectID := apiToken + "-" + remoteString + "-" + requestedID + "-" + "720p"
 			stream := stremio.StreamItem{
 				URL: streamURLaddr + "/redirect/" + redirectID,
 				// Stremio docs recommend to use the stream quality as title.
@@ -134,7 +139,7 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 			}
 		}
 		if len(torrents1080p) > 0 {
-			redirectID += "1080p"
+			redirectID := apiToken + "-" + remoteString + "-" + requestedID + "-" + "1080p"
 			stream := stremio.StreamItem{
 				URL:   "http://localhost:8080/redirect/" + redirectID,
 				Title: "1080p",
@@ -177,8 +182,8 @@ func createRedirectHandler(cache *fastcache.Cache, conversionClient realdebrid.C
 		}
 
 		idParts := strings.Split(redirectID, "-")
-		// "<apiToken>-<imdbID>-<quality>"
-		if len(idParts) != 3 {
+		// "<apiToken>-<remote>-<imdbID>-<quality>"
+		if len(idParts) != 4 {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -226,8 +231,14 @@ func createRedirectHandler(cache *fastcache.Cache, conversionClient realdebrid.C
 		}
 		var streamURL string
 		apiToken := idParts[0]
+		remote, err := strconv.ParseBool(idParts[1])
+		if err != nil {
+			log.Println("Couldn't parse remote value", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 		for _, torrent := range torrentList {
-			if streamURL, err = conversionClient.GetStreamURL(torrent.MagnetURL, apiToken); err != nil {
+			if streamURL, err = conversionClient.GetStreamURL(torrent.MagnetURL, apiToken, remote); err != nil {
 				log.Println("Couldn't get stream URL:", err)
 			} else {
 				break

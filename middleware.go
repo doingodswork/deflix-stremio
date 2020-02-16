@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/doingodswork/deflix-stremio/pkg/realdebrid"
@@ -57,12 +58,18 @@ func createTokenMiddleware(conversionClient realdebrid.Client) func(http.Handler
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
+			remote := false
+			if strings.HasSuffix(apiToken, "-remote") {
+				remote = true
+				apiToken = strings.TrimSuffix(apiToken, "-remote")
+			}
 			if err := conversionClient.TestToken(apiToken); err != nil {
 				w.WriteHeader(http.StatusForbidden)
 				return
 			}
 
 			newReq := r.WithContext(context.WithValue(r.Context(), "apitoken", apiToken))
+			newReq = newReq.WithContext(context.WithValue(newReq.Context(), "remote", remote))
 			next.ServeHTTP(w, newReq)
 		})
 	}

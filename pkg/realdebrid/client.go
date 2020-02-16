@@ -133,7 +133,7 @@ func (c Client) CheckInstantAvailability(apiToken string, infoHashes ...string) 
 	return result
 }
 
-func (c Client) GetStreamURL(magnetURL, apiToken string) (string, error) {
+func (c Client) GetStreamURL(magnetURL, apiToken string, remote bool) (string, error) {
 	log.Println("Adding torrent to RealDebrid...")
 	data := url.Values{}
 	data.Set("magnet", magnetURL)
@@ -221,9 +221,9 @@ func (c Client) GetStreamURL(magnetURL, apiToken string) (string, error) {
 	log.Println("Unrestricting link...")
 	data = url.Values{}
 	data.Set("link", debridURL)
-	// if remote {
-	// 	data.Set("remote", "1")
-	// }
+	if remote {
+		data.Set("remote", "1")
+	}
 	resBytes, err = c.post(rdBaseURL+"/unrestrict/link", apiToken, data)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't unrestrict link: %v", err)
