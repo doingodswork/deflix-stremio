@@ -43,3 +43,13 @@ Then:
 That's it!
 
 Optionally you can also add `-remote` to your token, which will lead to your "remote traffic" being used, which allows you to share your RealDebrid account (and API token) with friends. (⚠️When sharing your account and *not* using remote traffic, you might get suspended - see RealDebrid's [terms](https://real-debrid.com/terms) and [faq](https://real-debrid.com/faq)!)
+
+Disclaimer
+----------
+
+Deflix
+
+- doesn't *host* any media files or torrents
+- doesn't *provide link lists* to media files or torrents
+- isn't a *torrent indexer*
+- doesn't *facilitate the sharing* of any media files or torrents
