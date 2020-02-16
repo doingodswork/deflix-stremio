@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	version = "0.2.1"
+	version = "0.3.0"
 )
 
 var manifest = stremio.Manifest{
