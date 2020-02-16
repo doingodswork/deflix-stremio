@@ -102,7 +102,7 @@ func main() {
 	// Stremio endpoints
 
 	conversionClient := realdebrid.NewClient(5*time.Second, tokenCache, availabilityCache)
-	searchClient := imdb2torrent.NewClient(5*time.Second, torrentCache)
+	searchClient := imdb2torrent.NewClient(baseURLyts, baseURLtpb, baseURL1337x, 5*time.Second, torrentCache)
 	// Use token middleware only for the Stremio endpoints
 	tokenMiddleware := createTokenMiddleware(conversionClient)
 	manifestHandler := createManifestHandler(conversionClient)

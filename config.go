@@ -18,7 +18,10 @@ var (
 	// We split these on 4 caches à 32 MB
 	// Note: fastcache uses 32 MB as minimum, that's why we use `4*32 MB = 128 MB` as minimum.
 	cacheMaxBytes = *flag.Int("cacheMaxBytes", 128*1024*1024, "Max number of bytes to be used for the in-memory cache. Default (and minimum!) is 128 MB.")
-	envPrefix     = *flag.String("envPrefix", "", "Prefix for environment variables.")
+	baseURLyts    = *flag.String("baseURLyts", "https://yts.mx", "Base URL for YTS")
+	baseURLtpb    = *flag.String("baseURLtpb", "https://thepiratebay.org", "Base URL for TPB")
+	baseURL1337x  = *flag.String("baseURL1337x", "https://1337x.to", "Base URL for 1337x")
+	envPrefix     = *flag.String("envPrefix", "", "Prefix for environment variables")
 )
 
 func parseConfig() {
@@ -57,6 +60,21 @@ func parseConfig() {
 			if cacheMaxBytes, err = strconv.Atoi(val); err != nil {
 				log.Fatal("Couldn't convert environment variable CACHE_MAX_BYTES from string to int")
 			}
+		}
+	}
+	if !isArgSet("baseURLyts") {
+		if val, ok := os.LookupEnv(envPrefix + "BASE_URL_YTS"); ok {
+			baseURLyts = val
+		}
+	}
+	if !isArgSet("baseURLtpb") {
+		if val, ok := os.LookupEnv(envPrefix + "BASE_URL_TPB"); ok {
+			baseURLtpb = val
+		}
+	}
+	if !isArgSet("baseURL1337x") {
+		if val, ok := os.LookupEnv(envPrefix + "BASE_URL_1337X"); ok {
+			baseURL1337x = val
 		}
 	}
 }

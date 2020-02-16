@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	// See recommended tracker list on https://yts.lt/api#list_movies
+	// See recommended tracker list on https://yts.mx/api#list_movies
 	trackers = []string{"udp://open.demonii.com:1337/announce",
 		"udp://tracker.openbittorrent.com:80",
 		"udp://tracker.coppersurfer.tk:6969",
@@ -25,12 +25,14 @@ var (
 )
 
 type ytsClient struct {
+	baseURL    string
 	httpClient *http.Client
 	cache      *fastcache.Cache
 }
 
-func newYTSclient(timeout time.Duration, cache *fastcache.Cache) ytsClient {
+func newYTSclient(baseURL string, timeout time.Duration, cache *fastcache.Cache) ytsClient {
 	return ytsClient{
+		baseURL: baseURL,
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
@@ -55,7 +57,7 @@ func (c ytsClient) check(imdbID string) ([]Result, error) {
 		}
 	}
 
-	url := "https://yts.lt/api/v2/list_movies.json?query_term=" + imdbID
+	url := c.baseURL + "/api/v2/list_movies.json?query_term=" + imdbID
 	res, err := c.httpClient.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't GET %v: %v", url, err)

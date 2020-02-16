@@ -20,11 +20,11 @@ type Client struct {
 	leetxClient leetxClient
 }
 
-func NewClient(timeout time.Duration, cache *fastcache.Cache) Client {
+func NewClient(baseURLyts, baseURLtpb, baseURL1337x string, timeout time.Duration, cache *fastcache.Cache) Client {
 	return Client{
-		ytsClient:   newYTSclient(timeout, cache),
-		tpbClient:   newTPBclient(timeout, cache),
-		leetxClient: newLeetxclient(timeout, cache),
+		ytsClient:   newYTSclient(baseURLyts, timeout, cache),
+		tpbClient:   newTPBclient(baseURLtpb, timeout, cache),
+		leetxClient: newLeetxclient(baseURL1337x, timeout, cache),
 	}
 }
 

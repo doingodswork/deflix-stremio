@@ -13,12 +13,14 @@ import (
 )
 
 type tpbClient struct {
+	baseURL    string
 	httpClient *http.Client
 	cache      *fastcache.Cache
 }
 
-func newTPBclient(timeout time.Duration, cache *fastcache.Cache) tpbClient {
+func newTPBclient(baseURL string, timeout time.Duration, cache *fastcache.Cache) tpbClient {
 	return tpbClient{
+		baseURL: baseURL,
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
@@ -48,7 +50,7 @@ func (c tpbClient) check(imdbID string, attempts int) ([]Result, error) {
 		return nil, fmt.Errorf("Cannot check TPB with 0 attempts")
 	}
 	// "/0/7/207" suffix is: ? / sort by seeders / category "HD - Movies"
-	reqUrl := "https://thepiratebay.org/search/" + imdbID + "/0/7/207"
+	reqUrl := c.baseURL + "/search/" + imdbID + "/0/7/207"
 	res, err := c.httpClient.Get(reqUrl)
 	if err != nil {
 		// HTTP client errors are *always* `*url.Error`s

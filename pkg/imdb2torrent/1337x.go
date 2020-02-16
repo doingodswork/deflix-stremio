@@ -15,12 +15,14 @@ import (
 )
 
 type leetxClient struct {
+	baseURL    string
 	httpClient *http.Client
 	cache      *fastcache.Cache
 }
 
-func newLeetxclient(timeout time.Duration, cache *fastcache.Cache) leetxClient {
+func newLeetxclient(baseURL string, timeout time.Duration, cache *fastcache.Cache) leetxClient {
 	return leetxClient{
+		baseURL: baseURL,
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
@@ -62,7 +64,7 @@ func (c leetxClient) check(imdbID string) ([]Result, error) {
 
 	// Search on 1337x
 
-	reqUrl := "https://1337x.to/category-search/" + movieSearch + "/Movies/1/"
+	reqUrl := c.baseURL + "/category-search/" + movieSearch + "/Movies/1/"
 	doc, err := c.getDoc(reqUrl)
 	if err != nil {
 		return nil, err
@@ -75,7 +77,7 @@ func (c leetxClient) check(imdbID string) ([]Result, error) {
 
 	// Go via a single search result to the general movie page
 
-	reqUrl = "https://1337x.to" + torrentPath
+	reqUrl = c.baseURL + torrentPath
 	doc, err = c.getDoc(reqUrl)
 	if err != nil {
 		return nil, err
@@ -88,7 +90,7 @@ func (c leetxClient) check(imdbID string) ([]Result, error) {
 
 	// Go through torrent pages for the movie
 
-	reqUrl = "https://1337x.to" + movieInfoURL
+	reqUrl = c.baseURL + movieInfoURL
 	doc, err = c.getDoc(reqUrl)
 	if err != nil {
 		return nil, err
@@ -100,7 +102,7 @@ func (c leetxClient) check(imdbID string) ([]Result, error) {
 		if strings.Contains(linkText, "720p") || strings.Contains(linkText, "1080p") {
 			torrentLink, ok := s.Find("a").Next().Attr("href")
 			if ok {
-				torrentPageURLs = append(torrentPageURLs, "https://1337x.to"+torrentLink)
+				torrentPageURLs = append(torrentPageURLs, c.baseURL+torrentLink)
 			}
 		}
 	})
