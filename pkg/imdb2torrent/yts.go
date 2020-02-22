@@ -81,7 +81,7 @@ func (c ytsClient) check(imdbID string) ([]Result, error) {
 	var results []Result
 	for _, torrent := range torrents {
 		quality := torrent.Get("quality").String()
-		if quality == "720p" || quality == "1080p" {
+		if quality == "720p" || quality == "1080p" || quality == "2160p" {
 			infoHash := torrent.Get("hash").String()
 			result := createMagnetURL(infoHash, title)
 			result.Quality = quality

@@ -29,9 +29,9 @@ func NewClient(baseURLyts, baseURLtpb, baseURL1337x string, timeout time.Duratio
 }
 
 // FindMagnets tries to find magnet URLs for the given IMDb ID.
-// It only returns 720p and 1080p videos.
+// It only returns 720p, 1080p, 1080p 10bit, 2160p and 2160p 10bit videos.
 // It caches results once they're found.
-// It can return an empty slice and no error if no actual error occurred (for example if torrents where found but no >720p videos).
+// It can return an empty slice and no error if no actual error occurred (for example if torrents where found but no >=720p videos).
 func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 	torrentSiteCount := 3
 	resChan := make(chan []Result, torrentSiteCount)

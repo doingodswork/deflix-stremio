@@ -95,15 +95,25 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 
 		// Note: The torrents slice is guaranteed to not be empty at this point, because it already contained non-duplicate info hashes and then only unavailable ones were filtered and then a `len(availableInfoHashes) == 0` was done.
 
-		// Separate all torrent results into one 720p and one 1080p list, so we can offer the user one stream for each quality now (or maybe just for one quality if there's no torrent for the other), cache the torrents for each apiToken-imdbID-quality combination and later (at the redirect endpoint) go through the respective torrent list to turn in into a streamable video URL via RealDebrid.
+		// Separate all torrent results into a 720p, 1080p, 1080p 10bit, 2160p and 2160p 10bit list, so we can offer the user one stream for each quality now (or maybe just for one quality if there's no torrent for the other), cache the torrents for each apiToken-imdbID-quality combination and later (at the redirect endpoint) go through the respective torrent list to turn in into a streamable video URL via RealDebrid.
 		var torrents720p []imdb2torrent.Result
 		var torrents1080p []imdb2torrent.Result
+		var torrents1080p10bit []imdb2torrent.Result
+		var torrents2160p []imdb2torrent.Result
+		var torrents2160p10bit []imdb2torrent.Result
 		for _, torrent := range torrents {
-			// TODO: If we know 100% the quality starts with the searched string, strings.HasPrefix() might be faster.
-			if strings.Contains(torrent.Quality, "720p") {
+			if strings.HasPrefix(torrent.Quality, "720p") {
 				torrents720p = append(torrents720p, torrent)
-			} else {
+			} else if strings.HasPrefix(torrent.Quality, "1080p") && strings.Contains(torrent.Quality, "10bit") {
+				torrents1080p10bit = append(torrents1080p10bit, torrent)
+			} else if strings.HasPrefix(torrent.Quality, "1080p") {
 				torrents1080p = append(torrents1080p, torrent)
+			} else if strings.HasPrefix(torrent.Quality, "2160p") && strings.Contains(torrent.Quality, "10bit") {
+				torrents2160p10bit = append(torrents2160p10bit, torrent)
+			} else if strings.HasPrefix(torrent.Quality, "2160p") {
+				torrents2160p = append(torrents2160p, torrent)
+			} else {
+				log.Println("Unknown quality, can't sort into one of the torrent lists:", torrent.Quality)
 			}
 		}
 
@@ -151,6 +161,60 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 
 			// Cache for upcoming redirect request
 			if data, err := imdb2torrent.NewCacheEntry(torrents1080p); err != nil {
+				log.Println("Couldn't create cache entry for torrent results:", err)
+			} else {
+				redirectCache.Set([]byte(redirectID), data)
+			}
+		}
+		if len(torrents1080p10bit) > 0 {
+			redirectID := apiToken + "-" + remoteString + "-" + requestedID + "-" + "1080p-10bit"
+			stream := stremio.StreamItem{
+				URL:   "http://localhost:8080/redirect/" + redirectID,
+				Title: "1080p 10bit",
+			}
+			if len(torrents1080p10bit) == 1 {
+				stream.Title = torrents1080p10bit[0].Quality
+			}
+			streams = append(streams, stream)
+
+			// Cache for upcoming redirect request
+			if data, err := imdb2torrent.NewCacheEntry(torrents1080p10bit); err != nil {
+				log.Println("Couldn't create cache entry for torrent results:", err)
+			} else {
+				redirectCache.Set([]byte(redirectID), data)
+			}
+		}
+		if len(torrents2160p) > 0 {
+			redirectID := apiToken + "-" + remoteString + "-" + requestedID + "-" + "2160p"
+			stream := stremio.StreamItem{
+				URL:   "http://localhost:8080/redirect/" + redirectID,
+				Title: "2160p",
+			}
+			if len(torrents2160p) == 1 {
+				stream.Title = torrents2160p[0].Quality
+			}
+			streams = append(streams, stream)
+
+			// Cache for upcoming redirect request
+			if data, err := imdb2torrent.NewCacheEntry(torrents2160p); err != nil {
+				log.Println("Couldn't create cache entry for torrent results:", err)
+			} else {
+				redirectCache.Set([]byte(redirectID), data)
+			}
+		}
+		if len(torrents2160p10bit) > 0 {
+			redirectID := apiToken + "-" + remoteString + "-" + requestedID + "-" + "2160p-10bit"
+			stream := stremio.StreamItem{
+				URL:   "http://localhost:8080/redirect/" + redirectID,
+				Title: "2160p 10bit",
+			}
+			if len(torrents2160p10bit) == 1 {
+				stream.Title = torrents2160p10bit[0].Quality
+			}
+			streams = append(streams, stream)
+
+			// Cache for upcoming redirect request
+			if data, err := imdb2torrent.NewCacheEntry(torrents2160p10bit); err != nil {
 				log.Println("Couldn't create cache entry for torrent results:", err)
 			} else {
 				redirectCache.Set([]byte(redirectID), data)

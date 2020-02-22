@@ -99,7 +99,7 @@ func (c leetxClient) check(imdbID string) ([]Result, error) {
 	// Go through elements
 	doc.Find(".table-list tbody tr").Each(func(i int, s *goquery.Selection) {
 		linkText := s.Find("a").Next().Text()
-		if strings.Contains(linkText, "720p") || strings.Contains(linkText, "1080p") {
+		if strings.Contains(linkText, "720p") || strings.Contains(linkText, "1080p") || strings.Contains(linkText, "2160p") {
 			torrentLink, ok := s.Find("a").Next().Attr("href")
 			if ok {
 				torrentPageURLs = append(torrentPageURLs, c.baseURL+torrentLink)
@@ -129,18 +129,24 @@ func (c leetxClient) check(imdbID string) ([]Result, error) {
 				return
 			}
 
+			title := movieName
+
 			quality := ""
 			if strings.Contains(magnet, "720p") {
 				quality = "720p"
 			} else if strings.Contains(magnet, "1080p") {
 				quality = "1080p"
+			} else if strings.Contains(magnet, "2160p") {
+				quality = "2160p"
 			} else {
 				// This should never be the case, because it was previously checked during scraping
 				resultChan <- Result{}
 				return
 			}
 
-			title := movieName
+			if strings.Contains(magnet, "10bit") {
+				quality += " 10bit"
+			}
 
 			// https://en.wikipedia.org/wiki/Pirated_movie_release_types
 			if strings.Contains(magnet, "HDCam") {

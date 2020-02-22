@@ -89,16 +89,21 @@ func (c tpbClient) check(imdbID string, attempts int) ([]Result, error) {
 			log.Println("Scraped movie title is empty, did the HTML change?")
 			return
 		}
+		title = strings.TrimSpace(title)
+
 		quality := ""
 		if strings.Contains(title, "720p") {
 			quality = "720p"
 		} else if strings.Contains(title, "1080p") {
 			quality = "1080p"
+		} else if strings.Contains(title, "2160p") {
+			quality = "2160p"
 		} else {
 			return
 		}
-		title = strings.TrimSpace(title)
-
+		if strings.Contains(title, "10bit") {
+			quality += " 10bit"
+		}
 		// https://en.wikipedia.org/wiki/Pirated_movie_release_types
 		if strings.Contains(title, "HDCAM") {
 			quality += (" (⚠️cam)")
