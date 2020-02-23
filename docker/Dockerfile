@@ -10,7 +10,8 @@ FROM gcr.io/distroless/static
 
 COPY --from=builder /go/src/app/deflix-stremio /
 
-# Default bind addr is localhost, which wouldn't allow connections from outside the container
+# Default bind addr is localhost, which wouldn't allow connections from outside the container.
+# Should be overwritten when using `--network host` and not wanting to expose the service to other hosts.
 ENV BIND_ADDR 0.0.0.0
 
 # distroless/static `os.UserCacheDir()` leads to "/root/.cache", so the persisted cache will be in "/root/.cache/deflix-stremio/"
@@ -18,6 +19,5 @@ ENV BIND_ADDR 0.0.0.0
 VOLUME [ "/root/.cache/deflix-stremio" ]
 EXPOSE 8080
 
-# CLI arguments can't be used here because the Docker image doesn't contain a shell.
-# That's also why we use CMD instead of ENTRYPOINT (because otherwise a user might think he can add CLI arguments in `docker run`).
-CMD ["/deflix-stremio"]
+# Using ENTRYPOINT instead of CMD allows the user to easily just *add* command line arguments when using `docker run`
+ENTRYPOINT ["/deflix-stremio"]
