@@ -12,11 +12,11 @@ import (
 
 // Flags
 var (
-	bindAddr      = flag.String("bindAddr", "localhost", "Local interface address to bind to. \"0.0.0.0\" binds to all interfaces.")
+	bindAddr      = flag.String("bindAddr", "localhost", `Local interface address to bind to. "0.0.0.0" binds to all interfaces.`)
 	port          = flag.Int("port", 8080, "Port to listen on")
 	streamURLaddr = flag.String("streamURLaddr", "http://localhost:8080", "Address to be used in a stream URL that's delivered to Stremio and later used to redirect to RealDebrid")
 	cachePath     = flag.String("cachePath", "", "Path for loading a persisted cache on startup and persisting the current cache in regular intervals. An empty value will lead to `os.UserCacheDir()+\"/deflix-stremio/\"`")
-	// 128*1024*1024 MB = 128 MB
+	// 128*1024*1024 Byte = 128 MB
 	// We split these on 4 caches à 32 MB
 	// Note: fastcache uses 32 MB as minimum, that's why we use `4*32 MB = 128 MB` as minimum.
 	cacheMaxBytes = flag.Int("cacheMaxBytes", 128*1024*1024, "Max number of bytes to be used for the in-memory cache. Default (and minimum!) is 128 MB.")
@@ -24,6 +24,7 @@ var (
 	baseURLtpb    = flag.String("baseURLtpb", "https://thepiratebay.org", "Base URL for TPB")
 	baseURL1337x  = flag.String("baseURL1337x", "https://1337x.to", "Base URL for 1337x")
 	baseURLibit   = flag.String("baseURLibit", "https://ibit.am", "Base URL for ibit")
+	logLevel      = flag.String("logLevel", "info", `Log level to show only logs with the given and more severe levels. Can be "trace", "debug", "info", "warn", "error", "fatal", "panic"`)
 	envPrefix     = flag.String("envPrefix", "", "Prefix for environment variables")
 )
 
@@ -78,6 +79,11 @@ func parseConfig(ctx context.Context) {
 	if !isArgSet(ctx, "baseURL1337x") {
 		if val, ok := os.LookupEnv(*envPrefix + "BASE_URL_1337X"); ok {
 			*baseURL1337x = val
+		}
+	}
+	if !isArgSet(ctx, "logLevel") {
+		if val, ok := os.LookupEnv(*envPrefix + "LOG_LEVEL"); ok {
+			*logLevel = val
 		}
 	}
 }
