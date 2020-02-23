@@ -65,6 +65,11 @@ func init() {
 
 	// Make predicting "random" numbers harder
 	rand.NewSource(time.Now().UnixNano())
+
+	// Configure logging (except for level, which we only know from the config which is obtained later).
+	log.SetFormatter(&log.TextFormatter{
+		FullTimestamp: true,
+	})
 }
 
 func main() {
