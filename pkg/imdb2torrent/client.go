@@ -3,12 +3,12 @@ package imdb2torrent
 import (
 	"context"
 	"fmt"
-	"log"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
+	log "github.com/sirupsen/logrus"
 )
 
 var (

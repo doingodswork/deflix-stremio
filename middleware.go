@@ -2,14 +2,15 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/doingodswork/deflix-stremio/pkg/realdebrid"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	log "github.com/sirupsen/logrus"
+
+	"github.com/doingodswork/deflix-stremio/pkg/realdebrid"
 )
 
 func createTimerMiddleware(ctx context.Context) func(http.Handler) http.Handler {

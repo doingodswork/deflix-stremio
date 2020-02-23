@@ -3,10 +3,11 @@ package main
 import (
 	"context"
 	"flag"
-	"log"
 	"os"
 	"strconv"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // Flags

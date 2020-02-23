@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
+	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 )
 

@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/VictoriaMetrics/fastcache"
+	log "github.com/sirupsen/logrus"
 )
 
 type ibitClient struct {

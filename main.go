@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"math/rand"
 	"net/http"
 	"os"
@@ -16,6 +15,7 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
 	"github.com/doingodswork/deflix-stremio/pkg/realdebrid"

@@ -7,5 +7,6 @@ require (
 	github.com/VictoriaMetrics/fastcache v1.5.7
 	github.com/gorilla/handlers v1.4.2
 	github.com/gorilla/mux v1.7.4
+	github.com/sirupsen/logrus v1.4.2
 	github.com/tidwall/gjson v1.4.0
 )

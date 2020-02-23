@@ -5,8 +5,9 @@ import (
 	"context"
 	"encoding/gob"
 	"fmt"
-	"log"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type cacheEntry struct {

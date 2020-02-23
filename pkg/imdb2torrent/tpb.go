@@ -3,7 +3,6 @@ package imdb2torrent
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/VictoriaMetrics/fastcache"
+	log "github.com/sirupsen/logrus"
 )
 
 type tpbClient struct {

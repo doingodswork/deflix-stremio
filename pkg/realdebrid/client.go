@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
+	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 )
 
