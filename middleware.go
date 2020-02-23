@@ -15,7 +15,8 @@ import (
 func createTimerMiddleware(ctx context.Context) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			newReq := r.WithContext(context.WithValue(r.Context(), "start", time.Now()))
+			rCtx := r.Context()
+			newReq := r.WithContext(context.WithValue(rCtx, "start", time.Now()))
 			// Call the next handler, which can be another middleware in the chain, or the final handler.
 			next.ServeHTTP(w, newReq)
 		})
@@ -56,6 +57,7 @@ var recoveryMiddleware = handlers.RecoveryHandler(handlers.PrintRecoveryStack(tr
 func createTokenMiddleware(ctx context.Context, conversionClient realdebrid.Client) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			rCtx := r.Context()
 			params := mux.Vars(r)
 			apiToken := params["apitoken"]
 			if apiToken == "" {
@@ -67,13 +69,14 @@ func createTokenMiddleware(ctx context.Context, conversionClient realdebrid.Clie
 				remote = true
 				apiToken = strings.TrimSuffix(apiToken, "-remote")
 			}
-			if err := conversionClient.TestToken(ctx, apiToken); err != nil {
+			if err := conversionClient.TestToken(rCtx, apiToken); err != nil {
 				w.WriteHeader(http.StatusForbidden)
 				return
 			}
 
-			newReq := r.WithContext(context.WithValue(r.Context(), "apitoken", apiToken))
-			newReq = newReq.WithContext(context.WithValue(newReq.Context(), "remote", remote))
+			rCtx = context.WithValue(rCtx, "apitoken", apiToken)
+			rCtx = context.WithValue(rCtx, "remote", remote)
+			newReq := r.WithContext(rCtx)
 			next.ServeHTTP(w, newReq)
 		})
 	}
@@ -82,10 +85,11 @@ func createTokenMiddleware(ctx context.Context, conversionClient realdebrid.Clie
 func createLoggingMiddleware(ctx context.Context) func(http.Handler) http.Handler {
 	return func(before http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			rCtx := r.Context()
 			// First call the *before* handler!
 			before.ServeHTTP(w, r)
 			// Then log
-			reqStart := r.Context().Value("start").(time.Time)
+			reqStart := rCtx.Value("start").(time.Time)
 			duration := time.Since(reqStart).Milliseconds()
 			log.Println(r.Method, r.URL, "from", r.RemoteAddr, "took", duration, "ms")
 		})
