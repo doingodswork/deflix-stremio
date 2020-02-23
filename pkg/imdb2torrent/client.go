@@ -11,20 +11,25 @@ import (
 )
 
 var (
-	magnet2InfoHashRegex = regexp.MustCompile("btih:.+?&") // The "?" makes the ".+" non-greedy
+	magnet2InfoHashRegex = regexp.MustCompile("btih:.+?&")     // The "?" makes the ".+" non-greedy
+	regexMagnet          = regexp.MustCompile("'magnet:?.+?'") // The "?" makes the ".+" non-greedy
 )
 
 type Client struct {
+	timeout     time.Duration
 	ytsClient   ytsClient
 	tpbClient   tpbClient
 	leetxClient leetxClient
+	ibitClient  ibitClient
 }
 
-func NewClient(baseURLyts, baseURLtpb, baseURL1337x string, timeout time.Duration, cache *fastcache.Cache) Client {
+func NewClient(baseURLyts, baseURLtpb, baseURL1337x, baseURLibit string, timeout time.Duration, cache *fastcache.Cache) Client {
 	return Client{
+		timeout:     timeout,
 		ytsClient:   newYTSclient(baseURLyts, timeout, cache),
 		tpbClient:   newTPBclient(baseURLtpb, timeout, cache),
 		leetxClient: newLeetxclient(baseURL1337x, timeout, cache),
+		ibitClient:  newIbitClient(baseURLibit, timeout, cache),
 	}
 }
 
@@ -76,6 +81,25 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 		}
 	}()
 
+	// ibit
+	// Note: An initial movie search takes long, because multiple requests need to be made, but ibit uses rate limiting, so we can't do them concurrently.
+	// So let's treat this special: Make the request, but only wait for 5 seconds, then don't cancel the operation, but let it run in the background so the cache gets filled.
+	// With the next movie search for the same IMDb ID the cache is used.
+	ibitResChan := make(chan []Result)
+	ibitErrChan := make(chan error)
+	ibitStop := time.Now().Add(c.timeout)
+	go func() {
+		log.Println("Started searching torrents on ibit...")
+		ibitResults, err := c.ibitClient.check(imdbID)
+		if err != nil {
+			log.Println("Couldn't find torrents on ibit:", err)
+			ibitErrChan <- err
+		} else {
+			log.Println("Found", len(ibitResults), "torrents on ibit")
+			ibitResChan <- ibitResults
+		}
+	}()
+
 	var combinedResults []Result
 	var errs []error
 	dupRemovalRequired := false
@@ -94,8 +118,31 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 	close(resChan)
 	close(errChan)
 
+	returnErrors := len(errs) == torrentSiteCount
+
+	// Now collect result from ibit if it's there.
+	var closeChansOk bool
+	select {
+	case err := <-ibitErrChan:
+		errs = append(errs, err)
+		closeChansOk = true
+	case results := <-ibitResChan:
+		if !dupRemovalRequired && len(combinedResults) > 0 && len(results) > 0 {
+			dupRemovalRequired = true
+		}
+		combinedResults = append(combinedResults, results...)
+		returnErrors = false
+		closeChansOk = true
+	case <-time.After(time.Until(ibitStop)):
+		log.Println("ibit torrent search hasn't finished yet, we'll let it run in the background")
+	}
+	if closeChansOk {
+		close(ibitErrChan)
+		close(ibitResChan)
+	}
+
 	// Return error (only) if all torrent sites returned actual errors (and not just empty results)
-	if len(errs) == torrentSiteCount {
+	if returnErrors {
 		errsMsg := "Couldn't find torrents on any site: "
 		for i := 1; i <= torrentSiteCount; i++ {
 			errsMsg += fmt.Sprintf("%v.: %v; ", i, errs[i-1])

@@ -21,6 +21,7 @@ var (
 	baseURLyts    = *flag.String("baseURLyts", "https://yts.mx", "Base URL for YTS")
 	baseURLtpb    = *flag.String("baseURLtpb", "https://thepiratebay.org", "Base URL for TPB")
 	baseURL1337x  = *flag.String("baseURL1337x", "https://1337x.to", "Base URL for 1337x")
+	baseURLibit   = *flag.String("baseURLibit", "https://ibit.am", "Base URL for ibit")
 	envPrefix     = *flag.String("envPrefix", "", "Prefix for environment variables")
 )
 

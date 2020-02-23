@@ -29,7 +29,7 @@ const (
 var manifest = stremio.Manifest{
 	ID:          "tv.deflix.stremio",
 	Name:        "Deflix - Debrid flicks",
-	Description: "Looks up your selected movie on YTS, The Pirate Bay and 1337x and automatically turns your selected torrent into a debrid/cached stream, for high speed and no P2P uploading (!). Currently supported providers: real-debrid.com (more coming in the future!).",
+	Description: "Looks up your selected movie on YTS, The Pirate Bay, 1337x and ibit and automatically turns your selected torrent into a debrid/cached stream, for high speed and no P2P uploading (!). Currently supported providers: real-debrid.com (more coming in the future!).",
 	Version:     version,
 
 	ResourceItems: []stremio.ResourceItem{
@@ -102,7 +102,7 @@ func main() {
 	// Stremio endpoints
 
 	conversionClient := realdebrid.NewClient(5*time.Second, tokenCache, availabilityCache)
-	searchClient := imdb2torrent.NewClient(baseURLyts, baseURLtpb, baseURL1337x, 5*time.Second, torrentCache)
+	searchClient := imdb2torrent.NewClient(baseURLyts, baseURLtpb, baseURL1337x, baseURLibit, 5*time.Second, torrentCache)
 	// Use token middleware only for the Stremio endpoints
 	tokenMiddleware := createTokenMiddleware(conversionClient)
 	manifestHandler := createManifestHandler(conversionClient)
