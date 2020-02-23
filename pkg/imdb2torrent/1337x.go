@@ -101,9 +101,11 @@ func (c leetxClient) check(imdbID string) ([]Result, error) {
 		linkText := s.Find("a").Next().Text()
 		if strings.Contains(linkText, "720p") || strings.Contains(linkText, "1080p") || strings.Contains(linkText, "2160p") {
 			torrentLink, ok := s.Find("a").Next().Attr("href")
-			if ok {
-				torrentPageURLs = append(torrentPageURLs, c.baseURL+torrentLink)
+			if !ok || torrentLink == "" {
+				log.Println("Couldn't find link to the torrent page, did the HTML change?")
+				return
 			}
+			torrentPageURLs = append(torrentPageURLs, c.baseURL+torrentLink)
 		}
 	})
 	// TODO: We should differentiate between "parsing went wrong" and "just no search results".
@@ -124,7 +126,7 @@ func (c leetxClient) check(imdbID string) ([]Result, error) {
 			}
 
 			magnet, ok := doc.Find(".box-info ul li").First().Find("a").Attr("href")
-			if !ok {
+			if !ok || magnet == "" {
 				resultChan <- Result{}
 				return
 			}
@@ -178,7 +180,10 @@ func (c leetxClient) check(imdbID string) ([]Result, error) {
 	var results []Result
 	// We don't use a timeout channel because the HTTP clients have a timeout so the goroutines are guaranteed to finish
 	for i := 0; i < len(torrentPageURLs); i++ {
-		results = append(results, <-resultChan)
+		result := <-resultChan
+		if result.MagnetURL != "" {
+			results = append(results, result)
+		}
 	}
 
 	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
