@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"os"
@@ -25,7 +26,7 @@ var (
 	envPrefix     = *flag.String("envPrefix", "", "Prefix for environment variables")
 )
 
-func parseConfig() {
+func parseConfig(ctx context.Context) {
 	flag.Parse()
 
 	if envPrefix != "" && !strings.HasSuffix(envPrefix, "_") {
@@ -34,46 +35,46 @@ func parseConfig() {
 
 	// Only overwrite the values by their env var counterparts that have not been set (and that *are* set via env var).
 	var err error
-	if !isArgSet("bindAddr") {
+	if !isArgSet(ctx, "bindAddr") {
 		if val, ok := os.LookupEnv(envPrefix + "BIND_ADDR"); ok {
 			bindAddr = val
 		}
 	}
-	if !isArgSet("port") {
+	if !isArgSet(ctx, "port") {
 		if val, ok := os.LookupEnv(envPrefix + "PORT"); ok {
 			if port, err = strconv.Atoi(val); err != nil {
 				log.Fatal("Couldn't convert environment variable PORT from string to int")
 			}
 		}
 	}
-	if !isArgSet("streamURLaddr") {
+	if !isArgSet(ctx, "streamURLaddr") {
 		if val, ok := os.LookupEnv(envPrefix + "STREAM_URL_ADDR"); ok {
 			streamURLaddr = val
 		}
 	}
-	if !isArgSet("cachePath") {
+	if !isArgSet(ctx, "cachePath") {
 		if val, ok := os.LookupEnv(envPrefix + "CACHE_PATH"); ok {
 			cachePath = val
 		}
 	}
-	if !isArgSet("cacheMaxBytes") {
+	if !isArgSet(ctx, "cacheMaxBytes") {
 		if val, ok := os.LookupEnv(envPrefix + "CACHE_MAX_BYTES"); ok {
 			if cacheMaxBytes, err = strconv.Atoi(val); err != nil {
 				log.Fatal("Couldn't convert environment variable CACHE_MAX_BYTES from string to int")
 			}
 		}
 	}
-	if !isArgSet("baseURLyts") {
+	if !isArgSet(ctx, "baseURLyts") {
 		if val, ok := os.LookupEnv(envPrefix + "BASE_URL_YTS"); ok {
 			baseURLyts = val
 		}
 	}
-	if !isArgSet("baseURLtpb") {
+	if !isArgSet(ctx, "baseURLtpb") {
 		if val, ok := os.LookupEnv(envPrefix + "BASE_URL_TPB"); ok {
 			baseURLtpb = val
 		}
 	}
-	if !isArgSet("baseURL1337x") {
+	if !isArgSet(ctx, "baseURL1337x") {
 		if val, ok := os.LookupEnv(envPrefix + "BASE_URL_1337X"); ok {
 			baseURL1337x = val
 		}
@@ -82,7 +83,7 @@ func parseConfig() {
 
 // isArgSet returns true if the argument you're looking for is actually set as command line argument.
 // Pass without "-" prefix.
-func isArgSet(arg string) bool {
+func isArgSet(ctx context.Context, arg string) bool {
 	arg = "-" + arg
 	for _, argsElem := range flag.Args() {
 		if arg == argsElem {

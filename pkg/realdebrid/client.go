@@ -1,6 +1,7 @@
 package realdebrid
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -26,7 +27,7 @@ type Client struct {
 	availabilityCache *fastcache.Cache
 }
 
-func NewClient(timeout time.Duration, tokenCache, availabilityCache *fastcache.Cache) Client {
+func NewClient(ctx context.Context, timeout time.Duration, tokenCache, availabilityCache *fastcache.Cache) Client {
 	return Client{
 		httpClient: &http.Client{
 			Timeout: timeout,
@@ -36,13 +37,13 @@ func NewClient(timeout time.Duration, tokenCache, availabilityCache *fastcache.C
 	}
 }
 
-func (c Client) TestToken(apiToken string) error {
+func (c Client) TestToken(ctx context.Context, apiToken string) error {
 	log.Println("Testing token...")
 
 	// Check cache first.
 	// Note: Only when a token is valid a cache entry was created, because a token is probably valid for another 24 hours, while when a token is invalid it's likely that the user makes a payment to RealDebrid to extend his premium status and make his token valid again *within* 24 hours.
 	if tokenGob, ok := c.tokenCache.HasGet(nil, []byte(apiToken)); ok {
-		created, err := fromCacheEntry(tokenGob)
+		created, err := fromCacheEntry(ctx, tokenGob)
 		if err != nil {
 			log.Println("Couldn't decode token cache entry:", err)
 		} else if time.Since(created) < (24 * time.Hour) {
@@ -53,7 +54,7 @@ func (c Client) TestToken(apiToken string) error {
 		}
 	}
 
-	resBytes, err := c.get(rdBaseURL+"/user", apiToken)
+	resBytes, err := c.get(ctx, rdBaseURL+"/user", apiToken)
 	if err != nil {
 		return fmt.Errorf("Couldn't fetch user info from real-debrid.com with the provided token: %v", err)
 	}
@@ -64,7 +65,7 @@ func (c Client) TestToken(apiToken string) error {
 	log.Println("Token OK")
 
 	// Create cache entry
-	if tokenGob, err := newCacheEntry(); err != nil {
+	if tokenGob, err := newCacheEntry(ctx); err != nil {
 		log.Println("Couldn't encode token cache entry:", err)
 	} else {
 		c.tokenCache.Set([]byte(apiToken), tokenGob)
@@ -73,7 +74,7 @@ func (c Client) TestToken(apiToken string) error {
 	return nil
 }
 
-func (c Client) CheckInstantAvailability(apiToken string, infoHashes ...string) []string {
+func (c Client) CheckInstantAvailability(ctx context.Context, apiToken string, infoHashes ...string) []string {
 	// Precondition check
 	if len(infoHashes) == 0 {
 		return nil
@@ -86,7 +87,7 @@ func (c Client) CheckInstantAvailability(apiToken string, infoHashes ...string) 
 	requestRequired := false
 	for _, infoHash := range infoHashes {
 		if availabilityGob, ok := c.availabilityCache.HasGet(nil, []byte(infoHash)); ok {
-			created, err := fromCacheEntry(availabilityGob)
+			created, err := fromCacheEntry(ctx, availabilityGob)
 			if err != nil {
 				log.Println("Couldn't decode availability cache entry:", err)
 				requestRequired = true
@@ -107,7 +108,7 @@ func (c Client) CheckInstantAvailability(apiToken string, infoHashes ...string) 
 
 	// Only make HTTP request if we didn't find all hashes in the cache yet
 	if requestRequired {
-		resBytes, err := c.get(url, apiToken)
+		resBytes, err := c.get(ctx, url, apiToken)
 		if err != nil {
 			log.Println("Couldn't check torrents' instant availability on real-debrid.com:", err)
 		} else {
@@ -120,7 +121,7 @@ func (c Client) CheckInstantAvailability(apiToken string, infoHashes ...string) 
 					infoHash = strings.ToUpper(infoHash)
 					result = append(result, infoHash)
 					// Create cache entry
-					if availabilityGob, err := newCacheEntry(); err != nil {
+					if availabilityGob, err := newCacheEntry(ctx); err != nil {
 						log.Println("Couldn't encode availability cache entry:", err)
 					} else {
 						c.availabilityCache.Set([]byte(infoHash), availabilityGob)
@@ -133,11 +134,11 @@ func (c Client) CheckInstantAvailability(apiToken string, infoHashes ...string) 
 	return result
 }
 
-func (c Client) GetStreamURL(magnetURL, apiToken string, remote bool) (string, error) {
+func (c Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, remote bool) (string, error) {
 	log.Println("Adding torrent to RealDebrid...")
 	data := url.Values{}
 	data.Set("magnet", magnetURL)
-	resBytes, err := c.post(rdBaseURL+"/torrents/addMagnet", apiToken, data)
+	resBytes, err := c.post(ctx, rdBaseURL+"/torrents/addMagnet", apiToken, data)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't add torrent to RealDebrid: %v", err)
 	}
@@ -147,14 +148,14 @@ func (c Client) GetStreamURL(magnetURL, apiToken string, remote bool) (string, e
 	// Check RealDebrid torrent info
 
 	log.Println("Checking torrent info...")
-	resBytes, err = c.get(rdTorrentURL, apiToken)
+	resBytes, err = c.get(ctx, rdTorrentURL, apiToken)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't get torrent info from real-debrid.com: %v", err)
 	}
 	torrentID := gjson.GetBytes(resBytes, "id").String()
 	fileResults := gjson.GetBytes(resBytes, "files").Array()
 	// TODO: Not required if we pass the instant available file ID from the availability check, but probably no huge performance implication
-	fileID, err := selectFileID(fileResults)
+	fileID, err := selectFileID(ctx, fileResults)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't find proper file in torrent: %v", err)
 	}
@@ -165,7 +166,7 @@ func (c Client) GetStreamURL(magnetURL, apiToken string, remote bool) (string, e
 	log.Println("Adding torrent to RealDebrid downloads...")
 	data = url.Values{}
 	data.Set("files", fileID)
-	_, err = c.post(rdBaseURL+"/torrents/selectFiles/"+torrentID, apiToken, data)
+	_, err = c.post(ctx, rdBaseURL+"/torrents/selectFiles/"+torrentID, apiToken, data)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't add torrent to RealDebrid downloads: %v", err)
 	}
@@ -178,7 +179,7 @@ func (c Client) GetStreamURL(magnetURL, apiToken string, remote bool) (string, e
 	waitForDownloadSeconds := 5
 	waitedForDownloadSeconds := 0
 	for torrentStatus != "downloaded" {
-		resBytes, err = c.get(rdTorrentURL, apiToken)
+		resBytes, err = c.get(ctx, rdTorrentURL, apiToken)
 		if err != nil {
 			return "", fmt.Errorf("Couldn't get torrent info from real-debrid.com: %v", err)
 		}
@@ -224,7 +225,7 @@ func (c Client) GetStreamURL(magnetURL, apiToken string, remote bool) (string, e
 	if remote {
 		data.Set("remote", "1")
 	}
-	resBytes, err = c.post(rdBaseURL+"/unrestrict/link", apiToken, data)
+	resBytes, err = c.post(ctx, rdBaseURL+"/unrestrict/link", apiToken, data)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't unrestrict link: %v", err)
 	}
@@ -234,7 +235,7 @@ func (c Client) GetStreamURL(magnetURL, apiToken string, remote bool) (string, e
 	return streamURL, nil
 }
 
-func (c Client) get(url, apiToken string) ([]byte, error) {
+func (c Client) get(ctx context.Context, url, apiToken string) ([]byte, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't create GET request: %v", err)
@@ -260,7 +261,7 @@ func (c Client) get(url, apiToken string) ([]byte, error) {
 	return ioutil.ReadAll(res.Body)
 }
 
-func (c Client) post(url, apiToken string, data url.Values) ([]byte, error) {
+func (c Client) post(ctx context.Context, url, apiToken string, data url.Values) ([]byte, error) {
 	req, err := http.NewRequest("POST", url, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't create POST request: %v", err)
@@ -290,7 +291,7 @@ func (c Client) post(url, apiToken string, data url.Values) ([]byte, error) {
 	return ioutil.ReadAll(res.Body)
 }
 
-func selectFileID(fileResults []gjson.Result) (string, error) {
+func selectFileID(ctx context.Context, fileResults []gjson.Result) (string, error) {
 	// Precondition check
 	if len(fileResults) == 0 {
 		return "", fmt.Errorf("Empty slice of files")

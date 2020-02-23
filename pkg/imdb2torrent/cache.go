@@ -2,6 +2,7 @@ package imdb2torrent
 
 import (
 	"bytes"
+	"context"
 	"encoding/gob"
 	"fmt"
 	"log"
@@ -14,7 +15,7 @@ type cacheEntry struct {
 }
 
 // NewCacheEntry turns data into a single cacheEntry and returns the cacheEntry's gob-encoded bytes.
-func NewCacheEntry(data []Result) ([]byte, error) {
+func NewCacheEntry(ctx context.Context, data []Result) ([]byte, error) {
 	entry := cacheEntry{
 		Created: time.Now(),
 		Results: data,
@@ -32,7 +33,7 @@ func NewCacheEntry(data []Result) ([]byte, error) {
 }
 
 // FromCacheEntry turns data via gob-decoding into a cacheEntry and returns its results and creation time.
-func FromCacheEntry(data []byte) ([]Result, time.Time, error) {
+func FromCacheEntry(ctx context.Context, data []byte) ([]Result, time.Time, error) {
 	reader := bytes.NewReader(data)
 	decoder := gob.NewDecoder(reader)
 	var entry cacheEntry

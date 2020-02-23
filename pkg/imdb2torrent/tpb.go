@@ -1,6 +1,7 @@
 package imdb2torrent
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -18,7 +19,7 @@ type tpbClient struct {
 	cache      *fastcache.Cache
 }
 
-func newTPBclient(baseURL string, timeout time.Duration, cache *fastcache.Cache) tpbClient {
+func newTPBclient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache) tpbClient {
 	return tpbClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{
@@ -31,11 +32,11 @@ func newTPBclient(baseURL string, timeout time.Duration, cache *fastcache.Cache)
 // check scrapes TPB to find torrents for the given IMDb ID.
 // TPB sometimes runs into a timeout, so let's allow multiple attempts *when a timeout occurs*.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c tpbClient) check(imdbID string, attempts int) ([]Result, error) {
+func (c tpbClient) check(ctx context.Context, imdbID string, attempts int) ([]Result, error) {
 	// Check cache first
 	cacheKey := imdbID + "-TPB"
 	if torrentsGob, ok := c.cache.HasGet(nil, []byte(cacheKey)); ok {
-		torrentList, created, err := FromCacheEntry(torrentsGob)
+		torrentList, created, err := FromCacheEntry(ctx, torrentsGob)
 		if err != nil {
 			log.Println("Couldn't decode TPB torrent results:", err)
 		} else if time.Since(created) < (24 * time.Hour) {
@@ -64,7 +65,7 @@ func (c tpbClient) check(imdbID string, attempts int) ([]Result, error) {
 			// Simple tests have shown that when a proper connection exists, all requests to TPB work, while when no proper connection exists all requests time out.
 			log.Println("Closing connections to TPB and retrying...")
 			c.httpClient.CloseIdleConnections()
-			return c.check(imdbID, attempts-1)
+			return c.check(ctx, imdbID, attempts-1)
 		} else {
 			return nil, fmt.Errorf("Couldn't GET %v: %v", reqUrl, err)
 		}
@@ -133,7 +134,7 @@ func (c tpbClient) check(imdbID string, attempts int) ([]Result, error) {
 
 	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
 	// Any actual errors would have returned earlier.
-	if torrentsGob, err := NewCacheEntry(results); err != nil {
+	if torrentsGob, err := NewCacheEntry(ctx, results); err != nil {
 		log.Println("Couldn't create cache entry for TPB torrents:", err)
 	} else {
 		c.cache.Set([]byte(cacheKey), torrentsGob)

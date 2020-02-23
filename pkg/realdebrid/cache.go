@@ -2,13 +2,14 @@ package realdebrid
 
 import (
 	"bytes"
+	"context"
 	"encoding/gob"
 	"fmt"
 	"time"
 )
 
 // newCacheEntry turns the current time into bytes via gob encoding.
-func newCacheEntry() ([]byte, error) {
+func newCacheEntry(ctx context.Context) ([]byte, error) {
 	writer := bytes.Buffer{}
 	encoder := gob.NewEncoder(&writer)
 	if err := encoder.Encode(time.Now()); err != nil {
@@ -18,7 +19,7 @@ func newCacheEntry() ([]byte, error) {
 }
 
 // fromCacheEntry turns gob-encoded bytes into a time object.
-func fromCacheEntry(data []byte) (time.Time, error) {
+func fromCacheEntry(ctx context.Context, data []byte) (time.Time, error) {
 	reader := bytes.NewReader(data)
 	decoder := gob.NewDecoder(reader)
 	var entry time.Time

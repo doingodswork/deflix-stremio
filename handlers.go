@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -30,7 +31,7 @@ var healthHandler = func(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func createManifestHandler(conversionClient realdebrid.Client) http.HandlerFunc {
+func createManifestHandler(ctx context.Context, conversionClient realdebrid.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("manifestHandler called: %+v\n", r)
 
@@ -43,7 +44,7 @@ func createManifestHandler(conversionClient realdebrid.Client) http.HandlerFunc 
 	}
 }
 
-func createStreamHandler(searchClient imdb2torrent.Client, conversionClient realdebrid.Client, redirectCache *fastcache.Cache) http.HandlerFunc {
+func createStreamHandler(ctx context.Context, searchClient imdb2torrent.Client, conversionClient realdebrid.Client, redirectCache *fastcache.Cache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("streamHandler called: %+v\n", r)
 
@@ -56,7 +57,7 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 			return
 		}
 
-		torrents, err := searchClient.FindMagnets(requestedID)
+		torrents, err := searchClient.FindMagnets(ctx, requestedID)
 		if err != nil {
 			log.Println("Magnet not found:", err)
 			w.WriteHeader(http.StatusNotFound)
@@ -73,7 +74,7 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 			infoHashes = append(infoHashes, torrent.InfoHash)
 		}
 		apiToken := r.Context().Value("apitoken").(string)
-		availableInfoHashes := conversionClient.CheckInstantAvailability(apiToken, infoHashes...)
+		availableInfoHashes := conversionClient.CheckInstantAvailability(ctx, apiToken, infoHashes...)
 		if len(availableInfoHashes) == 0 {
 			// TODO: queue for download on real-debrid, or log somewhere for an asynchronous process to go through them and queue them?
 			log.Println("None of the found torrents are instantly available on real-debrid.com")
@@ -142,7 +143,7 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 			streams = append(streams, stream)
 
 			// Cache for upcoming redirect request
-			if data, err := imdb2torrent.NewCacheEntry(torrents720p); err != nil {
+			if data, err := imdb2torrent.NewCacheEntry(ctx, torrents720p); err != nil {
 				log.Println("Couldn't create cache entry for torrent results:", err)
 			} else {
 				redirectCache.Set([]byte(redirectID), data)
@@ -160,7 +161,7 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 			streams = append(streams, stream)
 
 			// Cache for upcoming redirect request
-			if data, err := imdb2torrent.NewCacheEntry(torrents1080p); err != nil {
+			if data, err := imdb2torrent.NewCacheEntry(ctx, torrents1080p); err != nil {
 				log.Println("Couldn't create cache entry for torrent results:", err)
 			} else {
 				redirectCache.Set([]byte(redirectID), data)
@@ -178,7 +179,7 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 			streams = append(streams, stream)
 
 			// Cache for upcoming redirect request
-			if data, err := imdb2torrent.NewCacheEntry(torrents1080p10bit); err != nil {
+			if data, err := imdb2torrent.NewCacheEntry(ctx, torrents1080p10bit); err != nil {
 				log.Println("Couldn't create cache entry for torrent results:", err)
 			} else {
 				redirectCache.Set([]byte(redirectID), data)
@@ -196,7 +197,7 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 			streams = append(streams, stream)
 
 			// Cache for upcoming redirect request
-			if data, err := imdb2torrent.NewCacheEntry(torrents2160p); err != nil {
+			if data, err := imdb2torrent.NewCacheEntry(ctx, torrents2160p); err != nil {
 				log.Println("Couldn't create cache entry for torrent results:", err)
 			} else {
 				redirectCache.Set([]byte(redirectID), data)
@@ -214,7 +215,7 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 			streams = append(streams, stream)
 
 			// Cache for upcoming redirect request
-			if data, err := imdb2torrent.NewCacheEntry(torrents2160p10bit); err != nil {
+			if data, err := imdb2torrent.NewCacheEntry(ctx, torrents2160p10bit); err != nil {
 				log.Println("Couldn't create cache entry for torrent results:", err)
 			} else {
 				redirectCache.Set([]byte(redirectID), data)
@@ -234,7 +235,7 @@ func createStreamHandler(searchClient imdb2torrent.Client, conversionClient real
 	}
 }
 
-func createRedirectHandler(cache *fastcache.Cache, conversionClient realdebrid.Client) http.HandlerFunc {
+func createRedirectHandler(ctx context.Context, cache *fastcache.Cache, conversionClient realdebrid.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("redirectHandler called: %+v\n", r)
 
@@ -259,7 +260,7 @@ func createRedirectHandler(cache *fastcache.Cache, conversionClient realdebrid.C
 		cacheKey := redirectID + "-stream"
 		if streamURLgob, ok := cache.HasGet(nil, []byte(cacheKey)); ok {
 			log.Println("Hit redirect cache for ID", redirectID)
-			if streamURL, created, err := fromCacheEntry(streamURLgob); err != nil {
+			if streamURL, created, err := fromCacheEntry(ctx, streamURLgob); err != nil {
 				log.Println("Couldn't decode streamURL:", err)
 			} else if len(streamURL) == 0 && time.Since(created) > time.Minute {
 				log.Println("The torrents for this stream where previously tried to be converted into a stream but it didn't work. This was more than one minute ago though, so we'll try again.")
@@ -287,7 +288,7 @@ func createRedirectHandler(cache *fastcache.Cache, conversionClient realdebrid.C
 		// We ignore the cache entry creation date here, because the entry is not really *cached*, but we just (mis-)use the cache as size-limited storage and overwrite the value each time in the stream handler.
 		// This also has the advantage that if a user pauses a stream and later continues it, the stream handler isn't used and no value is overwritten, but this redirect endpoint is called, with the above stream cache maybe being evicted, the following would still lead to a result after 24 hours.
 		// *But* not sure how the player behaves when RealDebrid converts the torrents to a different stream URL (because for example the first torrent in the list isn't "instantly available" anymore) and the player seeks something like 5 minutes into the movie.
-		torrentList, _, err := imdb2torrent.FromCacheEntry(torrentsGob)
+		torrentList, _, err := imdb2torrent.FromCacheEntry(ctx, torrentsGob)
 		if err != nil {
 			log.Println("Couldn't decode torrent results:", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -302,7 +303,7 @@ func createRedirectHandler(cache *fastcache.Cache, conversionClient realdebrid.C
 			return
 		}
 		for _, torrent := range torrentList {
-			if streamURL, err = conversionClient.GetStreamURL(torrent.MagnetURL, apiToken, remote); err != nil {
+			if streamURL, err = conversionClient.GetStreamURL(ctx, torrent.MagnetURL, apiToken, remote); err != nil {
 				log.Println("Couldn't get stream URL:", err)
 			} else {
 				break
@@ -310,7 +311,7 @@ func createRedirectHandler(cache *fastcache.Cache, conversionClient realdebrid.C
 		}
 
 		// Fill cache, even if no actual video stream was found, because it seems to be the current state on RealDebrid
-		if streamURLgob, err := newCacheEntry(streamURL); err != nil {
+		if streamURLgob, err := newCacheEntry(ctx, streamURL); err != nil {
 			log.Println("Couldn't encode streamURL:", err)
 		} else {
 			cache.Set([]byte(cacheKey), []byte(streamURLgob))

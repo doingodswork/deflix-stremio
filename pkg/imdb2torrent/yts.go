@@ -1,6 +1,7 @@
 package imdb2torrent
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -30,7 +31,7 @@ type ytsClient struct {
 	cache      *fastcache.Cache
 }
 
-func newYTSclient(baseURL string, timeout time.Duration, cache *fastcache.Cache) ytsClient {
+func newYTSclient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache) ytsClient {
 	return ytsClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{
@@ -42,11 +43,11 @@ func newYTSclient(baseURL string, timeout time.Duration, cache *fastcache.Cache)
 
 // check uses YTS' API to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c ytsClient) check(imdbID string) ([]Result, error) {
+func (c ytsClient) check(ctx context.Context, imdbID string) ([]Result, error) {
 	// Check cache first
 	cacheKey := imdbID + "-YTS"
 	if torrentsGob, ok := c.cache.HasGet(nil, []byte(cacheKey)); ok {
-		torrentList, created, err := FromCacheEntry(torrentsGob)
+		torrentList, created, err := FromCacheEntry(ctx, torrentsGob)
 		if err != nil {
 			log.Println("Couldn't decode YTS torrent results:", err)
 		} else if time.Since(created) < (24 * time.Hour) {
@@ -83,7 +84,7 @@ func (c ytsClient) check(imdbID string) ([]Result, error) {
 		quality := torrent.Get("quality").String()
 		if quality == "720p" || quality == "1080p" || quality == "2160p" {
 			infoHash := torrent.Get("hash").String()
-			result := createMagnetURL(infoHash, title)
+			result := createMagnetURL(ctx, infoHash, title)
 			result.Quality = quality
 			ripType := torrent.Get("type").String()
 			if ripType != "" {
@@ -95,7 +96,7 @@ func (c ytsClient) check(imdbID string) ([]Result, error) {
 
 	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
 	// Any actual errors would have returned earlier.
-	if torrentsGob, err := NewCacheEntry(results); err != nil {
+	if torrentsGob, err := NewCacheEntry(ctx, results); err != nil {
 		log.Println("Couldn't create cache entry for YTS torrents:", err)
 	} else {
 		c.cache.Set([]byte(cacheKey), torrentsGob)
@@ -104,7 +105,7 @@ func (c ytsClient) check(imdbID string) ([]Result, error) {
 	return results, nil
 }
 
-func createMagnetURL(infoHash, title string) Result {
+func createMagnetURL(ctx context.Context, infoHash, title string) Result {
 	result := Result{
 		InfoHash: infoHash,
 		Title:    title,

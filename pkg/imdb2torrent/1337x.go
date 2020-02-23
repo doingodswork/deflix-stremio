@@ -1,6 +1,7 @@
 package imdb2torrent
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -20,7 +21,7 @@ type leetxClient struct {
 	cache      *fastcache.Cache
 }
 
-func newLeetxclient(baseURL string, timeout time.Duration, cache *fastcache.Cache) leetxClient {
+func newLeetxclient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache) leetxClient {
 	return leetxClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{
@@ -33,11 +34,11 @@ func newLeetxclient(baseURL string, timeout time.Duration, cache *fastcache.Cach
 // check scrapes 1337x to find torrents for the given IMDb ID.
 // It uses the Stremio Cinemata remote addon to get a movie name for a given IMDb ID, so it can search 1337x with the name.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c leetxClient) check(imdbID string) ([]Result, error) {
+func (c leetxClient) check(ctx context.Context, imdbID string) ([]Result, error) {
 	// Check cache first
 	cacheKey := imdbID + "-1337x"
 	if torrentsGob, ok := c.cache.HasGet(nil, []byte(cacheKey)); ok {
-		torrentList, created, err := FromCacheEntry(torrentsGob)
+		torrentList, created, err := FromCacheEntry(ctx, torrentsGob)
 		if err != nil {
 			log.Println("Couldn't decode 1337x torrent results:", err)
 		} else if time.Since(created) < (24 * time.Hour) {
@@ -49,7 +50,7 @@ func (c leetxClient) check(imdbID string) ([]Result, error) {
 	}
 
 	// Get movie name
-	movieName, movieYear, err := c.getMovieName(imdbID)
+	movieName, movieYear, err := c.getMovieName(ctx, imdbID)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't get movie name via Cinemata for IMDb ID %v: %v", imdbID, err)
 	}
@@ -65,7 +66,7 @@ func (c leetxClient) check(imdbID string) ([]Result, error) {
 	// Search on 1337x
 
 	reqUrl := c.baseURL + "/category-search/" + movieSearch + "/Movies/1/"
-	doc, err := c.getDoc(reqUrl)
+	doc, err := c.getDoc(ctx, reqUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +79,7 @@ func (c leetxClient) check(imdbID string) ([]Result, error) {
 	// Go via a single search result to the general movie page
 
 	reqUrl = c.baseURL + torrentPath
-	doc, err = c.getDoc(reqUrl)
+	doc, err = c.getDoc(ctx, reqUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,7 @@ func (c leetxClient) check(imdbID string) ([]Result, error) {
 	// Go through torrent pages for the movie
 
 	reqUrl = c.baseURL + movieInfoURL
-	doc, err = c.getDoc(reqUrl)
+	doc, err = c.getDoc(ctx, reqUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +120,7 @@ func (c leetxClient) check(imdbID string) ([]Result, error) {
 
 	for _, torrentPageURL := range torrentPageURLs {
 		go func(goTorrentPageURL string) {
-			doc, err = c.getDoc(goTorrentPageURL)
+			doc, err = c.getDoc(ctx, goTorrentPageURL)
 			if err != nil {
 				resultChan <- Result{}
 				return
@@ -188,7 +189,7 @@ func (c leetxClient) check(imdbID string) ([]Result, error) {
 
 	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
 	// Any actual errors would have returned earlier.
-	if torrentsGob, err := NewCacheEntry(results); err != nil {
+	if torrentsGob, err := NewCacheEntry(ctx, results); err != nil {
 		log.Println("Couldn't create cache entry for 1337x torrents:", err)
 	} else {
 		c.cache.Set([]byte(cacheKey), torrentsGob)
@@ -197,7 +198,7 @@ func (c leetxClient) check(imdbID string) ([]Result, error) {
 	return results, nil
 }
 
-func (c leetxClient) getMovieName(imdbID string) (string, string, error) {
+func (c leetxClient) getMovieName(ctx context.Context, imdbID string) (string, string, error) {
 	// Check cache first
 	// TODO: Currently these entries will never be evicted. But in case the movie names of IMDb IDs can change (e.g. from some "working title" / codename to the actual release title) we should do that.
 	movieName := ""
@@ -242,7 +243,7 @@ func (c leetxClient) getMovieName(imdbID string) (string, string, error) {
 	return movieName, movieYear, nil
 }
 
-func (c leetxClient) getDoc(url string) (*goquery.Document, error) {
+func (c leetxClient) getDoc(ctx context.Context, url string) (*goquery.Document, error) {
 	res, err := c.httpClient.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't GET %v: %v", url, err)

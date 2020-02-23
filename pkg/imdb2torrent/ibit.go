@@ -2,6 +2,7 @@ package imdb2torrent
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -21,7 +22,7 @@ type ibitClient struct {
 	lock       *sync.Mutex
 }
 
-func newIbitClient(baseURL string, timeout time.Duration, cache *fastcache.Cache) ibitClient {
+func newIbitClient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache) ibitClient {
 	return ibitClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{
@@ -34,7 +35,7 @@ func newIbitClient(baseURL string, timeout time.Duration, cache *fastcache.Cache
 
 // check scrapes ibit to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c ibitClient) check(imdbID string) ([]Result, error) {
+func (c ibitClient) check(ctx context.Context, imdbID string) ([]Result, error) {
 	// Lock for all requests to ibit, because of rate limiting
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -42,7 +43,7 @@ func (c ibitClient) check(imdbID string) ([]Result, error) {
 	// Check cache first
 	cacheKey := imdbID + "-ibit"
 	if torrentsGob, ok := c.cache.HasGet(nil, []byte(cacheKey)); ok {
-		torrentList, created, err := FromCacheEntry(torrentsGob)
+		torrentList, created, err := FromCacheEntry(ctx, torrentsGob)
 		if err != nil {
 			log.Println("Couldn't decode ibit torrent results:", err)
 		} else if time.Since(created) < (24 * time.Hour) {
@@ -157,7 +158,7 @@ func (c ibitClient) check(imdbID string) ([]Result, error) {
 
 	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
 	// Any actual errors would have returned earlier.
-	if torrentsGob, err := NewCacheEntry(results); err != nil {
+	if torrentsGob, err := NewCacheEntry(ctx, results); err != nil {
 		log.Println("Couldn't create cache entry for ibit torrents:", err)
 	} else {
 		c.cache.Set([]byte(cacheKey), torrentsGob)

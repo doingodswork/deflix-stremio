@@ -1,6 +1,7 @@
 package imdb2torrent
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"regexp"
@@ -23,13 +24,13 @@ type Client struct {
 	ibitClient  ibitClient
 }
 
-func NewClient(baseURLyts, baseURLtpb, baseURL1337x, baseURLibit string, timeout time.Duration, cache *fastcache.Cache) Client {
+func NewClient(ctx context.Context, baseURLyts, baseURLtpb, baseURL1337x, baseURLibit string, timeout time.Duration, cache *fastcache.Cache) Client {
 	return Client{
 		timeout:     timeout,
-		ytsClient:   newYTSclient(baseURLyts, timeout, cache),
-		tpbClient:   newTPBclient(baseURLtpb, timeout, cache),
-		leetxClient: newLeetxclient(baseURL1337x, timeout, cache),
-		ibitClient:  newIbitClient(baseURLibit, timeout, cache),
+		ytsClient:   newYTSclient(ctx, baseURLyts, timeout, cache),
+		tpbClient:   newTPBclient(ctx, baseURLtpb, timeout, cache),
+		leetxClient: newLeetxclient(ctx, baseURL1337x, timeout, cache),
+		ibitClient:  newIbitClient(ctx, baseURLibit, timeout, cache),
 	}
 }
 
@@ -37,7 +38,7 @@ func NewClient(baseURLyts, baseURLtpb, baseURL1337x, baseURLibit string, timeout
 // It only returns 720p, 1080p, 1080p 10bit, 2160p and 2160p 10bit videos.
 // It caches results once they're found.
 // It can return an empty slice and no error if no actual error occurred (for example if torrents where found but no >=720p videos).
-func (c Client) FindMagnets(imdbID string) ([]Result, error) {
+func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error) {
 	torrentSiteCount := 3
 	resChan := make(chan []Result, torrentSiteCount)
 	errChan := make(chan error, torrentSiteCount)
@@ -45,7 +46,7 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 	// YTS
 	go func() {
 		log.Println("Started searching torrents on YTS...")
-		results, err := c.ytsClient.check(imdbID)
+		results, err := c.ytsClient.check(ctx, imdbID)
 		if err != nil {
 			log.Println("Couldn't find torrents on YTS:", err)
 			errChan <- err
@@ -58,7 +59,7 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 	// TPB
 	go func() {
 		log.Println("Started searching torrents on TPB...")
-		results, err := c.tpbClient.check(imdbID, 2)
+		results, err := c.tpbClient.check(ctx, imdbID, 2)
 		if err != nil {
 			log.Println("Couldn't find torrents on TPB:", err)
 			errChan <- err
@@ -71,7 +72,7 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 	// 1337x
 	go func() {
 		log.Println("Started searching torrents on 1337x...")
-		results, err := c.leetxClient.check(imdbID)
+		results, err := c.leetxClient.check(ctx, imdbID)
 		if err != nil {
 			log.Println("Couldn't find torrents on 1337x:", err)
 			errChan <- err
@@ -90,7 +91,7 @@ func (c Client) FindMagnets(imdbID string) ([]Result, error) {
 	ibitStop := time.Now().Add(c.timeout)
 	go func() {
 		log.Println("Started searching torrents on ibit...")
-		ibitResults, err := c.ibitClient.check(imdbID)
+		ibitResults, err := c.ibitClient.check(ctx, imdbID)
 		if err != nil {
 			log.Println("Couldn't find torrents on ibit:", err)
 			ibitErrChan <- err

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/gob"
 	"fmt"
 	"time"
@@ -13,7 +14,7 @@ type cacheEntry struct {
 }
 
 // newCacheEntry turns data into a single cacheEntry and returns the cacheEntry's gob-encoded bytes.
-func newCacheEntry(data string) ([]byte, error) {
+func newCacheEntry(ctx context.Context, data string) ([]byte, error) {
 	entry := cacheEntry{
 		Created: time.Now(),
 		Value:   data,
@@ -27,7 +28,7 @@ func newCacheEntry(data string) ([]byte, error) {
 }
 
 // fromCacheEntry turns data via gob-decoding into a cacheEntry and returns its results and creation time.
-func fromCacheEntry(data []byte) (string, time.Time, error) {
+func fromCacheEntry(ctx context.Context, data []byte) (string, time.Time, error) {
 	reader := bytes.NewReader(data)
 	decoder := gob.NewDecoder(reader)
 	var entry cacheEntry

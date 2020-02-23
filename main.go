@@ -68,7 +68,8 @@ func init() {
 }
 
 func main() {
-	parseConfig()
+	mainCtx := context.Background()
+	parseConfig(mainCtx)
 
 	// Load or create caches
 
@@ -92,28 +93,28 @@ func main() {
 	log.Println("Setting up server")
 	r := mux.NewRouter()
 	s := r.Methods("GET").Subrouter()
-	s.Use(timerMiddleware,
-		corsMiddleware, // Stremio doesn't show stream responses when no CORS middleware is used!
+	s.Use(createTimerMiddleware(mainCtx),
+		createCorsMiddleware(mainCtx), // Stremio doesn't show stream responses when no CORS middleware is used!
 		handlers.ProxyHeaders,
 		recoveryMiddleware,
-		loggingMiddleware)
+		createLoggingMiddleware(mainCtx))
 	s.HandleFunc("/health", healthHandler)
 
 	// Stremio endpoints
 
-	conversionClient := realdebrid.NewClient(5*time.Second, tokenCache, availabilityCache)
-	searchClient := imdb2torrent.NewClient(baseURLyts, baseURLtpb, baseURL1337x, baseURLibit, 5*time.Second, torrentCache)
+	conversionClient := realdebrid.NewClient(mainCtx, 5*time.Second, tokenCache, availabilityCache)
+	searchClient := imdb2torrent.NewClient(mainCtx, baseURLyts, baseURLtpb, baseURL1337x, baseURLibit, 5*time.Second, torrentCache)
 	// Use token middleware only for the Stremio endpoints
-	tokenMiddleware := createTokenMiddleware(conversionClient)
-	manifestHandler := createManifestHandler(conversionClient)
-	streamHandler := createStreamHandler(searchClient, conversionClient, redirectCache)
+	tokenMiddleware := createTokenMiddleware(mainCtx, conversionClient)
+	manifestHandler := createManifestHandler(mainCtx, conversionClient)
+	streamHandler := createStreamHandler(mainCtx, searchClient, conversionClient, redirectCache)
 	s.HandleFunc("/{apitoken}/manifest.json", tokenMiddleware(manifestHandler).ServeHTTP)
 	s.HandleFunc("/{apitoken}/stream/{type}/{id}.json", tokenMiddleware(streamHandler).ServeHTTP)
 
 	// Additional endpoints
 
 	// Redirects stream URLs (previously sent to Stremio) to the actual RealDebrid stream URLs
-	s.HandleFunc("/redirect/{id}", createRedirectHandler(redirectCache, conversionClient))
+	s.HandleFunc("/redirect/{id}", createRedirectHandler(mainCtx, redirectCache, conversionClient))
 
 	srv := &http.Server{
 		Addr:    bindAddr + ":" + strconv.Itoa(port),
@@ -151,7 +152,7 @@ func main() {
 	go func() {
 		for {
 			time.Sleep(time.Hour)
-			persistCache(cachePath, stoppingPtr)
+			persistCache(mainCtx, cachePath, stoppingPtr)
 		}
 	}()
 
@@ -197,7 +198,7 @@ func main() {
 	}
 }
 
-func persistCache(cacheFilePath string, stoppingPtr *bool) {
+func persistCache(ctx context.Context, cacheFilePath string, stoppingPtr *bool) {
 	if *stoppingPtr {
 		log.Println("Regular cache persistence triggered, but server is shutting down")
 		return
