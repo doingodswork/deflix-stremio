@@ -73,20 +73,20 @@ func main() {
 
 	// Load or create caches
 
-	if cachePath == "" {
+	if *cachePath == "" {
 		userCacheDir, err := os.UserCacheDir()
 		if err != nil {
 			log.Fatal("Couldn't determine user cache directory via `os.UserCacheDir()`:", err)
 		}
-		cachePath = userCacheDir + "/deflix-stremio"
+		*cachePath = userCacheDir + "/deflix-stremio"
 	} else {
-		cachePath = strings.TrimSuffix(cachePath, "/")
+		*cachePath = strings.TrimSuffix(*cachePath, "/")
 	}
-	cachePath += "/cache"
-	tokenCache = fastcache.LoadFromFileOrNew(cachePath+"/token", cacheMaxBytes/4)
-	availabilityCache = fastcache.LoadFromFileOrNew(cachePath+"/availability", cacheMaxBytes/4)
-	torrentCache = fastcache.LoadFromFileOrNew(cachePath+"/torrent", cacheMaxBytes/4)
-	redirectCache = fastcache.LoadFromFileOrNew(cachePath+"/redirect", cacheMaxBytes/4)
+	*cachePath += "/cache"
+	tokenCache = fastcache.LoadFromFileOrNew(*cachePath+"/token", *cacheMaxBytes/4)
+	availabilityCache = fastcache.LoadFromFileOrNew(*cachePath+"/availability", *cacheMaxBytes/4)
+	torrentCache = fastcache.LoadFromFileOrNew(*cachePath+"/torrent", *cacheMaxBytes/4)
+	redirectCache = fastcache.LoadFromFileOrNew(*cachePath+"/redirect", *cacheMaxBytes/4)
 
 	// Basic middleware and health endpoint
 
@@ -103,7 +103,7 @@ func main() {
 	// Stremio endpoints
 
 	conversionClient := realdebrid.NewClient(mainCtx, 5*time.Second, tokenCache, availabilityCache)
-	searchClient := imdb2torrent.NewClient(mainCtx, baseURLyts, baseURLtpb, baseURL1337x, baseURLibit, 5*time.Second, torrentCache)
+	searchClient := imdb2torrent.NewClient(mainCtx, *baseURLyts, *baseURLtpb, *baseURL1337x, *baseURLibit, 5*time.Second, torrentCache)
 	// Use token middleware only for the Stremio endpoints
 	tokenMiddleware := createTokenMiddleware(mainCtx, conversionClient)
 	manifestHandler := createManifestHandler(mainCtx, conversionClient)
@@ -117,7 +117,7 @@ func main() {
 	s.HandleFunc("/redirect/{id}", createRedirectHandler(mainCtx, redirectCache, conversionClient))
 
 	srv := &http.Server{
-		Addr:    bindAddr + ":" + strconv.Itoa(port),
+		Addr:    *bindAddr + ":" + strconv.Itoa(*port),
 		Handler: s,
 		// Timeouts to avoid Slowloris attacks
 		ReadTimeout:    time.Second * 5,
@@ -152,7 +152,7 @@ func main() {
 	go func() {
 		for {
 			time.Sleep(time.Hour)
-			persistCache(mainCtx, cachePath, stoppingPtr)
+			persistCache(mainCtx, *cachePath, stoppingPtr)
 		}
 	}()
 
