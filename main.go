@@ -100,7 +100,7 @@ func main() {
 	if *cachePath == "" {
 		userCacheDir, err := os.UserCacheDir()
 		if err != nil {
-			log.Fatal("Couldn't determine user cache directory via `os.UserCacheDir()`:", err)
+			log.WithError(err).Fatal("Couldn't determine user cache directory via `os.UserCacheDir()`")
 		}
 		*cachePath = userCacheDir + "/deflix-stremio"
 	} else {
@@ -157,9 +157,9 @@ func main() {
 	go func() {
 		if err := srv.ListenAndServe(); err != nil {
 			if !*stoppingPtr {
-				log.Fatal("Couldn't start server:", err)
+				log.WithError(err).Fatal("Couldn't start server")
 			} else {
-				log.Fatal("Error in srv.ListenAndServe() during server shutdown (probably context deadline expired before the server could shutdown cleanly):", err)
+				log.WithError(err).Fatal("Error in srv.ListenAndServe() during server shutdown (probably context deadline expired before the server could shutdown cleanly)")
 			}
 		}
 	}()
@@ -218,7 +218,7 @@ func main() {
 	ctx, _ := context.WithTimeout(context.Background(), 9*time.Second)
 	// Doesn't block if no connections, but will otherwise wait until the timeout deadline
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatal("Error shutting down server:", err)
+		log.WithError(err).Fatal("Error shutting down server")
 	}
 }
 

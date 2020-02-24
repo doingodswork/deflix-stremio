@@ -45,7 +45,7 @@ func parseConfig(ctx context.Context) {
 	if !isArgSet(ctx, "port") {
 		if val, ok := os.LookupEnv(*envPrefix + "PORT"); ok {
 			if *port, err = strconv.Atoi(val); err != nil {
-				log.Fatal("Couldn't convert environment variable PORT from string to int")
+				log.WithError(err).WithField("envVar", "PORT").Fatal("Couldn't convert environment variable from string to int")
 			}
 		}
 	}
@@ -62,7 +62,7 @@ func parseConfig(ctx context.Context) {
 	if !isArgSet(ctx, "cacheMaxBytes") {
 		if val, ok := os.LookupEnv(*envPrefix + "CACHE_MAX_BYTES"); ok {
 			if *cacheMaxBytes, err = strconv.Atoi(val); err != nil {
-				log.Fatal("Couldn't convert environment variable CACHE_MAX_BYTES from string to int")
+				log.WithError(err).WithField("envVar", "CACHE_MAX_BYTES").Fatal("Couldn't convert environment variable from string to int")
 			}
 		}
 	}
