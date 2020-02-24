@@ -139,6 +139,8 @@ func main() {
 
 	// Redirects stream URLs (previously sent to Stremio) to the actual RealDebrid stream URLs
 	s.HandleFunc("/redirect/{id}", createRedirectHandler(mainCtx, redirectCache, conversionClient))
+	// Root redirects to website
+	s.HandleFunc("/", rootHandler)
 
 	srv := &http.Server{
 		Addr:    *bindAddr + ":" + strconv.Itoa(*port),

@@ -329,3 +329,8 @@ func createRedirectHandler(ctx context.Context, cache *fastcache.Cache, conversi
 		w.WriteHeader(http.StatusMovedPermanently)
 	}
 }
+
+var rootHandler = func(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Location", *rootURL)
+	w.WriteHeader(http.StatusMovedPermanently)
+}

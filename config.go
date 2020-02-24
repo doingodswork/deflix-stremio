@@ -12,7 +12,7 @@ import (
 
 // Flags
 var (
-	bindAddr      = flag.String("bindAddr", "localhost", `Local interface address to bind to. "0.0.0.0" binds to all interfaces.`)
+	bindAddr      = flag.String("bindAddr", "localhost", `Local interface address to bind to. "localhost" only allows access from the local host. "0.0.0.0" binds to all network interfaces.`)
 	port          = flag.Int("port", 8080, "Port to listen on")
 	streamURLaddr = flag.String("streamURLaddr", "http://localhost:8080", "Address to be used in a stream URL that's delivered to Stremio and later used to redirect to RealDebrid")
 	cachePath     = flag.String("cachePath", "", "Path for loading a persisted cache on startup and persisting the current cache in regular intervals. An empty value will lead to `os.UserCacheDir()+\"/deflix-stremio/\"`")
@@ -25,6 +25,7 @@ var (
 	baseURL1337x  = flag.String("baseURL1337x", "https://1337x.to", "Base URL for 1337x")
 	baseURLibit   = flag.String("baseURLibit", "https://ibit.am", "Base URL for ibit")
 	logLevel      = flag.String("logLevel", "info", `Log level to show only logs with the given and more severe levels. Can be "trace", "debug", "info", "warn", "error", "fatal", "panic"`)
+	rootURL       = flag.String("rootURL", "https://www.deflix.tv", "Redirect target for the root")
 	envPrefix     = flag.String("envPrefix", "", "Prefix for environment variables")
 )
 
@@ -84,6 +85,11 @@ func parseConfig(ctx context.Context) {
 	if !isArgSet(ctx, "logLevel") {
 		if val, ok := os.LookupEnv(*envPrefix + "LOG_LEVEL"); ok {
 			*logLevel = val
+		}
+	}
+	if !isArgSet(ctx, "rootURL") {
+		if val, ok := os.LookupEnv(*envPrefix + "ROOT_URL"); ok {
+			*rootURL = val
 		}
 	}
 }
