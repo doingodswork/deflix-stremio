@@ -131,12 +131,18 @@ func (c tpbClient) check(ctx context.Context, imdbID string, attempts int) ([]Re
 		infoHash = strings.TrimSuffix(infoHash, "&")
 		infoHash = strings.ToUpper(infoHash)
 
+		if infoHash == "" {
+			logger.WithField("magnet", magnet).Warn("Couldn't extract info_hash. Did the HTML change?")
+			return
+		}
+
 		result := Result{
 			Title:     title,
 			Quality:   quality,
 			InfoHash:  infoHash,
 			MagnetURL: magnet,
 		}
+		logger.WithFields(log.Fields{"title": title, "quality": quality, "infoHash": infoHash, "magnet": magnet}).Trace("Found torrent")
 		results = append(results, result)
 	})
 

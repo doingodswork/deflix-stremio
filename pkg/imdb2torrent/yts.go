@@ -92,12 +92,16 @@ func (c ytsClient) check(ctx context.Context, imdbID string) ([]Result, error) {
 		quality := torrent.Get("quality").String()
 		if quality == "720p" || quality == "1080p" || quality == "2160p" {
 			infoHash := torrent.Get("hash").String()
+			if infoHash == "" {
+				logger.WithField("torrentJSON", torrent.String()).Warn("Couldn't get info_hash from torrent JSON")
+			}
 			result := createMagnetURL(ctx, infoHash, title)
 			result.Quality = quality
 			ripType := torrent.Get("type").String()
 			if ripType != "" {
 				result.Quality += " (" + ripType + ")"
 			}
+			logger.WithFields(log.Fields{"title": title, "quality": quality, "infoHash": infoHash, "magnet": result.MagnetURL}).Trace("Found torrent")
 			results = append(results, result)
 		}
 	}

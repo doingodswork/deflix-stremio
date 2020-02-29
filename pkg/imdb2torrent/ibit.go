@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,6 +17,8 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	log "github.com/sirupsen/logrus"
 )
+
+var magnet2InfoHashRegexIbit = regexp.MustCompile(`btih:.+?\\x26dn=`) // The "?" makes the ".+" non-greedy
 
 type ibitClient struct {
 	baseURL    string
@@ -117,6 +121,9 @@ func (c ibitClient) check(ctx context.Context, imdbID string) ([]Result, error) 
 		}
 		magnetBytes := regexMagnet.Find(body)
 		magnet := strings.Trim(string(magnetBytes), "'")
+		if magnet == "" {
+			continue
+		}
 
 		bodyReader := bytes.NewReader(body)
 		doc, err = goquery.NewDocumentFromReader(bodyReader)
@@ -153,6 +160,30 @@ func (c ibitClient) check(ctx context.Context, imdbID string) ([]Result, error) 
 		infoHash := strings.TrimPrefix(string(match), "btih:")
 		infoHash = strings.TrimSuffix(infoHash, "&")
 		infoHash = strings.ToUpper(infoHash)
+		// ibit changes their HTML sometimes, let's try another way if the previous one didn't yield a result
+		if infoHash == "" {
+			match = magnet2InfoHashRegexIbit.Find([]byte(magnet))
+			infoHash = strings.TrimPrefix(string(match), "btih:")
+			infoHash = strings.TrimSuffix(infoHash, `\x26dn=`)
+			infoHash = strings.ReplaceAll(infoHash, "-", "")
+			infoHash = strings.ToUpper(infoHash)
+			// The rest of the magnet is also a bit "obfuscated" (they're using some hex characters, but not everywhere)
+			if infoHash != "" {
+				magnetTailIndex := strings.Index(magnet, `\x26tr=`)
+				if magnetTailIndex == -1 {
+					logger.WithField("magnet", magnet).Warn(`Couldn't recreate magnet URL by cutting at \x26tr=. Did the HTML change?`)
+					continue
+				}
+				magnetTail := string(([]byte(magnet))[magnetTailIndex:])
+				magnetTail = strings.ReplaceAll(magnetTail, `\x26`, "&")
+				magnet = "magnet:?xt=urn:btih:" + infoHash + "&dn=" + url.QueryEscape(title) + magnetTail
+			}
+		}
+
+		if infoHash == "" {
+			logger.WithField("magnet", magnet).Warn("Couldn't extract info_hash. Did the HTML change?")
+			continue
+		}
 
 		result := Result{
 			Title:     title,
@@ -160,6 +191,7 @@ func (c ibitClient) check(ctx context.Context, imdbID string) ([]Result, error) 
 			InfoHash:  infoHash,
 			MagnetURL: magnet,
 		}
+		logger.WithFields(log.Fields{"title": title, "quality": quality, "infoHash": infoHash, "magnet": magnet}).Trace("Found torrent")
 
 		results = append(results, result)
 	}
