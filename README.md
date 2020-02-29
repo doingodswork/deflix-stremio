@@ -11,10 +11,33 @@ Currently supported providers:
 
 > More providers will be supported in the future!
 
-Run
----
+Contents
+--------
 
-The addon is a remote addon, so it's an HTTP web service. It's written in Go.
+1. [Install](#install)
+2. [Run locally](#run-locally)
+   1. [Configuration](#configuration)
+   2. [Warning](#warning)
+3. [Disclaimer](#disclaimer)
+
+Install
+-------
+
+This addon is a remote addon, so it's an HTTP web service and Stremio just sends HTTP requests to it. You dont't need to run any untrusted code on your machine.
+
+1. Get your RealDebrid API token from <https://real-debrid.com/apitoken>
+2. Enter the addon URL in the search box of the addons section of Stremio, like this:
+   - `https://stremio.deflix.tv/YOUR-API-TOKEN/manifest.json`  
+     > (replace `YOUR-API-TOKEN` by your actual API token!)
+
+That's it!
+
+Optionally you can also add `-remote` to your token, which will lead to your "remote traffic" being used, which allows you to share your RealDebrid account (and API token) with friends. (⚠️When sharing your account and *not* using remote traffic, you might get suspended - see RealDebrid's [terms](https://real-debrid.com/terms) and [faq](https://real-debrid.com/faq)!)
+
+Run locally
+-----------
+
+Alternatively you can also run the addon locally and use that in Stremio. The addon is written in Go and compiles to a single executable file without dependencies, so it's really easy to run on your machine.
 
 You can use one of the precompiled binaries from GitHub:
 
@@ -27,6 +50,10 @@ Or use Docker:
 1. `docker pull doingodswork/deflix-stremio`
 2. `docker run --name deflix-stremio -p 8080:8080 doingodswork/deflix-stremio`
 3. To stop the container: `docker stop deflix-stremio`
+
+Then similar to installing the publicly hosted addon you enter the URL in the search box of the addon section of Stremio. But as URL you use `http://localhost:8080/YOUR-API-TOKEN/manifest.json`.
+
+### Configuration
 
 The following options can be configured via either command line argument or environment variable:
 
@@ -60,24 +87,9 @@ Usage of deflix-stremio:
 
 If you want to configure deflix-stremio via environment variables, you can use the according environment variable keys, like this: `baseURL1337x` -> `BASE_URL_1337X`. If you want to use an environment variable prefix you have to set it with the command line argument (for example `-envPrefix DEFLIX` and then the environment variable for the previous example would be `DEFLIX_BASE_URL_1337X`.
 
-Use
----
+### Warning
 
-After you started the web service with either the binary or Docker, it's running on `http://localhost:8080`.
-
-Then:
-
-1. Get your RealDebrid API token from <https://real-debrid.com/apitoken>
-2. Enter the addon URL in the search box of the addons section of Stremio, like this:
-   - `http://localhost:8080/YOUR_API_TOKEN/manifest.json`  
-     > (replace `YOUR_API_TOKEN` by your actual API token!)
-
-That's it!
-
-Optionally you can also add `-remote` to your token, which will lead to your "remote traffic" being used, which allows you to share your RealDebrid account (and API token) with friends. (⚠️When sharing your account and *not* using remote traffic, you might get suspended - see RealDebrid's [terms](https://real-debrid.com/terms) and [faq](https://real-debrid.com/faq)!)
-
-Warning
--------
+If you *run* this web service on your local laptop or server, i.e. if you *self-host* this, you should know the following:
 
 Deflix doesn't download or upload any torrents, but it *does* send HTTP requests to YTS, The Pirate Bay and 1337x, which *might* be illegal in some countries. Streaming movies from RealDebrid *might* also be illegal in some countries.
 
