@@ -7,10 +7,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/doingodswork/deflix-stremio/pkg/cinemata"
 	"github.com/doingodswork/deflix-stremio/pkg/realdebrid"
 )
 
@@ -84,7 +86,9 @@ func createTokenMiddleware(ctx context.Context, conversionClient realdebrid.Clie
 	}
 }
 
-func createLoggingMiddleware(ctx context.Context) func(http.Handler) http.Handler {
+func createLoggingMiddleware(ctx context.Context, cinemataCache *fastcache.Cache) func(http.Handler) http.Handler {
+	// Only 1 second to allow for cache retrieval. The data should be cached from the 1337x scraper.
+	cinemataClient := cinemata.NewClient(ctx, 1*time.Second, cinemataCache)
 	return func(before http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			rCtx := r.Context()
@@ -94,6 +98,28 @@ func createLoggingMiddleware(ctx context.Context) func(http.Handler) http.Handle
 			reqStart := rCtx.Value("start").(time.Time)
 			duration := time.Since(reqStart).Milliseconds()
 			durationString := strconv.FormatInt(duration, 10) + "ms"
+			var movie string
+			logMovie := false
+			if strings.Contains(r.URL.String(), "/stream/") || strings.Contains(r.URL.String(), "/redirect/") {
+				logMovie = true
+				var imdbID string
+				params := mux.Vars(r)
+				if strings.Contains(r.URL.String(), "/stream/") {
+					imdbID = params["id"]
+				} else {
+					redirectID := params["id"]
+					idParts := strings.Split(redirectID, "-")
+					imdbID = idParts[2]
+				}
+				if imdbID != "" {
+					if movieName, movieYear, err := cinemataClient.GetMovieNameYear(rCtx, imdbID); err != nil {
+						log.WithContext(ctx).WithError(err).Warn("Couldn't get movie name and year for request logger")
+					} else {
+						movie = movieName + " " + strconv.Itoa(movieYear)
+					}
+				}
+			}
+
 			fields := log.Fields{
 				"method":     r.Method,
 				"url":        r.URL,
@@ -101,7 +127,12 @@ func createLoggingMiddleware(ctx context.Context) func(http.Handler) http.Handle
 				"userAgent":  r.Header.Get("User-Agent"),
 				"duration":   durationString,
 			}
-			log.WithContext(rCtx).WithFields(fields).Info("Handled request")
+			if logMovie {
+				log.WithContext(rCtx).WithFields(fields).WithField("movie", movie).Info("Handled request")
+			} else {
+				log.WithContext(rCtx).WithFields(fields).Info("Handled request")
+			}
+
 		})
 	}
 }

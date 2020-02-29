@@ -132,7 +132,7 @@ func main() {
 		createCorsMiddleware(mainCtx), // Stremio doesn't show stream responses when no CORS middleware is used!
 		handlers.ProxyHeaders,
 		recoveryMiddleware,
-		createLoggingMiddleware(mainCtx))
+		createLoggingMiddleware(mainCtx, cinemataCache))
 	s.HandleFunc("/health", healthHandler)
 
 	// Stremio endpoints
