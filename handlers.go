@@ -153,7 +153,7 @@ func createStreamHandler(ctx context.Context, searchClient imdb2torrent.Client, 
 		if len(torrents1080p) > 0 {
 			redirectID := apiToken + "-" + remoteString + "-" + requestedID + "-" + "1080p"
 			stream := stremio.StreamItem{
-				URL:   "http://localhost:8080/redirect/" + redirectID,
+				URL:   *streamURLaddr + "/redirect/" + redirectID,
 				Title: "1080p",
 			}
 			if len(torrents1080p) == 1 {
@@ -171,7 +171,7 @@ func createStreamHandler(ctx context.Context, searchClient imdb2torrent.Client, 
 		if len(torrents1080p10bit) > 0 {
 			redirectID := apiToken + "-" + remoteString + "-" + requestedID + "-" + "1080p-10bit"
 			stream := stremio.StreamItem{
-				URL:   "http://localhost:8080/redirect/" + redirectID,
+				URL:   *streamURLaddr + "/redirect/" + redirectID,
 				Title: "1080p 10bit",
 			}
 			if len(torrents1080p10bit) == 1 {
@@ -189,7 +189,7 @@ func createStreamHandler(ctx context.Context, searchClient imdb2torrent.Client, 
 		if len(torrents2160p) > 0 {
 			redirectID := apiToken + "-" + remoteString + "-" + requestedID + "-" + "2160p"
 			stream := stremio.StreamItem{
-				URL:   "http://localhost:8080/redirect/" + redirectID,
+				URL:   *streamURLaddr + "/redirect/" + redirectID,
 				Title: "2160p",
 			}
 			if len(torrents2160p) == 1 {
@@ -207,7 +207,7 @@ func createStreamHandler(ctx context.Context, searchClient imdb2torrent.Client, 
 		if len(torrents2160p10bit) > 0 {
 			redirectID := apiToken + "-" + remoteString + "-" + requestedID + "-" + "2160p-10bit"
 			stream := stremio.StreamItem{
-				URL:   "http://localhost:8080/redirect/" + redirectID,
+				URL:   *streamURLaddr + "/redirect/" + redirectID,
 				Title: "2160p 10bit",
 			}
 			if len(torrents2160p10bit) == 1 {
