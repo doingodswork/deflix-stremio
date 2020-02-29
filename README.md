@@ -28,6 +28,38 @@ Or use Docker:
 2. `docker run --name deflix-stremio -p 8080:8080 doingodswork/deflix-stremio`
 3. To stop the container: `docker stop deflix-stremio`
 
+The following options can be configured via either command line argument or environment variable:
+
+```text
+Usage of deflix-stremio:
+  -baseURL1337x string
+        Base URL for 1337x (default "https://1337x.to")
+  -baseURLibit string
+        Base URL for ibit (default "https://ibit.am")
+  -baseURLtpb string
+        Base URL for TPB (default "https://thepiratebay.org")
+  -baseURLyts string
+        Base URL for YTS (default "https://yts.mx")
+  -bindAddr string
+        Local interface address to bind to. "localhost" only allows access from the local host. "0.0.0.0" binds to all network interfaces. (default "localhost")
+  -cacheMaxBytes int
+        Max number of bytes to be used for the in-memory cache. Default (and minimum!) is 128 MB. (default 134217728)
+  -cachePath os.UserCacheDir()+"/deflix-stremio/"
+        Path for loading a persisted cache on startup and persisting the current cache in regular intervals. An empty value will lead to os.UserCacheDir()+"/deflix-stremio/"
+  -envPrefix string
+        Prefix for environment variables
+  -logLevel string
+        Log level to show only logs with the given and more severe levels. Can be "trace", "debug", "info", "warn", "error", "fatal", "panic" (default "debug")
+  -port int
+        Port to listen on (default 8080)
+  -rootURL string
+        Redirect target for the root (default "https://www.deflix.tv")
+  -streamURLaddr string
+        Address to be used in a stream URL that's delivered to Stremio and later used to redirect to RealDebrid (default "http://localhost:8080")
+```
+
+If you want to configure deflix-stremio via environment variables, you can use the according environment variable keys, like this: `baseURL1337x` -> `BASE_URL_1337X`. If you want to use an environment variable prefix you have to set it with the command line argument (for example `-envPrefix DEFLIX` and then the environment variable for the previous example would be `DEFLIX_BASE_URL_1337X`.
+
 Use
 ---
 
