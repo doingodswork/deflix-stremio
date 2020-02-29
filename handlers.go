@@ -51,7 +51,7 @@ func createManifestHandler(ctx context.Context, conversionClient realdebrid.Clie
 	}
 }
 
-func createStreamHandler(ctx context.Context, searchClient imdb2torrent.Client, conversionClient realdebrid.Client, redirectCache *fastcache.Cache) http.HandlerFunc {
+func createStreamHandler(ctx context.Context, config config, searchClient imdb2torrent.Client, conversionClient realdebrid.Client, redirectCache *fastcache.Cache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rCtx := r.Context()
 		logger := log.WithContext(rCtx)
@@ -139,7 +139,7 @@ func createStreamHandler(ctx context.Context, searchClient imdb2torrent.Client, 
 		if len(torrents720p) > 0 {
 			redirectID := apiToken + "-" + remoteString + "-" + requestedID + "-" + "720p"
 			stream := stremio.StreamItem{
-				URL: *streamURLaddr + "/redirect/" + redirectID,
+				URL: config.StreamURLaddr + "/redirect/" + redirectID,
 				// Stremio docs recommend to use the stream quality as title.
 				// See https://github.com/Stremio/stremio-addon-sdk/blob/ddaa3b80def8a44e553349734dd02ec9c3fea52c/docs/api/responses/stream.md#additional-properties-to-provide-information--behaviour-flags
 				Title: "720p",
@@ -172,7 +172,7 @@ func createStreamHandler(ctx context.Context, searchClient imdb2torrent.Client, 
 		if len(torrents1080p) > 0 {
 			redirectID := apiToken + "-" + remoteString + "-" + requestedID + "-" + "1080p"
 			stream := stremio.StreamItem{
-				URL:   *streamURLaddr + "/redirect/" + redirectID,
+				URL:   config.StreamURLaddr + "/redirect/" + redirectID,
 				Title: "1080p",
 			}
 			if len(torrents1080p) == 1 {
@@ -201,7 +201,7 @@ func createStreamHandler(ctx context.Context, searchClient imdb2torrent.Client, 
 		if len(torrents1080p10bit) > 0 {
 			redirectID := apiToken + "-" + remoteString + "-" + requestedID + "-" + "1080p-10bit"
 			stream := stremio.StreamItem{
-				URL:   *streamURLaddr + "/redirect/" + redirectID,
+				URL:   config.StreamURLaddr + "/redirect/" + redirectID,
 				Title: "1080p 10bit",
 			}
 			if len(torrents1080p10bit) == 1 {
@@ -230,7 +230,7 @@ func createStreamHandler(ctx context.Context, searchClient imdb2torrent.Client, 
 		if len(torrents2160p) > 0 {
 			redirectID := apiToken + "-" + remoteString + "-" + requestedID + "-" + "2160p"
 			stream := stremio.StreamItem{
-				URL:   *streamURLaddr + "/redirect/" + redirectID,
+				URL:   config.StreamURLaddr + "/redirect/" + redirectID,
 				Title: "2160p",
 			}
 			if len(torrents2160p) == 1 {
@@ -259,7 +259,7 @@ func createStreamHandler(ctx context.Context, searchClient imdb2torrent.Client, 
 		if len(torrents2160p10bit) > 0 {
 			redirectID := apiToken + "-" + remoteString + "-" + requestedID + "-" + "2160p-10bit"
 			stream := stremio.StreamItem{
-				URL:   *streamURLaddr + "/redirect/" + redirectID,
+				URL:   config.StreamURLaddr + "/redirect/" + redirectID,
 				Title: "2160p 10bit",
 			}
 			if len(torrents2160p10bit) == 1 {
@@ -395,12 +395,14 @@ func createRedirectHandler(ctx context.Context, cache *fastcache.Cache, conversi
 	}
 }
 
-var rootHandler = func(w http.ResponseWriter, r *http.Request) {
-	rCtx := r.Context()
-	logger := log.WithContext(rCtx)
-	logger.WithField("request", r).Trace("rootHandler called")
+func createRootHandler(ctx context.Context, config config) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rCtx := r.Context()
+		logger := log.WithContext(rCtx)
+		logger.WithField("request", r).Trace("rootHandler called")
 
-	logger.WithField("redirectLocation", *rootURL).Debug("Responding with redirect")
-	w.Header().Set("Location", *rootURL)
-	w.WriteHeader(http.StatusMovedPermanently)
+		logger.WithField("redirectLocation", config.RootURL).Debug("Responding with redirect")
+		w.Header().Set("Location", config.RootURL)
+		w.WriteHeader(http.StatusMovedPermanently)
+	}
 }

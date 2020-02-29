@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"math/rand"
 	"net/http"
 	"os"
@@ -74,10 +75,14 @@ func init() {
 
 func main() {
 	mainCtx := context.Background()
-	log.Info("Parsing config")
-	parseConfig(mainCtx)
+	log.Info("Parsing config...")
+	config := parseConfig(mainCtx)
+	configJSON, err := json.Marshal(config)
+	if err != nil {
+		log.WithError(err).Fatal("Couldn't marshal config to JSON")
+	}
 
-	switch *logLevel {
+	switch config.LogLevel {
 	case "trace":
 		log.SetLevel(log.TraceLevel)
 	case "debug":
@@ -93,25 +98,27 @@ func main() {
 	case "panic":
 		log.SetLevel(log.PanicLevel)
 	default:
-		log.WithField("logLevel", logLevel).Fatal("Unknown logLevel")
+		log.WithField("logLevel", config.LogLevel).Fatal("Unknown logLevel")
 	}
+
+	log.WithField("config", string(configJSON)).Info("Parsed config")
 
 	// Load or create caches
 
-	if *cachePath == "" {
+	if config.CachePath == "" {
 		userCacheDir, err := os.UserCacheDir()
 		if err != nil {
 			log.WithError(err).Fatal("Couldn't determine user cache directory via `os.UserCacheDir()`")
 		}
-		*cachePath = userCacheDir + "/deflix-stremio"
+		config.CachePath = userCacheDir + "/deflix-stremio"
 	} else {
-		*cachePath = strings.TrimSuffix(*cachePath, "/")
+		config.CachePath = strings.TrimSuffix(config.CachePath, "/")
 	}
-	*cachePath += "/cache"
-	tokenCache = fastcache.LoadFromFileOrNew(*cachePath+"/token", *cacheMaxBytes/4)
-	availabilityCache = fastcache.LoadFromFileOrNew(*cachePath+"/availability", *cacheMaxBytes/4)
-	torrentCache = fastcache.LoadFromFileOrNew(*cachePath+"/torrent", *cacheMaxBytes/4)
-	redirectCache = fastcache.LoadFromFileOrNew(*cachePath+"/redirect", *cacheMaxBytes/4)
+	config.CachePath += "/cache"
+	tokenCache = fastcache.LoadFromFileOrNew(config.CachePath+"/token", config.CacheMaxBytes/4)
+	availabilityCache = fastcache.LoadFromFileOrNew(config.CachePath+"/availability", config.CacheMaxBytes/4)
+	torrentCache = fastcache.LoadFromFileOrNew(config.CachePath+"/torrent", config.CacheMaxBytes/4)
+	redirectCache = fastcache.LoadFromFileOrNew(config.CachePath+"/redirect", config.CacheMaxBytes/4)
 
 	// Basic middleware and health endpoint
 
@@ -128,11 +135,11 @@ func main() {
 	// Stremio endpoints
 
 	conversionClient := realdebrid.NewClient(mainCtx, 5*time.Second, tokenCache, availabilityCache)
-	searchClient := imdb2torrent.NewClient(mainCtx, *baseURLyts, *baseURLtpb, *baseURL1337x, *baseURLibit, 5*time.Second, torrentCache)
+	searchClient := imdb2torrent.NewClient(mainCtx, config.BaseURLyts, config.BaseURLtpb, config.BaseURL1337x, config.BaseURLibit, 5*time.Second, torrentCache)
 	// Use token middleware only for the Stremio endpoints
 	tokenMiddleware := createTokenMiddleware(mainCtx, conversionClient)
 	manifestHandler := createManifestHandler(mainCtx, conversionClient)
-	streamHandler := createStreamHandler(mainCtx, searchClient, conversionClient, redirectCache)
+	streamHandler := createStreamHandler(mainCtx, config, searchClient, conversionClient, redirectCache)
 	s.HandleFunc("/{apitoken}/manifest.json", tokenMiddleware(manifestHandler).ServeHTTP)
 	s.HandleFunc("/{apitoken}/stream/{type}/{id}.json", tokenMiddleware(streamHandler).ServeHTTP)
 
@@ -141,10 +148,10 @@ func main() {
 	// Redirects stream URLs (previously sent to Stremio) to the actual RealDebrid stream URLs
 	s.HandleFunc("/redirect/{id}", createRedirectHandler(mainCtx, redirectCache, conversionClient))
 	// Root redirects to website
-	s.HandleFunc("/", rootHandler)
+	s.HandleFunc("/", createRootHandler(mainCtx, config))
 
 	srv := &http.Server{
-		Addr:    *bindAddr + ":" + strconv.Itoa(*port),
+		Addr:    config.BindAddr + ":" + strconv.Itoa(config.Port),
 		Handler: s,
 		// Timeouts to avoid Slowloris attacks
 		ReadTimeout:    time.Second * 5,
@@ -179,7 +186,7 @@ func main() {
 	go func() {
 		for {
 			time.Sleep(time.Hour)
-			persistCache(mainCtx, *cachePath, stoppingPtr)
+			persistCache(mainCtx, config.CachePath, stoppingPtr)
 		}
 	}()
 
