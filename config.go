@@ -24,7 +24,7 @@ var (
 	baseURLtpb    = flag.String("baseURLtpb", "https://thepiratebay.org", "Base URL for TPB")
 	baseURL1337x  = flag.String("baseURL1337x", "https://1337x.to", "Base URL for 1337x")
 	baseURLibit   = flag.String("baseURLibit", "https://ibit.am", "Base URL for ibit")
-	logLevel      = flag.String("logLevel", "info", `Log level to show only logs with the given and more severe levels. Can be "trace", "debug", "info", "warn", "error", "fatal", "panic"`)
+	logLevel      = flag.String("logLevel", "debug", `Log level to show only logs with the given and more severe levels. Can be "trace", "debug", "info", "warn", "error", "fatal", "panic"`)
 	rootURL       = flag.String("rootURL", "https://www.deflix.tv", "Redirect target for the root")
 	envPrefix     = flag.String("envPrefix", "", "Prefix for environment variables")
 )

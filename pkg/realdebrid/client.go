@@ -38,19 +38,21 @@ func NewClient(ctx context.Context, timeout time.Duration, tokenCache, availabil
 }
 
 func (c Client) TestToken(ctx context.Context, apiToken string) error {
-	log.Println("Testing token...")
+	logger := log.WithContext(ctx).WithField("apiToken", apiToken)
+	logger.Debug("Testing token...")
 
 	// Check cache first.
 	// Note: Only when a token is valid a cache entry was created, because a token is probably valid for another 24 hours, while when a token is invalid it's likely that the user makes a payment to RealDebrid to extend his premium status and make his token valid again *within* 24 hours.
 	if tokenGob, ok := c.tokenCache.HasGet(nil, []byte(apiToken)); ok {
 		created, err := fromCacheEntry(ctx, tokenGob)
 		if err != nil {
-			log.Println("Couldn't decode token cache entry:", err)
+			logger.WithError(err).Error("Couldn't decode token cache entry")
 		} else if time.Since(created) < (24 * time.Hour) {
-			log.Println("Token cached as valid")
+			logger.Debug("Token cached as valid")
 			return nil
 		} else {
-			log.Println("Token cached as valid, but entry is expired since", time.Since(created.Add(24*time.Hour)))
+			expiredSince := time.Since(created.Add(24 * time.Hour))
+			logger.WithField("expiredSince", expiredSince).Debug("Token cached as valid, but entry is expired")
 		}
 	}
 
@@ -62,11 +64,11 @@ func (c Client) TestToken(ctx context.Context, apiToken string) error {
 		return fmt.Errorf("Couldn't parse user info response from real-debrid.com")
 	}
 
-	log.Println("Token OK")
+	logger.Debug("Token OK")
 
 	// Create cache entry
 	if tokenGob, err := newCacheEntry(ctx); err != nil {
-		log.Println("Couldn't encode token cache entry:", err)
+		logger.WithError(err).Error("Couldn't encode token cache entry")
 	} else {
 		c.tokenCache.Set([]byte(apiToken), tokenGob)
 	}
@@ -75,6 +77,8 @@ func (c Client) TestToken(ctx context.Context, apiToken string) error {
 }
 
 func (c Client) CheckInstantAvailability(ctx context.Context, apiToken string, infoHashes ...string) []string {
+	logger := log.WithContext(ctx).WithField("apiToken", apiToken)
+
 	// Precondition check
 	if len(infoHashes) == 0 {
 		return nil
@@ -89,14 +93,18 @@ func (c Client) CheckInstantAvailability(ctx context.Context, apiToken string, i
 		if availabilityGob, ok := c.availabilityCache.HasGet(nil, []byte(infoHash)); ok {
 			created, err := fromCacheEntry(ctx, availabilityGob)
 			if err != nil {
-				log.Println("Couldn't decode availability cache entry:", err)
+				logger.WithError(err).WithField("infoHash", infoHash).Error("Couldn't decode availability cache entry")
 				requestRequired = true
 				url += "/" + infoHash
 			} else if time.Since(created) < (24 * time.Hour) {
-				log.Println("Availability cached as valid")
+				logger.WithField("infoHash", infoHash).Debug("Availability cached as valid")
 				result = append(result, infoHash)
 			} else {
-				log.Println("Availability cached as valid, but entry is expired since", time.Since(created.Add(24*time.Hour)))
+				fields := log.Fields{
+					"infoHash":     infoHash,
+					"expiredSince": time.Since(created.Add(24 * time.Hour)),
+				}
+				logger.WithFields(fields).Debug("Availability cached as valid, but entry is expired")
 				requestRequired = true
 				url += "/" + infoHash
 			}
@@ -110,7 +118,7 @@ func (c Client) CheckInstantAvailability(ctx context.Context, apiToken string, i
 	if requestRequired {
 		resBytes, err := c.get(ctx, url, apiToken)
 		if err != nil {
-			log.Println("Couldn't check torrents' instant availability on real-debrid.com:", err)
+			logger.WithError(err).Error("Couldn't check torrents' instant availability on real-debrid.com")
 		} else {
 			// Note: This iterates through all elements with the key being the info_hash
 			gjson.ParseBytes(resBytes).ForEach(func(key gjson.Result, value gjson.Result) bool {
@@ -122,7 +130,7 @@ func (c Client) CheckInstantAvailability(ctx context.Context, apiToken string, i
 					result = append(result, infoHash)
 					// Create cache entry
 					if availabilityGob, err := newCacheEntry(ctx); err != nil {
-						log.Println("Couldn't encode availability cache entry:", err)
+						logger.WithError(err).Error("Couldn't encode availability cache entry")
 					} else {
 						c.availabilityCache.Set([]byte(infoHash), availabilityGob)
 					}
@@ -135,19 +143,20 @@ func (c Client) CheckInstantAvailability(ctx context.Context, apiToken string, i
 }
 
 func (c Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, remote bool) (string, error) {
-	log.Println("Adding torrent to RealDebrid...")
+	logger := log.WithContext(ctx).WithField("apiToken", apiToken)
+	logger.Debug("Adding torrent to RealDebrid...")
 	data := url.Values{}
 	data.Set("magnet", magnetURL)
 	resBytes, err := c.post(ctx, rdBaseURL+"/torrents/addMagnet", apiToken, data)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't add torrent to RealDebrid: %v", err)
 	}
-	log.Println("Finished adding torrent to RealDebrid")
+	logger.Debug("Finished adding torrent to RealDebrid")
 	rdTorrentURL := gjson.GetBytes(resBytes, "uri").String()
 
 	// Check RealDebrid torrent info
 
-	log.Println("Checking torrent info...")
+	logger.Debug("Checking torrent info...")
 	resBytes, err = c.get(ctx, rdTorrentURL, apiToken)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't get torrent info from real-debrid.com: %v", err)
@@ -159,22 +168,22 @@ func (c Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, re
 	if err != nil {
 		return "", fmt.Errorf("Couldn't find proper file in torrent: %v", err)
 	}
-	log.Println("Torrent info OK")
+	logger.Debug("Torrent info OK")
 
 	// Add torrent to RealDebrid downloads
 
-	log.Println("Adding torrent to RealDebrid downloads...")
+	logger.Debug("Adding torrent to RealDebrid downloads...")
 	data = url.Values{}
 	data.Set("files", fileID)
 	_, err = c.post(ctx, rdBaseURL+"/torrents/selectFiles/"+torrentID, apiToken, data)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't add torrent to RealDebrid downloads: %v", err)
 	}
-	log.Println("Finished adding torrent to RealDebrid downloads")
+	logger.Debug("Finished adding torrent to RealDebrid downloads")
 
 	// Get torrent info (again)
 
-	log.Println("Checking torrent status...")
+	logger.Debug("Checking torrent status...")
 	torrentStatus := ""
 	waitForDownloadSeconds := 5
 	waitedForDownloadSeconds := 0
@@ -197,29 +206,42 @@ func (c Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, re
 		// Also matches future additional statuses that don't exist in the API yet. Well ok wait for 5 seconds as well.
 		if torrentStatus != "downloading" && torrentStatus != "downloaded" {
 			if waitedForDownloadSeconds < waitForDownloadSeconds {
-				log.Printf("Torrent status: %v. Waiting for download for %v seconds...\n", torrentStatus, waitForDownloadSeconds-waitedForDownloadSeconds)
+				fields := log.Fields{
+					"torrentStatus": torrentStatus,
+					"remainingWait": strconv.Itoa(waitForDownloadSeconds-waitedForDownloadSeconds) + "s",
+				}
+				logger.WithFields(fields).Debug("Waiting for download...")
 				waitedForDownloadSeconds++
 			} else {
-				log.Println("Torrent still "+torrentStatus+" after waiting", waitForDownloadSeconds, "seconds")
+				fields := log.Fields{
+					"torrentStatus": torrentStatus,
+					"waited":        strconv.Itoa(waitForDownloadSeconds) + "s",
+				}
+				logger.WithFields(fields).Debug("Torrent not downloading yet")
 				return "", fmt.Errorf("Torrent still waiting for download (currently %v) on real-debrid.com after waiting for %v seconds", torrentStatus, waitForDownloadSeconds)
 			}
 		} else if torrentStatus == "downloading" {
 			if waitedForDownloadSeconds < waitForDownloadSeconds {
-				log.Println("Torrent downloading. Waiting for", waitForDownloadSeconds-waitedForDownloadSeconds, "seconds...")
+				remainingWait := strconv.Itoa(waitForDownloadSeconds-waitedForDownloadSeconds) + "s"
+				logger.WithField("remainingWait", remainingWait).Debug("Torrent downloading...")
 				waitedForDownloadSeconds++
 			} else {
-				log.Println("Torrent still "+torrentStatus+" after waiting", waitForDownloadSeconds, "seconds")
+				fields := log.Fields{
+					"torrentStatus": torrentStatus,
+					"waited":        strconv.Itoa(waitForDownloadSeconds) + "s",
+				}
+				logger.WithFields(fields).Debug("Torrent still downloading")
 				return "", fmt.Errorf("Torrent still %v on real-debrid.com after waiting for %v seconds", torrentStatus, waitForDownloadSeconds)
 			}
 		}
 		time.Sleep(time.Second)
 	}
 	debridURL := gjson.GetBytes(resBytes, "links").Array()[0].String()
-	log.Println("Torrent is downloaded")
+	logger.Debug("Torrent is downloaded")
 
 	// Unrestrict link
 
-	log.Println("Unrestricting link...")
+	logger.Debug("Unrestricting link...")
 	data = url.Values{}
 	data.Set("link", debridURL)
 	if remote {
@@ -230,7 +252,7 @@ func (c Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, re
 		return "", fmt.Errorf("Couldn't unrestrict link: %v", err)
 	}
 	streamURL := gjson.GetBytes(resBytes, "download").String()
-	log.Println("Unrestricted link:", streamURL)
+	logger.WithField("unrestrictedLink", streamURL).Debug("Unrestricted link")
 
 	return streamURL, nil
 }

@@ -39,45 +39,59 @@ func NewClient(ctx context.Context, baseURLyts, baseURLtpb, baseURL1337x, baseUR
 // It caches results once they're found.
 // It can return an empty slice and no error if no actual error occurred (for example if torrents where found but no >=720p videos).
 func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error) {
+	logger := log.WithContext(ctx).WithField("imdbID", imdbID)
+
 	torrentSiteCount := 3
 	resChan := make(chan []Result, torrentSiteCount)
 	errChan := make(chan error, torrentSiteCount)
 
 	// YTS
 	go func() {
-		log.Println("Started searching torrents on YTS...")
+		logger.WithField("torrentSite", "YTS").Debug("Started searching torrents...")
 		results, err := c.ytsClient.check(ctx, imdbID)
 		if err != nil {
-			log.Println("Couldn't find torrents on YTS:", err)
+			logger.WithError(err).WithField("torrentSite", "YTS").Debug("Couldn't find torrents")
 			errChan <- err
 		} else {
-			log.Println("Found", len(results), "torrents on YTS")
+			fields := log.Fields{
+				"torrentSite":  "YTS",
+				"torrentCount": len(results),
+			}
+			logger.WithFields(fields).Debug("Found torrents")
 			resChan <- results
 		}
 	}()
 
 	// TPB
 	go func() {
-		log.Println("Started searching torrents on TPB...")
+		logger.WithField("torrentSite", "TPB").Debug("Started searching torrents...")
 		results, err := c.tpbClient.check(ctx, imdbID, 2)
 		if err != nil {
-			log.Println("Couldn't find torrents on TPB:", err)
+			logger.WithError(err).WithField("torrentSite", "TPB").Debug("Couldn't find torrents")
 			errChan <- err
 		} else {
-			log.Println("Found", len(results), "torrents on TPB")
+			fields := log.Fields{
+				"torrentSite":  "TPB",
+				"torrentCount": len(results),
+			}
+			logger.WithFields(fields).Debug("Found torrents")
 			resChan <- results
 		}
 	}()
 
 	// 1337x
 	go func() {
-		log.Println("Started searching torrents on 1337x...")
+		logger.WithField("torrentSite", "1337x").Debug("Started searching torrents...")
 		results, err := c.leetxClient.check(ctx, imdbID)
 		if err != nil {
-			log.Println("Couldn't find torrents on 1337x:", err)
+			logger.WithError(err).WithField("torrentSite", "1337x").Debug("Couldn't find torrents")
 			errChan <- err
 		} else {
-			log.Println("Found", len(results), "torrents on 1337x")
+			fields := log.Fields{
+				"torrentSite":  "1337x",
+				"torrentCount": len(results),
+			}
+			logger.WithFields(fields).Debug("Found torrents")
 			resChan <- results
 		}
 	}()
@@ -90,13 +104,17 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 	ibitErrChan := make(chan error)
 	ibitStop := time.Now().Add(c.timeout)
 	go func() {
-		log.Println("Started searching torrents on ibit...")
+		logger.WithField("torrentSite", "ibit").Debug("Started searching torrents...")
 		ibitResults, err := c.ibitClient.check(ctx, imdbID)
 		if err != nil {
-			log.Println("Couldn't find torrents on ibit:", err)
+			logger.WithError(err).WithField("torrentSite", "ibit").Debug("Couldn't find torrents")
 			ibitErrChan <- err
 		} else {
-			log.Println("Found", len(ibitResults), "torrents on ibit")
+			fields := log.Fields{
+				"torrentSite":  "ibit",
+				"torrentCount": len(ibitResults),
+			}
+			logger.WithFields(fields).Debug("Found torrents")
 			ibitResChan <- ibitResults
 		}
 	}()
@@ -135,7 +153,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 		returnErrors = false
 		closeChansOk = true
 	case <-time.After(time.Until(ibitStop)):
-		log.Println("ibit torrent search hasn't finished yet, we'll let it run in the background")
+		logger.WithField("torrentSite", "ibit").Info("torrent search hasn't finished yet, we'll let it run in the background")
 	}
 	if closeChansOk {
 		close(ibitErrChan)
@@ -168,7 +186,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 	}
 
 	if len(noDupResults) == 0 {
-		log.Println("Couldn't find ANY torrents for IMDb ID", imdbID)
+		logger.Warn("Couldn't find ANY torrents")
 	}
 
 	return noDupResults, nil

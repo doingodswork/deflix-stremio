@@ -33,17 +33,24 @@ func newTPBclient(ctx context.Context, baseURL string, timeout time.Duration, ca
 // TPB sometimes runs into a timeout, so let's allow multiple attempts *when a timeout occurs*.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
 func (c tpbClient) check(ctx context.Context, imdbID string, attempts int) ([]Result, error) {
+	logFields := log.Fields{
+		"imdbID":      imdbID,
+		"torrentSite": "TPB",
+	}
+	logger := log.WithContext(ctx).WithFields(logFields)
+
 	// Check cache first
 	cacheKey := imdbID + "-TPB"
 	if torrentsGob, ok := c.cache.HasGet(nil, []byte(cacheKey)); ok {
 		torrentList, created, err := FromCacheEntry(ctx, torrentsGob)
 		if err != nil {
-			log.Println("Couldn't decode TPB torrent results:", err)
+			logger.WithError(err).Error("Couldn't decode torrent results")
 		} else if time.Since(created) < (24 * time.Hour) {
-			log.Printf("Hit cache for TPB torrents, returning %v results\n", len(torrentList))
+			logger.WithField("torrentCount", len(torrentList)).Debug("Hit cache for torrents, returning results")
 			return torrentList, nil
 		} else {
-			log.Println("Hit cache for TPB torrents, but entry is expired since", time.Since(created.Add(24*time.Hour)))
+			expiredSince := time.Since(created.Add(24 * time.Hour))
+			logger.WithField("expiredSince", expiredSince).Debug("Hit cache for torrents, but entry is expired")
 		}
 	}
 
@@ -57,13 +64,13 @@ func (c tpbClient) check(ctx context.Context, imdbID string, attempts int) ([]Re
 		// HTTP client errors are *always* `*url.Error`s
 		urlErr := err.(*url.Error)
 		if urlErr.Timeout() {
-			log.Println("Ran into a timeout for", reqUrl)
+			logger.Info("Ran into a timeout")
 			if attempts == 1 {
 				return nil, fmt.Errorf("All attempted requests to %v timed out", reqUrl)
 			}
 			// Just retrying again with the same HTTP client, which probably reuses the previous connection, doesn't work.
 			// Simple tests have shown that when a proper connection exists, all requests to TPB work, while when no proper connection exists all requests time out.
-			log.Println("Closing connections to TPB and retrying...")
+			logger.Debug("Closing connections to TPB and retrying...")
 			c.httpClient.CloseIdleConnections()
 			return c.check(ctx, imdbID, attempts-1)
 		} else {
@@ -87,7 +94,7 @@ func (c tpbClient) check(ctx context.Context, imdbID string, attempts int) ([]Re
 	doc.Find("tbody tr").Each(func(_ int, s *goquery.Selection) {
 		title := s.Find(".detLink").Text()
 		if title == "" {
-			log.Println("Scraped movie title is empty, did the HTML change?")
+			logger.Warn("Scraped movie title is empty, did the HTML change?")
 			return
 		}
 		title = strings.TrimSpace(title)
@@ -114,7 +121,7 @@ func (c tpbClient) check(ctx context.Context, imdbID string, attempts int) ([]Re
 
 		magnet, _ := s.Find(".detName").Next().Attr("href")
 		if !strings.HasPrefix(magnet, "magnet:") {
-			log.Println("Scraped magnet URL doesn't look like a magnet URL. Did the HTML change?")
+			logger.Warn("Scraped magnet URL doesn't look like a magnet URL. Did the HTML change?")
 			return
 		}
 		// look for "btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c&" via regex and then cut out the hash
@@ -135,7 +142,7 @@ func (c tpbClient) check(ctx context.Context, imdbID string, attempts int) ([]Re
 	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
 	// Any actual errors would have returned earlier.
 	if torrentsGob, err := NewCacheEntry(ctx, results); err != nil {
-		log.Println("Couldn't create cache entry for TPB torrents:", err)
+		logger.WithError(err).Error("Couldn't create cache entry for torrents")
 	} else {
 		c.cache.Set([]byte(cacheKey), torrentsGob)
 	}

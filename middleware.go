@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -92,7 +93,15 @@ func createLoggingMiddleware(ctx context.Context) func(http.Handler) http.Handle
 			// Then log
 			reqStart := rCtx.Value("start").(time.Time)
 			duration := time.Since(reqStart).Milliseconds()
-			log.Println(r.Method, r.URL, "from", r.RemoteAddr, "took", duration, "ms")
+			durationString := strconv.FormatInt(duration, 10) + "ms"
+			fields := log.Fields{
+				"method":     r.Method,
+				"url":        r.URL,
+				"remoteAddr": r.RemoteAddr,
+				"userAgent":  r.Header.Get("User-Agent"),
+				"duration":   durationString,
+			}
+			log.WithContext(rCtx).WithFields(fields).Info("Handled request")
 		})
 	}
 }

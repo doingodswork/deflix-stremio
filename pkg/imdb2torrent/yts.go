@@ -44,17 +44,24 @@ func newYTSclient(ctx context.Context, baseURL string, timeout time.Duration, ca
 // check uses YTS' API to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
 func (c ytsClient) check(ctx context.Context, imdbID string) ([]Result, error) {
+	logFields := log.Fields{
+		"imdbID":      imdbID,
+		"torrentSite": "YTS",
+	}
+	logger := log.WithContext(ctx).WithFields(logFields)
+
 	// Check cache first
 	cacheKey := imdbID + "-YTS"
 	if torrentsGob, ok := c.cache.HasGet(nil, []byte(cacheKey)); ok {
 		torrentList, created, err := FromCacheEntry(ctx, torrentsGob)
 		if err != nil {
-			log.Println("Couldn't decode YTS torrent results:", err)
+			logger.WithError(err).Error("Couldn't decode torrent results")
 		} else if time.Since(created) < (24 * time.Hour) {
-			log.Printf("Hit cache for YTS torrents, returning %v results\n", len(torrentList))
+			logger.WithField("torrentCount", len(torrentList)).Debug("Hit cache for torrents, returning results")
 			return torrentList, nil
 		} else {
-			log.Println("Hit cache for YTS torrents, but entry is expired since", time.Since(created.Add(24*time.Hour)))
+			expiredSince := time.Since(created.Add(24 * time.Hour))
+			logger.WithField("expiredSince", expiredSince).Debug("Hit cache for torrents, but entry is expired")
 		}
 	}
 
@@ -97,7 +104,7 @@ func (c ytsClient) check(ctx context.Context, imdbID string) ([]Result, error) {
 	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
 	// Any actual errors would have returned earlier.
 	if torrentsGob, err := NewCacheEntry(ctx, results); err != nil {
-		log.Println("Couldn't create cache entry for YTS torrents:", err)
+		logger.WithError(err).Error("Couldn't create cache entry for torrents")
 	} else {
 		c.cache.Set([]byte(cacheKey), torrentsGob)
 	}

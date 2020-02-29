@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/gob"
 	"fmt"
+	"strconv"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -26,9 +27,10 @@ func NewCacheEntry(ctx context.Context, data []Result) ([]byte, error) {
 	if err := encoder.Encode(entry); err != nil {
 		return nil, fmt.Errorf("Couldn't encode cacheEntry: %v", err)
 	}
-	log.Printf("New cacheEntry size: %vKB", len(writer.Bytes())/1024)
+	entrySize := strconv.Itoa(len(writer.Bytes())/1024) + "KB"
+	log.WithContext(ctx).WithField("entrySize", entrySize).Debug("New cache entry created")
 	if len(writer.Bytes()) > 64*1024 {
-		log.Println("New cacheEntry is bigger than 64KB, which means it won't be stored in the cache when calling fastcache's Set() method. SetBig() (and GetBig()) must be used instead!")
+		log.WithContext(ctx).Warn("New cacheEntry is bigger than 64KB, which means it won't be stored in the cache when calling fastcache's Set() method. SetBig() (and GetBig()) must be used instead!")
 	}
 	return writer.Bytes(), nil
 }

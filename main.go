@@ -74,6 +74,7 @@ func init() {
 
 func main() {
 	mainCtx := context.Background()
+	log.Info("Parsing config")
 	parseConfig(mainCtx)
 
 	switch *logLevel {
@@ -114,7 +115,7 @@ func main() {
 
 	// Basic middleware and health endpoint
 
-	log.Println("Setting up server")
+	log.Info("Setting up server")
 	r := mux.NewRouter()
 	s := r.Methods("GET").Subrouter()
 	s.Use(createTimerMiddleware(mainCtx),
@@ -155,7 +156,7 @@ func main() {
 	stopping := false
 	stoppingPtr := &stopping
 
-	log.Println("Starting server on", srv.Addr)
+	log.WithField("address", srv.Addr).Info("Starting server")
 	go func() {
 		if err := srv.ListenAndServe(); err != nil {
 			if !*stoppingPtr {
@@ -169,7 +170,7 @@ func main() {
 	// Timed logger for easier debugging with logs
 	go func() {
 		for {
-			log.Println("...")
+			log.Trace("...")
 			time.Sleep(time.Second)
 		}
 	}()
@@ -189,16 +190,16 @@ func main() {
 		stats := fastcache.Stats{}
 		for {
 			tokenCache.UpdateStats(&stats)
-			log.Printf("Token cache stats: %#v\n", stats)
+			logCacheStats(mainCtx, stats, "token cache")
 			stats.Reset()
 			availabilityCache.UpdateStats(&stats)
-			log.Printf("Availability cache stats: %#v\n", stats)
+			logCacheStats(mainCtx, stats, "availability cache")
 			stats.Reset()
 			torrentCache.UpdateStats(&stats)
-			log.Printf("Torrent cache stats: %#v\n", stats)
+			logCacheStats(mainCtx, stats, "torrent cache")
 			stats.Reset()
 			redirectCache.UpdateStats(&stats)
-			log.Printf("Redirect cache stats: %#v\n", stats)
+			logCacheStats(mainCtx, stats, "redirect cache")
 			stats.Reset()
 
 			time.Sleep(time.Hour)
@@ -211,7 +212,7 @@ func main() {
 	// Accept SIGINT (Ctrl+C) and SIGTERM (`docker stop`)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	sig := <-c
-	log.Printf("Received \"%v\" signal. Shutting down...\n", sig)
+	log.WithField("signal", sig).Info("Received signal, shutting down...")
 	*stoppingPtr = true
 	// Create a deadline to wait for.
 	// Using the same value as the server's `WriteTimeout` would be great, because this would mean that every client could finish his request as he normally could.
@@ -222,26 +223,41 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		log.WithError(err).Fatal("Error shutting down server")
 	}
+	log.Info("Server shut down")
 }
 
 func persistCache(ctx context.Context, cacheFilePath string, stoppingPtr *bool) {
 	if *stoppingPtr {
-		log.Println("Regular cache persistence triggered, but server is shutting down")
+		log.Warn("Regular cache persistence triggered, but server is shutting down")
 		return
 	}
 
-	log.Printf("Persisting caches to \"%v\"...\n", cacheFilePath)
+	log.WithField("cacheFilePath", cacheFilePath).Info("Persisting caches...")
 	if err := tokenCache.SaveToFileConcurrent(cacheFilePath+"/token", runtime.NumCPU()); err != nil {
-		log.Println("Couldn't save token cache to file:", err)
+		log.WithError(err).Error("Couldn't save token cache to file")
 	}
 	if err := availabilityCache.SaveToFileConcurrent(cacheFilePath+"/availability", runtime.NumCPU()); err != nil {
-		log.Println("Couldn't save availability cache to file:", err)
+		log.WithError(err).Error("Couldn't save availability cache to file")
 	}
 	if err := torrentCache.SaveToFileConcurrent(cacheFilePath+"/torrent", runtime.NumCPU()); err != nil {
-		log.Println("Couldn't save torrent cache to file:", err)
+		log.WithError(err).Error("Couldn't save torrent cache to file")
 	}
 	if err := redirectCache.SaveToFileConcurrent(cacheFilePath+"/redirect", runtime.NumCPU()); err != nil {
-		log.Println("Couldn't save redirect cache to file:", err)
+		log.WithError(err).Error("Couldn't save redirect cache to file")
 	}
-	log.Println("Persisted caches")
+	log.Info("Persisted caches")
+}
+
+func logCacheStats(ctx context.Context, stats fastcache.Stats, cacheName string) {
+	fields := log.Fields{
+		"cache":        cacheName,
+		"GetCalls":     stats.GetCalls,
+		"SetCalls":     stats.SetCalls,
+		"Misses":       stats.Misses,
+		"Collisions":   stats.Collisions,
+		"Corruptions":  stats.Corruptions,
+		"EntriesCount": stats.EntriesCount,
+		"Size":         strconv.FormatUint(stats.BytesSize/uint64(1024)/uint64(1024), 10) + "MB",
+	}
+	log.WithFields(fields).Info("Cache stats")
 }

@@ -35,17 +35,24 @@ func newLeetxclient(ctx context.Context, baseURL string, timeout time.Duration, 
 // It uses the Stremio Cinemata remote addon to get a movie name for a given IMDb ID, so it can search 1337x with the name.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
 func (c leetxClient) check(ctx context.Context, imdbID string) ([]Result, error) {
+	logFields := log.Fields{
+		"imdbID":      imdbID,
+		"torrentSite": "1337x",
+	}
+	logger := log.WithContext(ctx).WithFields(logFields)
+
 	// Check cache first
 	cacheKey := imdbID + "-1337x"
 	if torrentsGob, ok := c.cache.HasGet(nil, []byte(cacheKey)); ok {
 		torrentList, created, err := FromCacheEntry(ctx, torrentsGob)
 		if err != nil {
-			log.Println("Couldn't decode 1337x torrent results:", err)
+			logger.WithError(err).Error("Couldn't decode torrent results")
 		} else if time.Since(created) < (24 * time.Hour) {
-			log.Printf("Hit cache for 1337x torrents, returning %v results\n", len(torrentList))
+			logger.WithField("torrentCount", len(torrentList)).Debug("Hit cache for torrents, returning results")
 			return torrentList, nil
 		} else {
-			log.Println("Hit cache for 1337x torrents, but entry is expired since", time.Since(created.Add(24*time.Hour)))
+			expiredSince := time.Since(created.Add(24 * time.Hour))
+			logger.WithField("expiredSince", expiredSince).Debug("Hit cache for torrents, but entry is expired")
 		}
 	}
 
@@ -103,7 +110,7 @@ func (c leetxClient) check(ctx context.Context, imdbID string) ([]Result, error)
 		if strings.Contains(linkText, "720p") || strings.Contains(linkText, "1080p") || strings.Contains(linkText, "2160p") {
 			torrentLink, ok := s.Find("a").Next().Attr("href")
 			if !ok || torrentLink == "" {
-				log.Println("Couldn't find link to the torrent page, did the HTML change?")
+				logger.Warn("Couldn't find link to the torrent page, did the HTML change?")
 				return
 			}
 			torrentPageURLs = append(torrentPageURLs, c.baseURL+torrentLink)
@@ -190,7 +197,7 @@ func (c leetxClient) check(ctx context.Context, imdbID string) ([]Result, error)
 	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
 	// Any actual errors would have returned earlier.
 	if torrentsGob, err := NewCacheEntry(ctx, results); err != nil {
-		log.Println("Couldn't create cache entry for 1337x torrents:", err)
+		logger.WithError(err).Error("Couldn't create cache entry for torrents")
 	} else {
 		c.cache.Set([]byte(cacheKey), torrentsGob)
 	}
@@ -204,11 +211,11 @@ func (c leetxClient) getMovieName(ctx context.Context, imdbID string) (string, s
 	movieName := ""
 	movieYear := ""
 	if movieNameBytes, ok := c.cache.HasGet(nil, []byte(imdbID+"-name")); ok {
-		log.Println("Hit cache for movie name for IMDb ID", imdbID)
+		log.WithContext(ctx).WithField("imdbID", imdbID).Debug("Hit cache for movie name")
 		movieName = string(movieNameBytes)
 	}
 	if movieYearBytes, ok := c.cache.HasGet(nil, []byte(imdbID+"-year")); ok {
-		log.Println("Hit cache for movie year for IMDb ID", imdbID)
+		log.WithContext(ctx).WithField("imdbID", imdbID).Debug("Hit cache for movie year")
 		movieYear = string(movieYearBytes)
 	}
 	// movieName is the important one, return if it was found in cache
