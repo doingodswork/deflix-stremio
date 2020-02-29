@@ -98,11 +98,10 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 
 	// ibit
 	// Note: An initial movie search takes long, because multiple requests need to be made, but ibit uses rate limiting, so we can't do them concurrently.
-	// So let's treat this special: Make the request, but only wait for 5 seconds, then don't cancel the operation, but let it run in the background so the cache gets filled.
+	// So let's treat this special: Make the request, but only wait for 1 second (in case the cache is filled), then don't cancel the operation, but let it run in the background so the cache gets filled.
 	// With the next movie search for the same IMDb ID the cache is used.
 	ibitResChan := make(chan []Result)
 	ibitErrChan := make(chan error)
-	ibitStop := time.Now().Add(c.timeout)
 	go func() {
 		logger.WithField("torrentSite", "ibit").Debug("Started searching torrents...")
 		ibitResults, err := c.ibitClient.check(ctx, imdbID)
@@ -119,6 +118,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 		}
 	}()
 
+	// Collect results from all except ibit.
 	var combinedResults []Result
 	var errs []error
 	dupRemovalRequired := false
@@ -152,7 +152,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 		combinedResults = append(combinedResults, results...)
 		returnErrors = false
 		closeChansOk = true
-	case <-time.After(time.Until(ibitStop)):
+	case <-time.After(1 * time.Second):
 		logger.WithField("torrentSite", "ibit").Info("torrent search hasn't finished yet, we'll let it run in the background")
 	}
 	if closeChansOk {
