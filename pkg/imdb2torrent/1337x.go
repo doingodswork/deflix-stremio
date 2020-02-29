@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -197,8 +198,14 @@ func (c leetxClient) check(ctx context.Context, imdbID string) ([]Result, error)
 	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
 	// Any actual errors would have returned earlier.
 	if torrentsGob, err := NewCacheEntry(ctx, results); err != nil {
-		logger.WithError(err).Error("Couldn't create cache entry for torrents")
+		logger.WithError(err).WithField("cache", "torrent").Error("Couldn't create cache entry for torrents")
 	} else {
+		entrySize := strconv.Itoa(len(torrentsGob)/1024) + "KB"
+		if len(torrentsGob) > 64*1024 {
+			logger.WithField("cache", "torrent").WithField("entrySize", entrySize).Warn("New cacheEntry is bigger than 64KB, which means it won't be stored in the cache when calling fastcache's Set() method. SetBig() (and GetBig()) must be used instead!")
+		} else {
+			logger.WithField("cache", "torrent").WithField("entrySize", entrySize).Debug("Caching torrent results")
+		}
 		c.cache.Set([]byte(cacheKey), torrentsGob)
 	}
 

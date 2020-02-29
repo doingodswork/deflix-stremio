@@ -190,16 +190,16 @@ func main() {
 		stats := fastcache.Stats{}
 		for {
 			tokenCache.UpdateStats(&stats)
-			logCacheStats(mainCtx, stats, "token cache")
+			logCacheStats(mainCtx, stats, "token")
 			stats.Reset()
 			availabilityCache.UpdateStats(&stats)
-			logCacheStats(mainCtx, stats, "availability cache")
+			logCacheStats(mainCtx, stats, "availability")
 			stats.Reset()
 			torrentCache.UpdateStats(&stats)
-			logCacheStats(mainCtx, stats, "torrent cache")
+			logCacheStats(mainCtx, stats, "torrent")
 			stats.Reset()
 			redirectCache.UpdateStats(&stats)
-			logCacheStats(mainCtx, stats, "redirect cache")
+			logCacheStats(mainCtx, stats, "redirect")
 			stats.Reset()
 
 			time.Sleep(time.Hour)
