@@ -58,6 +58,7 @@ var (
 	tokenCache        *fastcache.Cache
 	availabilityCache *fastcache.Cache
 	redirectCache     *fastcache.Cache
+	cinemataCache     *fastcache.Cache
 )
 
 func init() {
@@ -115,10 +116,12 @@ func main() {
 		config.CachePath = strings.TrimSuffix(config.CachePath, "/")
 	}
 	config.CachePath += "/cache"
-	tokenCache = fastcache.LoadFromFileOrNew(config.CachePath+"/token", config.CacheMaxBytes/4)
-	availabilityCache = fastcache.LoadFromFileOrNew(config.CachePath+"/availability", config.CacheMaxBytes/4)
-	torrentCache = fastcache.LoadFromFileOrNew(config.CachePath+"/torrent", config.CacheMaxBytes/4)
-	redirectCache = fastcache.LoadFromFileOrNew(config.CachePath+"/redirect", config.CacheMaxBytes/4)
+	cacheMaxBytes := config.CacheMaxMB * 1000 * 1000
+	tokenCache = fastcache.LoadFromFileOrNew(config.CachePath+"/token", cacheMaxBytes/5)
+	availabilityCache = fastcache.LoadFromFileOrNew(config.CachePath+"/availability", cacheMaxBytes/5)
+	torrentCache = fastcache.LoadFromFileOrNew(config.CachePath+"/torrent", cacheMaxBytes/5)
+	redirectCache = fastcache.LoadFromFileOrNew(config.CachePath+"/redirect", cacheMaxBytes/5)
+	cinemataCache = fastcache.LoadFromFileOrNew(config.CachePath+"/cinemata", cacheMaxBytes/5)
 
 	// Basic middleware and health endpoint
 
@@ -135,7 +138,7 @@ func main() {
 	// Stremio endpoints
 
 	conversionClient := realdebrid.NewClient(mainCtx, 5*time.Second, tokenCache, availabilityCache)
-	searchClient := imdb2torrent.NewClient(mainCtx, config.BaseURLyts, config.BaseURLtpb, config.BaseURL1337x, config.BaseURLibit, 5*time.Second, torrentCache)
+	searchClient := imdb2torrent.NewClient(mainCtx, config.BaseURLyts, config.BaseURLtpb, config.BaseURL1337x, config.BaseURLibit, 5*time.Second, torrentCache, cinemataCache)
 	// Use token middleware only for the Stremio endpoints
 	tokenMiddleware := createTokenMiddleware(mainCtx, conversionClient)
 	manifestHandler := createManifestHandler(mainCtx, conversionClient)
@@ -157,7 +160,7 @@ func main() {
 		ReadTimeout:    time.Second * 5,
 		WriteTimeout:   time.Second * 15,
 		IdleTimeout:    time.Second * 60,
-		MaxHeaderBytes: 1 << 10, // 1 KB
+		MaxHeaderBytes: 1 * 1000, // 1 KB
 	}
 
 	stopping := false
@@ -208,6 +211,9 @@ func main() {
 			redirectCache.UpdateStats(&stats)
 			logCacheStats(mainCtx, stats, "redirect")
 			stats.Reset()
+			cinemataCache.UpdateStats(&stats)
+			logCacheStats(mainCtx, stats, "cinemata")
+			stats.Reset()
 
 			time.Sleep(time.Hour)
 		}
@@ -241,16 +247,19 @@ func persistCache(ctx context.Context, cacheFilePath string, stoppingPtr *bool) 
 
 	log.WithField("cacheFilePath", cacheFilePath).Info("Persisting caches...")
 	if err := tokenCache.SaveToFileConcurrent(cacheFilePath+"/token", runtime.NumCPU()); err != nil {
-		log.WithError(err).Error("Couldn't save token cache to file")
+		log.WithError(err).WithField("cache", "token").Error("Couldn't save cache to file")
 	}
 	if err := availabilityCache.SaveToFileConcurrent(cacheFilePath+"/availability", runtime.NumCPU()); err != nil {
-		log.WithError(err).Error("Couldn't save availability cache to file")
+		log.WithError(err).WithField("cache", "availability").Error("Couldn't save cache to file")
 	}
 	if err := torrentCache.SaveToFileConcurrent(cacheFilePath+"/torrent", runtime.NumCPU()); err != nil {
-		log.WithError(err).Error("Couldn't save torrent cache to file")
+		log.WithError(err).WithField("cache", "torrent").Error("Couldn't save cache to file")
 	}
 	if err := redirectCache.SaveToFileConcurrent(cacheFilePath+"/redirect", runtime.NumCPU()); err != nil {
-		log.WithError(err).Error("Couldn't save redirect cache to file")
+		log.WithError(err).WithField("cache", "redirect").Error("Couldn't save cache to file")
+	}
+	if err := cinemataCache.SaveToFileConcurrent(cacheFilePath+"/cinemata", runtime.NumCPU()); err != nil {
+		log.WithError(err).WithField("cache", "cinemata").Error("Couldn't save cache to file")
 	}
 	log.Info("Persisted caches")
 }

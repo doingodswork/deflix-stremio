@@ -3,7 +3,6 @@ package imdb2torrent
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -13,22 +12,25 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/VictoriaMetrics/fastcache"
 	log "github.com/sirupsen/logrus"
-	"github.com/tidwall/gjson"
+
+	"github.com/doingodswork/deflix-stremio/pkg/cinemata"
 )
 
 type leetxClient struct {
-	baseURL    string
-	httpClient *http.Client
-	cache      *fastcache.Cache
+	baseURL        string
+	httpClient     *http.Client
+	cache          *fastcache.Cache
+	cinemataClient cinemata.Client
 }
 
-func newLeetxclient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache) leetxClient {
+func newLeetxclient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache, cinemataClient cinemata.Client) leetxClient {
 	return leetxClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
-		cache: cache,
+		cache:          cache,
+		cinemataClient: cinemataClient,
 	}
 }
 
@@ -58,13 +60,13 @@ func (c leetxClient) check(ctx context.Context, imdbID string) ([]Result, error)
 	}
 
 	// Get movie name
-	movieName, movieYear, err := c.getMovieName(ctx, imdbID)
+	movieName, movieYear, err := c.cinemataClient.GetMovieNameYear(ctx, imdbID)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't get movie name via Cinemata for IMDb ID %v: %v", imdbID, err)
 	}
 	movieSearch := movieName
-	if movieYear != "" {
-		movieSearch += " " + movieYear
+	if movieYear != 0 {
+		movieSearch += " " + strconv.Itoa(movieYear)
 	}
 	// Use this for general searching in URL "https://1337x.to/search/foo+bar/1/"
 	//movieSearch = strings.Replace(movieSearch, " ", "+", -1)
@@ -210,51 +212,6 @@ func (c leetxClient) check(ctx context.Context, imdbID string) ([]Result, error)
 	}
 
 	return results, nil
-}
-
-func (c leetxClient) getMovieName(ctx context.Context, imdbID string) (string, string, error) {
-	// Check cache first
-	// TODO: Currently these entries will never be evicted. But in case the movie names of IMDb IDs can change (e.g. from some "working title" / codename to the actual release title) we should do that.
-	movieName := ""
-	movieYear := ""
-	if movieNameBytes, ok := c.cache.HasGet(nil, []byte(imdbID+"-name")); ok {
-		log.WithContext(ctx).WithField("imdbID", imdbID).Debug("Hit cache for movie name")
-		movieName = string(movieNameBytes)
-	}
-	if movieYearBytes, ok := c.cache.HasGet(nil, []byte(imdbID+"-year")); ok {
-		log.WithContext(ctx).WithField("imdbID", imdbID).Debug("Hit cache for movie year")
-		movieYear = string(movieYearBytes)
-	}
-	// movieName is the important one, return if it was found in cache
-	if movieName != "" {
-		return movieName, movieYear, nil
-	}
-
-	reqUrl := "https://v3-cinemeta.strem.io/meta/movie/" + imdbID + ".json"
-
-	res, err := c.httpClient.Get(reqUrl)
-	if err != nil {
-		return "", "", fmt.Errorf("Couldn't GET %v: %v", reqUrl, err)
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("Bad GET response: %v", res.StatusCode)
-	}
-	resBody, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return "", "", fmt.Errorf("Couldn't read response body: %v", err)
-	}
-	movieName = gjson.GetBytes(resBody, "meta.name").String()
-	if movieName == "" {
-		return "", "", fmt.Errorf("Couldn't find movie name in Cinemata response")
-	}
-	movieYear = gjson.GetBytes(resBody, "meta.year").String()
-
-	// Fill cache
-	c.cache.Set([]byte(imdbID+"-name"), []byte(movieName))
-	c.cache.Set([]byte(imdbID+"-year"), []byte(movieYear))
-
-	return movieName, movieYear, nil
 }
 
 func (c leetxClient) getDoc(ctx context.Context, url string) (*goquery.Document, error) {

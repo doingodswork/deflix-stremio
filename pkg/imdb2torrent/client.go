@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
+	"github.com/doingodswork/deflix-stremio/pkg/cinemata"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -24,13 +25,14 @@ type Client struct {
 	ibitClient  ibitClient
 }
 
-func NewClient(ctx context.Context, baseURLyts, baseURLtpb, baseURL1337x, baseURLibit string, timeout time.Duration, cache *fastcache.Cache) Client {
+func NewClient(ctx context.Context, baseURLyts, baseURLtpb, baseURL1337x, baseURLibit string, timeout time.Duration, torrentCache *fastcache.Cache, cinemataCache *fastcache.Cache) Client {
+	cinemataClient := cinemata.NewClient(ctx, timeout, cinemataCache)
 	return Client{
 		timeout:     timeout,
-		ytsClient:   newYTSclient(ctx, baseURLyts, timeout, cache),
-		tpbClient:   newTPBclient(ctx, baseURLtpb, timeout, cache),
-		leetxClient: newLeetxclient(ctx, baseURL1337x, timeout, cache),
-		ibitClient:  newIbitClient(ctx, baseURLibit, timeout, cache),
+		ytsClient:   newYTSclient(ctx, baseURLyts, timeout, torrentCache),
+		tpbClient:   newTPBclient(ctx, baseURLtpb, timeout, torrentCache),
+		leetxClient: newLeetxclient(ctx, baseURL1337x, timeout, torrentCache, cinemataClient),
+		ibitClient:  newIbitClient(ctx, baseURLibit, timeout, torrentCache),
 	}
 }
 
