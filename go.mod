@@ -1,6 +1,6 @@
 module github.com/doingodswork/deflix-stremio
 
-go 1.13
+go 1.14
 
 require (
 	github.com/PuerkitoBio/goquery v1.5.1
@@ -8,5 +8,5 @@ require (
 	github.com/gorilla/handlers v1.4.2
 	github.com/gorilla/mux v1.7.4
 	github.com/sirupsen/logrus v1.4.2
-	github.com/tidwall/gjson v1.4.0
+	github.com/tidwall/gjson v1.6.0
 )
