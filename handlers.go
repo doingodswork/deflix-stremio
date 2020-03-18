@@ -68,7 +68,7 @@ func createStreamHandler(ctx context.Context, config config, searchClient imdb2t
 
 		torrents, err := searchClient.FindMagnets(rCtx, requestedID)
 		if err != nil {
-			logger.WithError(err).Info("Magnet not found")
+			logger.WithError(err).Warn("Magnet not found")
 			w.WriteHeader(http.StatusNotFound)
 			return
 		} else if len(torrents) == 0 {

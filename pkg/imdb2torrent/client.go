@@ -52,7 +52,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 		logger.WithField("torrentSite", "YTS").Debug("Started searching torrents...")
 		results, err := c.ytsClient.check(ctx, imdbID)
 		if err != nil {
-			logger.WithError(err).WithField("torrentSite", "YTS").Info("Couldn't find torrents")
+			logger.WithError(err).WithField("torrentSite", "YTS").Warn("Couldn't find torrents")
 			errChan <- err
 		} else {
 			fields := log.Fields{
@@ -69,7 +69,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 		logger.WithField("torrentSite", "TPB").Debug("Started searching torrents...")
 		results, err := c.tpbClient.check(ctx, imdbID, 2)
 		if err != nil {
-			logger.WithError(err).WithField("torrentSite", "TPB").Info("Couldn't find torrents")
+			logger.WithError(err).WithField("torrentSite", "TPB").Warn("Couldn't find torrents")
 			errChan <- err
 		} else {
 			fields := log.Fields{
@@ -86,7 +86,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 		logger.WithField("torrentSite", "1337x").Debug("Started searching torrents...")
 		results, err := c.leetxClient.check(ctx, imdbID)
 		if err != nil {
-			logger.WithError(err).WithField("torrentSite", "1337x").Info("Couldn't find torrents")
+			logger.WithError(err).WithField("torrentSite", "1337x").Warn("Couldn't find torrents")
 			errChan <- err
 		} else {
 			fields := log.Fields{
@@ -108,7 +108,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 		logger.WithField("torrentSite", "ibit").Debug("Started searching torrents...")
 		ibitResults, err := c.ibitClient.check(ctx, imdbID)
 		if err != nil {
-			logger.WithError(err).WithField("torrentSite", "ibit").Info("Couldn't find torrents")
+			logger.WithError(err).WithField("torrentSite", "ibit").Warn("Couldn't find torrents")
 			ibitErrChan <- err
 		} else {
 			fields := log.Fields{
