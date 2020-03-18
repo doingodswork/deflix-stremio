@@ -83,24 +83,7 @@ func main() {
 		log.WithError(err).Fatal("Couldn't marshal config to JSON")
 	}
 
-	switch config.LogLevel {
-	case "trace":
-		log.SetLevel(log.TraceLevel)
-	case "debug":
-		log.SetLevel(log.DebugLevel)
-	case "info":
-		log.SetLevel(log.InfoLevel)
-	case "warn":
-		log.SetLevel(log.WarnLevel)
-	case "error":
-		log.SetLevel(log.ErrorLevel)
-	case "fatal":
-		log.SetLevel(log.FatalLevel)
-	case "panic":
-		log.SetLevel(log.PanicLevel)
-	default:
-		log.WithField("logLevel", config.LogLevel).Fatal("Unknown logLevel")
-	}
+	setLogLevel(config)
 
 	log.WithField("config", string(configJSON)).Info("Parsed config")
 
@@ -276,4 +259,25 @@ func logCacheStats(ctx context.Context, stats fastcache.Stats, cacheName string)
 		"Size":         strconv.FormatUint(stats.BytesSize/uint64(1024)/uint64(1024), 10) + "MB",
 	}
 	log.WithFields(fields).Info("Cache stats")
+}
+
+func setLogLevel(cfg config) {
+	switch cfg.LogLevel {
+	case "trace":
+		log.SetLevel(log.TraceLevel)
+	case "debug":
+		log.SetLevel(log.DebugLevel)
+	case "info":
+		log.SetLevel(log.InfoLevel)
+	case "warn":
+		log.SetLevel(log.WarnLevel)
+	case "error":
+		log.SetLevel(log.ErrorLevel)
+	case "fatal":
+		log.SetLevel(log.FatalLevel)
+	case "panic":
+		log.SetLevel(log.PanicLevel)
+	default:
+		log.WithField("logLevel", cfg.LogLevel).Fatal("Unknown logLevel")
+	}
 }
