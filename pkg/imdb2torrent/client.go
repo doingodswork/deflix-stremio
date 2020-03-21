@@ -23,9 +23,10 @@ type Client struct {
 	tpbClient   tpbClient
 	leetxClient leetxClient
 	ibitClient  ibitClient
+	tpbRetries  int
 }
 
-func NewClient(ctx context.Context, baseURLyts, baseURLtpb, baseURL1337x, baseURLibit string, timeout time.Duration, torrentCache *fastcache.Cache, cinemataCache *fastcache.Cache) Client {
+func NewClient(ctx context.Context, baseURLyts, baseURLtpb, baseURL1337x, baseURLibit string, timeout time.Duration, tpbRetries int, torrentCache *fastcache.Cache, cinemataCache *fastcache.Cache) Client {
 	cinemataClient := cinemata.NewClient(ctx, timeout, cinemataCache)
 	return Client{
 		timeout:     timeout,
@@ -33,6 +34,7 @@ func NewClient(ctx context.Context, baseURLyts, baseURLtpb, baseURL1337x, baseUR
 		tpbClient:   newTPBclient(ctx, baseURLtpb, timeout, torrentCache),
 		leetxClient: newLeetxclient(ctx, baseURL1337x, timeout, torrentCache, cinemataClient),
 		ibitClient:  newIbitClient(ctx, baseURLibit, timeout, torrentCache),
+		tpbRetries:  tpbRetries,
 	}
 }
 
@@ -67,7 +69,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 	// TPB
 	go func() {
 		logger.WithField("torrentSite", "TPB").Debug("Started searching torrents...")
-		results, err := c.tpbClient.check(ctx, imdbID, 2)
+		results, err := c.tpbClient.check(ctx, imdbID, 1+c.tpbRetries)
 		if err != nil {
 			logger.WithError(err).WithField("torrentSite", "TPB").Warn("Couldn't find torrents")
 			errChan <- err

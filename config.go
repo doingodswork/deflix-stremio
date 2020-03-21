@@ -22,6 +22,7 @@ type config struct {
 	BaseURLibit   string `json:"baseURLibit"`
 	LogLevel      string `json:"logLevel"`
 	RootURL       string `json:"rootURL"`
+	TPBretries    int    `json:"tpbRetries"`
 	EnvPrefix     string `json:"envPrefix"`
 }
 
@@ -43,6 +44,7 @@ func parseConfig(ctx context.Context) config {
 		baseURLibit  = flag.String("baseURLibit", "https://ibit.am", "Base URL for ibit")
 		logLevel     = flag.String("logLevel", "debug", `Log level to show only logs with the given and more severe levels. Can be "trace", "debug", "info", "warn", "error", "fatal", "panic"`)
 		rootURL      = flag.String("rootURL", "https://www.deflix.tv", "Redirect target for the root")
+		tpbRetries   = flag.Int("tpbRetries", 0, "Number of retries in case TPB times out. Each retry will be done after the previous connection is closed.")
 		envPrefix    = flag.String("envPrefix", "", "Prefix for environment variables")
 	)
 
@@ -128,6 +130,15 @@ func parseConfig(ctx context.Context) config {
 		}
 	}
 	result.LogLevel = *logLevel
+
+	if !isArgSet(ctx, "tpbRetries") {
+		if val, ok := os.LookupEnv(*envPrefix + "TPB_RETRIES"); ok {
+			if *tpbRetries, err = strconv.Atoi(val); err != nil {
+				log.WithError(err).WithField("envVar", "TPB_RETRIES").Fatal("Couldn't convert environment variable from string to int")
+			}
+		}
+	}
+	result.TPBretries = *tpbRetries
 
 	if !isArgSet(ctx, "rootURL") {
 		if val, ok := os.LookupEnv(*envPrefix + "ROOT_URL"); ok {
