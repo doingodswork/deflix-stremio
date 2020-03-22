@@ -26,14 +26,14 @@ type Client struct {
 	tpbRetries  int
 }
 
-func NewClient(ctx context.Context, baseURLyts, baseURLtpb, baseURL1337x, baseURLibit string, timeout time.Duration, tpbRetries int, torrentCache *fastcache.Cache, cinemataCache *fastcache.Cache) Client {
+func NewClient(ctx context.Context, baseURLyts, baseURLtpb, baseURL1337x, baseURLibit string, timeout time.Duration, tpbRetries int, torrentCache *fastcache.Cache, cinemataCache *fastcache.Cache, cacheAge time.Duration) Client {
 	cinemataClient := cinemata.NewClient(ctx, timeout, cinemataCache)
 	return Client{
 		timeout:     timeout,
-		ytsClient:   newYTSclient(ctx, baseURLyts, timeout, torrentCache),
-		tpbClient:   newTPBclient(ctx, baseURLtpb, timeout, torrentCache),
-		leetxClient: newLeetxclient(ctx, baseURL1337x, timeout, torrentCache, cinemataClient),
-		ibitClient:  newIbitClient(ctx, baseURLibit, timeout, torrentCache),
+		ytsClient:   newYTSclient(ctx, baseURLyts, timeout, torrentCache, cacheAge),
+		tpbClient:   newTPBclient(ctx, baseURLtpb, timeout, torrentCache, cacheAge),
+		leetxClient: newLeetxclient(ctx, baseURL1337x, timeout, torrentCache, cinemataClient, cacheAge),
+		ibitClient:  newIbitClient(ctx, baseURLibit, timeout, torrentCache, cacheAge),
 		tpbRetries:  tpbRetries,
 	}
 }

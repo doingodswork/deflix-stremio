@@ -21,9 +21,10 @@ type leetxClient struct {
 	httpClient     *http.Client
 	cache          *fastcache.Cache
 	cinemataClient cinemata.Client
+	cacheAge       time.Duration
 }
 
-func newLeetxclient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache, cinemataClient cinemata.Client) leetxClient {
+func newLeetxclient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache, cinemataClient cinemata.Client, cacheAge time.Duration) leetxClient {
 	return leetxClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{
@@ -31,6 +32,7 @@ func newLeetxclient(ctx context.Context, baseURL string, timeout time.Duration, 
 		},
 		cache:          cache,
 		cinemataClient: cinemataClient,
+		cacheAge:       cacheAge,
 	}
 }
 
@@ -50,11 +52,11 @@ func (c leetxClient) check(ctx context.Context, imdbID string) ([]Result, error)
 		torrentList, created, err := FromCacheEntry(ctx, torrentsGob)
 		if err != nil {
 			logger.WithError(err).Error("Couldn't decode torrent results")
-		} else if time.Since(created) < (24 * time.Hour) {
+		} else if time.Since(created) < (c.cacheAge) {
 			logger.WithField("torrentCount", len(torrentList)).Debug("Hit cache for torrents, returning results")
 			return torrentList, nil
 		} else {
-			expiredSince := time.Since(created.Add(24 * time.Hour))
+			expiredSince := time.Since(created.Add(c.cacheAge))
 			logger.WithField("expiredSince", expiredSince).Debug("Hit cache for torrents, but entry is expired")
 		}
 	}

@@ -18,15 +18,17 @@ type tpbClient struct {
 	baseURL    string
 	httpClient *http.Client
 	cache      *fastcache.Cache
+	cacheAge   time.Duration
 }
 
-func newTPBclient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache) tpbClient {
+func newTPBclient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache, cacheAge time.Duration) tpbClient {
 	return tpbClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
-		cache: cache,
+		cache:    cache,
+		cacheAge: cacheAge,
 	}
 }
 
@@ -46,11 +48,11 @@ func (c tpbClient) check(ctx context.Context, imdbID string, attempts int) ([]Re
 		torrentList, created, err := FromCacheEntry(ctx, torrentsGob)
 		if err != nil {
 			logger.WithError(err).Error("Couldn't decode torrent results")
-		} else if time.Since(created) < (24 * time.Hour) {
+		} else if time.Since(created) < (c.cacheAge) {
 			logger.WithField("torrentCount", len(torrentList)).Debug("Hit cache for torrents, returning results")
 			return torrentList, nil
 		} else {
-			expiredSince := time.Since(created.Add(24 * time.Hour))
+			expiredSince := time.Since(created.Add(c.cacheAge))
 			logger.WithField("expiredSince", expiredSince).Debug("Hit cache for torrents, but entry is expired")
 		}
 	}

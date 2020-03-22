@@ -25,16 +25,18 @@ type ibitClient struct {
 	httpClient *http.Client
 	cache      *fastcache.Cache
 	lock       *sync.Mutex
+	cacheAge   time.Duration
 }
 
-func newIbitClient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache) ibitClient {
+func newIbitClient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache, cacheAge time.Duration) ibitClient {
 	return ibitClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
-		cache: cache,
-		lock:  &sync.Mutex{},
+		cache:    cache,
+		lock:     &sync.Mutex{},
+		cacheAge: cacheAge,
 	}
 }
 
@@ -57,11 +59,11 @@ func (c ibitClient) check(ctx context.Context, imdbID string) ([]Result, error) 
 		torrentList, created, err := FromCacheEntry(ctx, torrentsGob)
 		if err != nil {
 			logger.WithError(err).Error("Couldn't decode torrent results")
-		} else if time.Since(created) < (24 * time.Hour) {
+		} else if time.Since(created) < (c.cacheAge) {
 			logger.WithField("torrentCount", len(torrentList)).Debug("Hit cache for torrents, returning results")
 			return torrentList, nil
 		} else {
-			expiredSince := time.Since(created.Add(24 * time.Hour))
+			expiredSince := time.Since(created.Add(c.cacheAge))
 			logger.WithField("expiredSince", expiredSince).Debug("Hit cache for torrents, but entry is expired")
 		}
 	}
