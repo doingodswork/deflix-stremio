@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -263,6 +264,9 @@ func (c Client) get(ctx context.Context, url, apiToken string) ([]byte, error) {
 		return nil, fmt.Errorf("Couldn't create GET request: %v", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+apiToken)
+	// In case RD blocks requests based on User-Agent
+	fakeVersion := strconv.Itoa(rand.Intn(10000))
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0."+fakeVersion+".149 Safari/537.36")
 
 	res, err := c.httpClient.Do(req)
 	if err != nil {
@@ -290,6 +294,9 @@ func (c Client) post(ctx context.Context, url, apiToken string, data url.Values)
 	}
 	req.Header.Set("Authorization", "Bearer "+apiToken)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// In case RD blocks requests based on User-Agent
+	fakeVersion := strconv.Itoa(rand.Intn(10000))
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0."+fakeVersion+".149 Safari/537.36")
 
 	res, err := c.httpClient.Do(req)
 	if err != nil {
