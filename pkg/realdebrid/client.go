@@ -277,7 +277,7 @@ func (c Client) get(ctx context.Context, url, apiToken string) ([]byte, error) {
 		} else if res.StatusCode == http.StatusForbidden {
 			return nil, fmt.Errorf("Account locked")
 		}
-		return nil, fmt.Errorf("bad HTTP response status: %v (GET request to %v)", res.Status, url)
+		return nil, fmt.Errorf("bad HTTP response status: %v (GET request to '%v')", res.Status, url)
 	}
 
 	return ioutil.ReadAll(res.Body)
@@ -307,7 +307,11 @@ func (c Client) post(ctx context.Context, url, apiToken string, data url.Values)
 		} else if res.StatusCode == http.StatusForbidden {
 			return nil, fmt.Errorf("Account locked")
 		}
-		return nil, fmt.Errorf("bad HTTP response status: %v (POST request to %v)", res.Status, url)
+		resBody, _ := ioutil.ReadAll(res.Body)
+		if len(resBody) == 0 {
+			return nil, fmt.Errorf("bad HTTP response status: %v (POST request to '%v')", res.Status, url)
+		}
+		return nil, fmt.Errorf("bad HTTP response status: %v (POST request to '%v'; response body: '%s')", res.Status, url, resBody)
 	}
 
 	return ioutil.ReadAll(res.Body)
