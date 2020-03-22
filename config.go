@@ -6,24 +6,26 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
 
 type config struct {
-	BindAddr      string `json:"bindAddr"`
-	Port          int    `json:"port"`
-	StreamURLaddr string `json:"streamURLaddr"`
-	CachePath     string `json:"cachePath"`
-	CacheMaxMB    int    `json:"cacheMaxMB"`
-	BaseURLyts    string `json:"baseURLyts"`
-	BaseURLtpb    string `json:"baseURLtpb"`
-	BaseURL1337x  string `json:"baseURL1337x"`
-	BaseURLibit   string `json:"baseURLibit"`
-	LogLevel      string `json:"logLevel"`
-	RootURL       string `json:"rootURL"`
-	TPBretries    int    `json:"tpbRetries"`
-	EnvPrefix     string `json:"envPrefix"`
+	BindAddr      string        `json:"bindAddr"`
+	Port          int           `json:"port"`
+	StreamURLaddr string        `json:"streamURLaddr"`
+	CachePath     string        `json:"cachePath"`
+	CacheMaxMB    int           `json:"cacheMaxMB"`
+	CacheAgeRD    time.Duration `json:"cacheAgeRD"`
+	BaseURLyts    string        `json:"baseURLyts"`
+	BaseURLtpb    string        `json:"baseURLtpb"`
+	BaseURL1337x  string        `json:"baseURL1337x"`
+	BaseURLibit   string        `json:"baseURLibit"`
+	LogLevel      string        `json:"logLevel"`
+	RootURL       string        `json:"rootURL"`
+	TPBretries    int           `json:"tpbRetries"`
+	EnvPrefix     string        `json:"envPrefix"`
 }
 
 func parseConfig(ctx context.Context) config {
@@ -38,6 +40,7 @@ func parseConfig(ctx context.Context) config {
 		// We split this number into 5 equal sized caches à 32 MB.
 		// Note: fastcache uses 32 MB as minimum, that's why we use `5*32 MB = 160 MB` as minimum.
 		cacheMaxMB   = flag.Int("cacheMaxMB", 160, "Max number of megabytes to be used for the in-memory cache. Default (and minimum!) is 160 MB.")
+		cacheAgeRD   = flag.Duration("cacheAgeRD", 24*time.Hour, "Max age of cache entries for instant availability responses from RealDebrid. The format must be acceptable by Go's `time.ParseDuration`, for example \"24h\".")
 		baseURLyts   = flag.String("baseURLyts", "https://yts.mx", "Base URL for YTS")
 		baseURLtpb   = flag.String("baseURLtpb", "https://thepiratebay.org", "Base URL for TPB")
 		baseURL1337x = flag.String("baseURL1337x", "https://1337x.to", "Base URL for 1337x")
@@ -95,6 +98,15 @@ func parseConfig(ctx context.Context) config {
 		}
 	}
 	result.CacheMaxMB = *cacheMaxMB
+
+	if !isArgSet(ctx, "cacheAgeRD") {
+		if val, ok := os.LookupEnv(*envPrefix + "CACHE_AGE_RD"); ok {
+			if *cacheAgeRD, err = time.ParseDuration(val); err != nil {
+				log.WithError(err).WithField("envVar", "CACHE_AGE_RD").Fatal("Couldn't convert environment variable from string to time.Duration")
+			}
+		}
+	}
+	result.CacheAgeRD = *cacheAgeRD
 
 	if !isArgSet(ctx, "baseURLyts") {
 		if val, ok := os.LookupEnv(*envPrefix + "BASE_URL_YTS"); ok {

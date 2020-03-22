@@ -26,15 +26,17 @@ type Client struct {
 	tokenCache *fastcache.Cache
 	// For info_hash instant availability
 	availabilityCache *fastcache.Cache
+	cacheAge          time.Duration
 }
 
-func NewClient(ctx context.Context, timeout time.Duration, tokenCache, availabilityCache *fastcache.Cache) Client {
+func NewClient(ctx context.Context, timeout time.Duration, tokenCache, availabilityCache *fastcache.Cache, cacheAge time.Duration) Client {
 	return Client{
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
 		tokenCache:        tokenCache,
 		availabilityCache: availabilityCache,
+		cacheAge:          cacheAge,
 	}
 }
 
@@ -97,13 +99,13 @@ func (c Client) CheckInstantAvailability(ctx context.Context, apiToken string, i
 				logger.WithError(err).WithField("infoHash", infoHash).Error("Couldn't decode availability cache entry")
 				requestRequired = true
 				url += "/" + infoHash
-			} else if time.Since(created) < (24 * time.Hour) {
+			} else if time.Since(created) < (c.cacheAge) {
 				logger.WithField("infoHash", infoHash).Debug("Availability cached as valid")
 				result = append(result, infoHash)
 			} else {
 				fields := log.Fields{
 					"infoHash":     infoHash,
-					"expiredSince": time.Since(created.Add(24 * time.Hour)),
+					"expiredSince": time.Since(created.Add(c.cacheAge)),
 				}
 				logger.WithFields(fields).Debug("Availability cached as valid, but entry is expired")
 				requestRequired = true
