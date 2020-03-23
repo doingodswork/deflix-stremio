@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/doingodswork/deflix-stremio/pkg/realdebrid"
@@ -15,7 +16,9 @@ const (
 )
 
 var (
-	apiToken = flag.String("apiToken", "", "RealDebrid API token")
+	baseURL     = flag.String("baseURL", "https://api.real-debrid.com", "Base URL of RealDebrid")
+	apiToken    = flag.String("apiToken", "", "RealDebrid API token")
+	extraHeader = flag.String("extraHeader", "", "Additional header to set, for example for a proxy. Format: \"X-Foo: bar\"")
 )
 
 func main() {
@@ -26,8 +29,17 @@ func main() {
 	if *apiToken == "" {
 		log.Fatal("apiToken CLI argument must not be empty")
 	}
+	if *extraHeader != "" {
+		colonIndex := strings.Index(*extraHeader, ":")
+		if colonIndex <= 0 || colonIndex == len(*extraHeader)-1 {
+			log.Fatal("extraHeader CLI argument must have a format like \"X-Foo: bar\"")
+		}
+	}
 
-	rdClient := realdebrid.NewClient(ctx, 5*time.Second, nil, nil, time.Duration(0))
+	rdClient, err := realdebrid.NewClient(ctx, 5*time.Second, nil, nil, time.Duration(0), *baseURL, *extraHeader)
+	if err != nil {
+		log.Fatalf("Couldn't create RD client: %v", err)
+	}
 	streamURL, err := rdClient.GetStreamURL(ctx, bigBuckBunnyMagnet, *apiToken, false)
 	if err != nil {
 		log.Fatalf("Couldn't get stream URL: %v", err)

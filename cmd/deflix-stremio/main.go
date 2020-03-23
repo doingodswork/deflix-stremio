@@ -120,7 +120,10 @@ func main() {
 
 	// Stremio endpoints
 
-	conversionClient := realdebrid.NewClient(mainCtx, 5*time.Second, tokenCache, availabilityCache, config.CacheAgeRD)
+	conversionClient, err := realdebrid.NewClient(mainCtx, 5*time.Second, tokenCache, availabilityCache, config.CacheAgeRD, config.BaseURLrd, config.ExtraHeaderRD)
+	if err != nil {
+		log.WithError(err).Fatal("Couldn't create RealDebrid client")
+	}
 	searchClient := imdb2torrent.NewClient(mainCtx, config.BaseURLyts, config.BaseURLtpb, config.BaseURL1337x, config.BaseURLibit, 5*time.Second, config.TPBretries, torrentCache, cinemataCache, config.CacheAgeTorrents)
 	// Use token middleware only for the Stremio endpoints
 	tokenMiddleware := createTokenMiddleware(mainCtx, conversionClient)
@@ -210,9 +213,7 @@ func main() {
 	sig := <-c
 	log.WithField("signal", sig).Info("Received signal, shutting down...")
 	*stoppingPtr = true
-	// Create a deadline to wait for.
-	// Using the same value as the server's `WriteTimeout` would be great, because this would mean that every client could finish his request as he normally could.
-	// But `docker stop` only gives us 10 seconds.
+	// Create a deadline to wait for. `docker stop` gives us 10 seconds.
 	// No need to get the cancel func and defer calling it, because srv.Shutdown() will consider the timeout from the context.
 	ctx, _ := context.WithTimeout(context.Background(), 9*time.Second)
 	// Doesn't block if no connections, but will otherwise wait until the timeout deadline

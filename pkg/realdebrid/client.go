@@ -2,6 +2,7 @@ package realdebrid
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -16,10 +17,6 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const (
-	rdBaseURL = "https://api.real-debrid.com/rest/1.0"
-)
-
 type Client struct {
 	httpClient *http.Client
 	// For API token validity
@@ -27,9 +24,31 @@ type Client struct {
 	// For info_hash instant availability
 	availabilityCache *fastcache.Cache
 	cacheAge          time.Duration
+	rdBaseURL         string
+	extraHeaderKey    string
+	extraHeaderVal    string
 }
 
-func NewClient(ctx context.Context, timeout time.Duration, tokenCache, availabilityCache *fastcache.Cache, cacheAge time.Duration) Client {
+func NewClient(ctx context.Context, timeout time.Duration, tokenCache, availabilityCache *fastcache.Cache, cacheAge time.Duration, rdBaseURL, extraHeader string) (Client, error) {
+	// Precondition check
+	if rdBaseURL == "" {
+		return Client{}, errors.New("rdBaseURL parameter must not be empty")
+	}
+	if extraHeader != "" {
+		colonIndex := strings.Index(extraHeader, ":")
+		if colonIndex <= 0 || colonIndex == len(extraHeader)-1 {
+			return Client{}, errors.New("extraHeader parameter must have a format like \"X-Foo: bar\"")
+		}
+	}
+
+	var extraHeaderKey string
+	var extraHeaderVal string
+	if extraHeader != "" {
+		extraHeaderParts := strings.SplitN(extraHeader, ":", 2)
+		extraHeaderKey = strings.TrimSpace(extraHeaderParts[0])
+		extraHeaderVal = strings.TrimSpace(extraHeaderParts[1])
+	}
+
 	return Client{
 		httpClient: &http.Client{
 			Timeout: timeout,
@@ -37,7 +56,10 @@ func NewClient(ctx context.Context, timeout time.Duration, tokenCache, availabil
 		tokenCache:        tokenCache,
 		availabilityCache: availabilityCache,
 		cacheAge:          cacheAge,
-	}
+		rdBaseURL:         rdBaseURL,
+		extraHeaderKey:    extraHeaderKey,
+		extraHeaderVal:    extraHeaderVal,
+	}, nil
 }
 
 func (c Client) TestToken(ctx context.Context, apiToken string) error {
@@ -59,7 +81,7 @@ func (c Client) TestToken(ctx context.Context, apiToken string) error {
 		}
 	}
 
-	resBytes, err := c.get(ctx, rdBaseURL+"/user", apiToken)
+	resBytes, err := c.get(ctx, c.rdBaseURL+"/rest/1.0/user", apiToken)
 	if err != nil {
 		return fmt.Errorf("Couldn't fetch user info from real-debrid.com with the provided token: %v", err)
 	}
@@ -87,7 +109,7 @@ func (c Client) CheckInstantAvailability(ctx context.Context, apiToken string, i
 		return nil
 	}
 
-	url := rdBaseURL + "/torrents/instantAvailability"
+	url := c.rdBaseURL + "/rest/1.0/torrents/instantAvailability"
 	// Only check the ones of which we don't know that they're valid (or which our knowledge that they're valid is more than 24 hours old).
 	// We don't cache unavailable ones, because that might change often!
 	var result []string
@@ -150,7 +172,7 @@ func (c Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, re
 	logger.Debug("Adding torrent to RealDebrid...")
 	data := url.Values{}
 	data.Set("magnet", magnetURL)
-	resBytes, err := c.post(ctx, rdBaseURL+"/torrents/addMagnet", apiToken, data)
+	resBytes, err := c.post(ctx, c.rdBaseURL+"/rest/1.0/torrents/addMagnet", apiToken, data)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't add torrent to RealDebrid: %v", err)
 	}
@@ -178,7 +200,7 @@ func (c Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, re
 	logger.Debug("Adding torrent to RealDebrid downloads...")
 	data = url.Values{}
 	data.Set("files", fileID)
-	_, err = c.post(ctx, rdBaseURL+"/torrents/selectFiles/"+torrentID, apiToken, data)
+	_, err = c.post(ctx, c.rdBaseURL+"/rest/1.0/torrents/selectFiles/"+torrentID, apiToken, data)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't add torrent to RealDebrid downloads: %v", err)
 	}
@@ -250,7 +272,7 @@ func (c Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, re
 	if remote {
 		data.Set("remote", "1")
 	}
-	resBytes, err = c.post(ctx, rdBaseURL+"/unrestrict/link", apiToken, data)
+	resBytes, err = c.post(ctx, c.rdBaseURL+"/rest/1.0/unrestrict/link", apiToken, data)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't unrestrict link: %v", err)
 	}
@@ -266,6 +288,9 @@ func (c Client) get(ctx context.Context, url, apiToken string) ([]byte, error) {
 		return nil, fmt.Errorf("Couldn't create GET request: %v", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+apiToken)
+	if c.extraHeaderKey != "" {
+		req.Header.Set(c.extraHeaderKey, c.extraHeaderVal)
+	}
 	// In case RD blocks requests based on User-Agent
 	fakeVersion := strconv.Itoa(rand.Intn(10000))
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0."+fakeVersion+".149 Safari/537.36")
@@ -296,6 +321,9 @@ func (c Client) post(ctx context.Context, url, apiToken string, data url.Values)
 	}
 	req.Header.Set("Authorization", "Bearer "+apiToken)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if c.extraHeaderKey != "" {
+		req.Header.Set(c.extraHeaderKey, c.extraHeaderVal)
+	}
 	// In case RD blocks requests based on User-Agent
 	fakeVersion := strconv.Itoa(rand.Intn(10000))
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0."+fakeVersion+".149 Safari/537.36")

@@ -23,9 +23,11 @@ type config struct {
 	BaseURLtpb       string        `json:"baseURLtpb"`
 	BaseURL1337x     string        `json:"baseURL1337x"`
 	BaseURLibit      string        `json:"baseURLibit"`
+	BaseURLrd        string        `json:"baseURLrd"`
 	LogLevel         string        `json:"logLevel"`
 	RootURL          string        `json:"rootURL"`
 	TPBretries       int           `json:"tpbRetries"`
+	ExtraHeaderRD    string        `json:"extraHeaderRD"`
 	EnvPrefix        string        `json:"envPrefix"`
 }
 
@@ -47,9 +49,11 @@ func parseConfig(ctx context.Context) config {
 		baseURLtpb       = flag.String("baseURLtpb", "https://thepiratebay.org", "Base URL for TPB")
 		baseURL1337x     = flag.String("baseURL1337x", "https://1337x.to", "Base URL for 1337x")
 		baseURLibit      = flag.String("baseURLibit", "https://ibit.am", "Base URL for ibit")
+		baseURLrd        = flag.String("baseURLrd", "https://api.real-debrid.com", "Base URL for RealDebrid")
 		logLevel         = flag.String("logLevel", "debug", `Log level to show only logs with the given and more severe levels. Can be "trace", "debug", "info", "warn", "error", "fatal", "panic"`)
 		rootURL          = flag.String("rootURL", "https://www.deflix.tv", "Redirect target for the root")
 		tpbRetries       = flag.Int("tpbRetries", 0, "Number of retries in case TPB times out. Each retry will be done after the previous connection is closed.")
+		extraHeaderRD    = flag.String("extraHeaderRD", "", "Additional HTTP request header to set for request to RealDebrid")
 		envPrefix        = flag.String("envPrefix", "", "Prefix for environment variables")
 	)
 
@@ -147,6 +151,13 @@ func parseConfig(ctx context.Context) config {
 	}
 	result.BaseURLibit = *baseURLibit
 
+	if !isArgSet(ctx, "baseURLrd") {
+		if val, ok := os.LookupEnv(*envPrefix + "BASE_URL_RD"); ok {
+			*baseURLrd = val
+		}
+	}
+	result.BaseURLrd = *baseURLrd
+
 	if !isArgSet(ctx, "logLevel") {
 		if val, ok := os.LookupEnv(*envPrefix + "LOG_LEVEL"); ok {
 			*logLevel = val
@@ -169,6 +180,13 @@ func parseConfig(ctx context.Context) config {
 		}
 	}
 	result.RootURL = *rootURL
+
+	if !isArgSet(ctx, "extraHeaderRD") {
+		if val, ok := os.LookupEnv(*envPrefix + "EXTRA_HEADER_RD"); ok {
+			*extraHeaderRD = val
+		}
+	}
+	result.ExtraHeaderRD = *extraHeaderRD
 
 	return result
 }
