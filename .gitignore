@@ -34,3 +34,7 @@
 .history
 
 # End of https://www.gitignore.io/api/go,visualstudiocode
+
+/deflix-stremio
+/rd-tester
+/rd-proxy
