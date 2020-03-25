@@ -1,4 +1,8 @@
-/docker
 README.md
+/docker
 /cmd/rd-tester
 /cmd/rd-proxy
+
+/deflix-stremio*
+/rd-tester*
+/rd-proxy*
