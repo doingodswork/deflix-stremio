@@ -25,28 +25,29 @@ type Client struct {
 	availabilityCache *fastcache.Cache
 	cacheAge          time.Duration
 	rdBaseURL         string
-	extraHeaderKey    string
-	extraHeaderVal    string
+	extraHeaders      map[string]string
 }
 
-func NewClient(ctx context.Context, timeout time.Duration, tokenCache, availabilityCache *fastcache.Cache, cacheAge time.Duration, rdBaseURL, extraHeader string) (Client, error) {
+func NewClient(ctx context.Context, timeout time.Duration, tokenCache, availabilityCache *fastcache.Cache, cacheAge time.Duration, rdBaseURL string, extraHeaders []string) (Client, error) {
 	// Precondition check
 	if rdBaseURL == "" {
 		return Client{}, errors.New("rdBaseURL parameter must not be empty")
 	}
-	if extraHeader != "" {
-		colonIndex := strings.Index(extraHeader, ":")
-		if colonIndex <= 0 || colonIndex == len(extraHeader)-1 {
-			return Client{}, errors.New("extraHeader parameter must have a format like \"X-Foo: bar\"")
+	for _, extraHeader := range extraHeaders {
+		if extraHeader != "" {
+			colonIndex := strings.Index(extraHeader, ":")
+			if colonIndex <= 0 || colonIndex == len(extraHeader)-1 {
+				return Client{}, errors.New("extraHeaders elements must have a format like \"X-Foo: bar\"")
+			}
 		}
 	}
 
-	var extraHeaderKey string
-	var extraHeaderVal string
-	if extraHeader != "" {
-		extraHeaderParts := strings.SplitN(extraHeader, ":", 2)
-		extraHeaderKey = strings.TrimSpace(extraHeaderParts[0])
-		extraHeaderVal = strings.TrimSpace(extraHeaderParts[1])
+	extraHeaderMap := make(map[string]string, len(extraHeaders))
+	for _, extraHeader := range extraHeaders {
+		if extraHeader != "" {
+			extraHeaderParts := strings.SplitN(extraHeader, ":", 2)
+			extraHeaderMap[extraHeaderParts[0]] = extraHeaderParts[1]
+		}
 	}
 
 	return Client{
@@ -57,8 +58,7 @@ func NewClient(ctx context.Context, timeout time.Duration, tokenCache, availabil
 		availabilityCache: availabilityCache,
 		cacheAge:          cacheAge,
 		rdBaseURL:         rdBaseURL,
-		extraHeaderKey:    extraHeaderKey,
-		extraHeaderVal:    extraHeaderVal,
+		extraHeaders:      extraHeaderMap,
 	}, nil
 }
 
@@ -288,8 +288,8 @@ func (c Client) get(ctx context.Context, url, apiToken string) ([]byte, error) {
 		return nil, fmt.Errorf("Couldn't create GET request: %v", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+apiToken)
-	if c.extraHeaderKey != "" {
-		req.Header.Set(c.extraHeaderKey, c.extraHeaderVal)
+	for headerKey, headerVal := range c.extraHeaders {
+		req.Header.Add(headerKey, headerVal)
 	}
 	// In case RD blocks requests based on User-Agent
 	fakeVersion := strconv.Itoa(rand.Intn(10000))
@@ -321,8 +321,8 @@ func (c Client) post(ctx context.Context, url, apiToken string, data url.Values)
 	}
 	req.Header.Set("Authorization", "Bearer "+apiToken)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if c.extraHeaderKey != "" {
-		req.Header.Set(c.extraHeaderKey, c.extraHeaderVal)
+	for headerKey, headerVal := range c.extraHeaders {
+		req.Header.Add(headerKey, headerVal)
 	}
 	// In case RD blocks requests based on User-Agent
 	fakeVersion := strconv.Itoa(rand.Intn(10000))

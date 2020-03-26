@@ -120,7 +120,7 @@ func main() {
 
 	// Stremio endpoints
 
-	conversionClient, err := realdebrid.NewClient(mainCtx, 5*time.Second, tokenCache, availabilityCache, config.CacheAgeRD, config.BaseURLrd, config.ExtraHeaderRD)
+	conversionClient, err := realdebrid.NewClient(mainCtx, 5*time.Second, tokenCache, availabilityCache, config.CacheAgeRD, config.BaseURLrd, config.ExtraHeadersRD)
 	if err != nil {
 		log.WithError(err).Fatal("Couldn't create RealDebrid client")
 	}

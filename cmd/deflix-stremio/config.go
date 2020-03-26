@@ -27,7 +27,7 @@ type config struct {
 	LogLevel         string        `json:"logLevel"`
 	RootURL          string        `json:"rootURL"`
 	TPBretries       int           `json:"tpbRetries"`
-	ExtraHeaderRD    string        `json:"extraHeaderRD"`
+	ExtraHeadersRD   []string      `json:"extraHeadersRD"`
 	EnvPrefix        string        `json:"envPrefix"`
 }
 
@@ -53,7 +53,7 @@ func parseConfig(ctx context.Context) config {
 		logLevel         = flag.String("logLevel", "debug", `Log level to show only logs with the given and more severe levels. Can be "trace", "debug", "info", "warn", "error", "fatal", "panic".`)
 		rootURL          = flag.String("rootURL", "https://www.deflix.tv", "Redirect target for the root")
 		tpbRetries       = flag.Int("tpbRetries", 0, "Number of retries in case TPB times out. Each retry will be done after the previous connection is closed.")
-		extraHeaderRD    = flag.String("extraHeaderRD", "", "Additional HTTP request header to set for request to RealDebrid")
+		extraHeadersRD   = flag.String("extraHeadersRD", "", "Additional HTTP request headers to set for requests to RealDebrid, in a format like \"X-Foo: bar\", separated by newline characters (\"\\n\")")
 		envPrefix        = flag.String("envPrefix", "", "Prefix for environment variables")
 	)
 
@@ -181,12 +181,20 @@ func parseConfig(ctx context.Context) config {
 	}
 	result.RootURL = *rootURL
 
-	if !isArgSet(ctx, "extraHeaderRD") {
-		if val, ok := os.LookupEnv(*envPrefix + "EXTRA_HEADER_RD"); ok {
-			*extraHeaderRD = val
+	if !isArgSet(ctx, "extraHeadersRD") {
+		if val, ok := os.LookupEnv(*envPrefix + "EXTRA_HEADERS_RD"); ok {
+			*extraHeadersRD = val
 		}
 	}
-	result.ExtraHeaderRD = *extraHeaderRD
+	if *extraHeadersRD != "" {
+		headers := strings.Split(*extraHeadersRD, "\n")
+		for _, header := range headers {
+			header = strings.TrimSpace(header)
+			if header != "" {
+				result.ExtraHeadersRD = append(result.ExtraHeadersRD, header)
+			}
+		}
+	}
 
 	return result
 }

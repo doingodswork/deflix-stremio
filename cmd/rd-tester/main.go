@@ -16,9 +16,9 @@ const (
 )
 
 var (
-	baseURL     = flag.String("baseURL", "https://api.real-debrid.com", "Base URL of RealDebrid")
-	apiToken    = flag.String("apiToken", "", "RealDebrid API token")
-	extraHeader = flag.String("extraHeader", "", "Additional header to set, for example for a proxy. Format: \"X-Foo: bar\"")
+	baseURL      = flag.String("baseURL", "https://api.real-debrid.com", "Base URL of RealDebrid")
+	apiToken     = flag.String("apiToken", "", "RealDebrid API token")
+	extraHeaders = flag.String("extraHeaders", "", "Additional headers to set, for example for a proxy. Format: \"X-Foo: bar\". Separated by newline characters (\"\\n\")")
 )
 
 func main() {
@@ -29,14 +29,21 @@ func main() {
 	if *apiToken == "" {
 		log.Fatal("apiToken CLI argument must not be empty")
 	}
-	if *extraHeader != "" {
-		colonIndex := strings.Index(*extraHeader, ":")
-		if colonIndex <= 0 || colonIndex == len(*extraHeader)-1 {
-			log.Fatal("extraHeader CLI argument must have a format like \"X-Foo: bar\"")
+	// No precondition check for extraHeaders - `realdebrid.NewClient()` already does that
+
+	// Parse extra headers
+	var extraHeaderSlice []string
+	if *extraHeaders != "" {
+		headers := strings.Split(*extraHeaders, "\n")
+		for _, header := range headers {
+			header = strings.TrimSpace(header)
+			if header != "" {
+				extraHeaderSlice = append(extraHeaderSlice, header)
+			}
 		}
 	}
 
-	rdClient, err := realdebrid.NewClient(ctx, 5*time.Second, nil, nil, time.Duration(0), *baseURL, *extraHeader)
+	rdClient, err := realdebrid.NewClient(ctx, 5*time.Second, nil, nil, time.Duration(0), *baseURL, extraHeaderSlice)
 	if err != nil {
 		log.Fatalf("Couldn't create RD client: %v", err)
 	}
