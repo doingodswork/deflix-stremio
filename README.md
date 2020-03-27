@@ -11,6 +11,8 @@ Currently supported providers:
 
 > More providers will be supported in the future!
 
+Other upcoming features: Support for TV shows, more custom options (e.g. show *all single torrents* instead of grouped by quality) and more
+
 Contents
 --------
 
