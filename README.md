@@ -1,7 +1,7 @@
 Deflix Stremio addon
 ====================
 
-[Deflix](https://deflix.tv) addon for [Stremio](https://stremio.com)
+[Deflix](https://www.deflix.tv) addon for [Stremio](https://stremio.com)
 
 Looks up your selected movie on YTS, The Pirate Bay, 1337x and ibit and automatically turns your selected torrent into a debrid/cached stream, for high speed and **no P2P uploading**.
 
