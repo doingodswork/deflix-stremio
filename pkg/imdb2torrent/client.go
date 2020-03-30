@@ -26,16 +26,20 @@ type Client struct {
 	tpbRetries  int
 }
 
-func NewClient(ctx context.Context, baseURLyts, baseURLtpb, baseURL1337x, baseURLibit string, timeout time.Duration, tpbRetries int, torrentCache *fastcache.Cache, cinemataCache *fastcache.Cache, cacheAge time.Duration) Client {
+func NewClient(ctx context.Context, baseURLyts, baseURLtpb, baseURL1337x, baseURLibit string, socksProxyAddrTPB string, timeout time.Duration, tpbRetries int, torrentCache *fastcache.Cache, cinemataCache *fastcache.Cache, cacheAge time.Duration) (Client, error) {
 	cinemataClient := cinemata.NewClient(ctx, timeout, cinemataCache)
+	tpbClient, err := newTPBclient(ctx, baseURLtpb, socksProxyAddrTPB, timeout, torrentCache, cacheAge)
+	if err != nil {
+		return Client{}, fmt.Errorf("Couldn't create TPB client: %v", err)
+	}
 	return Client{
 		timeout:     timeout,
 		ytsClient:   newYTSclient(ctx, baseURLyts, timeout, torrentCache, cacheAge),
-		tpbClient:   newTPBclient(ctx, baseURLtpb, timeout, torrentCache, cacheAge),
+		tpbClient:   tpbClient,
 		leetxClient: newLeetxclient(ctx, baseURL1337x, timeout, torrentCache, cinemataClient, cacheAge),
 		ibitClient:  newIbitClient(ctx, baseURLibit, timeout, torrentCache, cacheAge),
 		tpbRetries:  tpbRetries,
-	}
+	}, nil
 }
 
 // FindMagnets tries to find magnet URLs for the given IMDb ID.

@@ -124,7 +124,10 @@ func main() {
 	if err != nil {
 		log.WithError(err).Fatal("Couldn't create RealDebrid client")
 	}
-	searchClient := imdb2torrent.NewClient(mainCtx, config.BaseURLyts, config.BaseURLtpb, config.BaseURL1337x, config.BaseURLibit, 5*time.Second, config.TPBretries, torrentCache, cinemataCache, config.CacheAgeTorrents)
+	searchClient, err := imdb2torrent.NewClient(mainCtx, config.BaseURLyts, config.BaseURLtpb, config.BaseURL1337x, config.BaseURLibit, config.SocksProxyAddrTPB, 5*time.Second, config.TPBretries, torrentCache, cinemataCache, config.CacheAgeTorrents)
+	if err != nil {
+		log.WithError(err).Fatal("Couldn't create torrent search client")
+	}
 	// Use token middleware only for the Stremio endpoints
 	tokenMiddleware := createTokenMiddleware(mainCtx, conversionClient)
 	manifestHandler := createManifestHandler(mainCtx, conversionClient)

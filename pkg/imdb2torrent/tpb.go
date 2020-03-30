@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"strconv"
 	"strings"
@@ -12,6 +13,8 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/VictoriaMetrics/fastcache"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/net/proxy"
+	"golang.org/x/net/publicsuffix"
 )
 
 type tpbClient struct {
@@ -21,15 +24,36 @@ type tpbClient struct {
 	cacheAge   time.Duration
 }
 
-func newTPBclient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache, cacheAge time.Duration) tpbClient {
-	return tpbClient{
-		baseURL: baseURL,
-		httpClient: &http.Client{
+func newTPBclient(ctx context.Context, baseURL, socksProxyAddr string, timeout time.Duration, cache *fastcache.Cache, cacheAge time.Duration) (tpbClient, error) {
+	// Using a SOCKS5 proxy allows us to make requests to TPB via the TOR network
+	var httpClient *http.Client
+	if socksProxyAddr != "" {
+		dialer, err := proxy.SOCKS5("tcp", socksProxyAddr, nil, proxy.Direct)
+		if err != nil {
+			return tpbClient{}, fmt.Errorf("Couldn't create SOCKS5 dialer: %v", err)
+		}
+		jar, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+		if err != nil {
+			return tpbClient{}, fmt.Errorf("Couldn't create cookie jar: %v", err)
+		}
+		httpClient = &http.Client{
+			Transport: &http.Transport{
+				Dial: dialer.Dial,
+			},
+			Jar:     jar,
 			Timeout: timeout,
-		},
-		cache:    cache,
-		cacheAge: cacheAge,
+		}
+	} else {
+		httpClient = &http.Client{
+			Timeout: timeout,
+		}
 	}
+	return tpbClient{
+		baseURL:    baseURL,
+		httpClient: httpClient,
+		cache:      cache,
+		cacheAge:   cacheAge,
+	}, nil
 }
 
 // check scrapes TPB to find torrents for the given IMDb ID.

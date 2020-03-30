@@ -12,23 +12,24 @@ import (
 )
 
 type config struct {
-	BindAddr         string        `json:"bindAddr"`
-	Port             int           `json:"port"`
-	StreamURLaddr    string        `json:"streamURLaddr"`
-	CachePath        string        `json:"cachePath"`
-	CacheMaxMB       int           `json:"cacheMaxMB"`
-	CacheAgeRD       time.Duration `json:"cacheAgeRD"`
-	CacheAgeTorrents time.Duration `json:"cacheAgeTorrents"`
-	BaseURLyts       string        `json:"baseURLyts"`
-	BaseURLtpb       string        `json:"baseURLtpb"`
-	BaseURL1337x     string        `json:"baseURL1337x"`
-	BaseURLibit      string        `json:"baseURLibit"`
-	BaseURLrd        string        `json:"baseURLrd"`
-	LogLevel         string        `json:"logLevel"`
-	RootURL          string        `json:"rootURL"`
-	TPBretries       int           `json:"tpbRetries"`
-	ExtraHeadersRD   []string      `json:"extraHeadersRD"`
-	EnvPrefix        string        `json:"envPrefix"`
+	BindAddr          string        `json:"bindAddr"`
+	Port              int           `json:"port"`
+	StreamURLaddr     string        `json:"streamURLaddr"`
+	CachePath         string        `json:"cachePath"`
+	CacheMaxMB        int           `json:"cacheMaxMB"`
+	CacheAgeRD        time.Duration `json:"cacheAgeRD"`
+	CacheAgeTorrents  time.Duration `json:"cacheAgeTorrents"`
+	BaseURLyts        string        `json:"baseURLyts"`
+	BaseURLtpb        string        `json:"baseURLtpb"`
+	BaseURL1337x      string        `json:"baseURL1337x"`
+	BaseURLibit       string        `json:"baseURLibit"`
+	BaseURLrd         string        `json:"baseURLrd"`
+	LogLevel          string        `json:"logLevel"`
+	RootURL           string        `json:"rootURL"`
+	TPBretries        int           `json:"tpbRetries"`
+	ExtraHeadersRD    []string      `json:"extraHeadersRD"`
+	SocksProxyAddrTPB string        `json:"socksProxyAddrTPB"`
+	EnvPrefix         string        `json:"envPrefix"`
 }
 
 func parseConfig(ctx context.Context) config {
@@ -42,19 +43,20 @@ func parseConfig(ctx context.Context) config {
 		cachePath     = flag.String("cachePath", "", "Path for loading a persisted cache on startup and persisting the current cache in regular intervals. An empty value will lead to `os.UserCacheDir()+\"/deflix-stremio/\"`.")
 		// We split this number into 5 equal sized caches à 32 MB.
 		// Note: fastcache uses 32 MB as minimum, that's why we use `5*32 MB = 160 MB` as minimum.
-		cacheMaxMB       = flag.Int("cacheMaxMB", 160, "Max number of megabytes to be used for the in-memory cache. Default (and minimum!) is 160 MB.")
-		cacheAgeRD       = flag.Duration("cacheAgeRD", 24*time.Hour, "Max age of cache entries for instant availability responses from RealDebrid. The format must be acceptable by Go's `time.ParseDuration`, for example \"24h\".")
-		cacheAgeTorrents = flag.Duration("cacheAgeTorrents", 24*time.Hour, "Max age of cache entries for torrents found per IMDb ID. The format must be acceptable by Go's `time.ParseDuration`, for example \"24h\".")
-		baseURLyts       = flag.String("baseURLyts", "https://yts.mx", "Base URL for YTS")
-		baseURLtpb       = flag.String("baseURLtpb", "https://thepiratebay.org", "Base URL for TPB")
-		baseURL1337x     = flag.String("baseURL1337x", "https://1337x.to", "Base URL for 1337x")
-		baseURLibit      = flag.String("baseURLibit", "https://ibit.am", "Base URL for ibit")
-		baseURLrd        = flag.String("baseURLrd", "https://api.real-debrid.com", "Base URL for RealDebrid")
-		logLevel         = flag.String("logLevel", "debug", `Log level to show only logs with the given and more severe levels. Can be "trace", "debug", "info", "warn", "error", "fatal", "panic".`)
-		rootURL          = flag.String("rootURL", "https://www.deflix.tv", "Redirect target for the root")
-		tpbRetries       = flag.Int("tpbRetries", 0, "Number of retries in case TPB times out. Each retry will be done after the previous connection is closed.")
-		extraHeadersRD   = flag.String("extraHeadersRD", "", "Additional HTTP request headers to set for requests to RealDebrid, in a format like \"X-Foo: bar\", separated by newline characters (\"\\n\")")
-		envPrefix        = flag.String("envPrefix", "", "Prefix for environment variables")
+		cacheMaxMB        = flag.Int("cacheMaxMB", 160, "Max number of megabytes to be used for the in-memory cache. Default (and minimum!) is 160 MB.")
+		cacheAgeRD        = flag.Duration("cacheAgeRD", 24*time.Hour, "Max age of cache entries for instant availability responses from RealDebrid. The format must be acceptable by Go's `time.ParseDuration`, for example \"24h\".")
+		cacheAgeTorrents  = flag.Duration("cacheAgeTorrents", 24*time.Hour, "Max age of cache entries for torrents found per IMDb ID. The format must be acceptable by Go's `time.ParseDuration`, for example \"24h\".")
+		baseURLyts        = flag.String("baseURLyts", "https://yts.mx", "Base URL for YTS")
+		baseURLtpb        = flag.String("baseURLtpb", "https://thepiratebay.org", "Base URL for TPB")
+		baseURL1337x      = flag.String("baseURL1337x", "https://1337x.to", "Base URL for 1337x")
+		baseURLibit       = flag.String("baseURLibit", "https://ibit.am", "Base URL for ibit")
+		baseURLrd         = flag.String("baseURLrd", "https://api.real-debrid.com", "Base URL for RealDebrid")
+		logLevel          = flag.String("logLevel", "debug", `Log level to show only logs with the given and more severe levels. Can be "trace", "debug", "info", "warn", "error", "fatal", "panic".`)
+		rootURL           = flag.String("rootURL", "https://www.deflix.tv", "Redirect target for the root")
+		tpbRetries        = flag.Int("tpbRetries", 0, "Number of retries in case TPB times out. Each retry will be done after the previous connection is closed.")
+		extraHeadersRD    = flag.String("extraHeadersRD", "", "Additional HTTP request headers to set for requests to RealDebrid, in a format like \"X-Foo: bar\", separated by newline characters (\"\\n\")")
+		socksProxyAddrTPB = flag.String("socksProxyAddrTPB", "", "SOCKS5 proxy address for accessing TPB, required for accessing TPB via the TOR network (where \"127.0.0.1:9050\" would be typical value)")
+		envPrefix         = flag.String("envPrefix", "", "Prefix for environment variables")
 	)
 
 	flag.Parse()
@@ -195,6 +197,13 @@ func parseConfig(ctx context.Context) config {
 			}
 		}
 	}
+
+	if !isArgSet(ctx, "socksProxyAddrTPB") {
+		if val, ok := os.LookupEnv(*envPrefix + "SOCKS_PROXY_ADDR_TPB"); ok {
+			*socksProxyAddrTPB = val
+		}
+	}
+	result.SocksProxyAddrTPB = *socksProxyAddrTPB
 
 	return result
 }
