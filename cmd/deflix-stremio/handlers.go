@@ -136,154 +136,26 @@ func createStreamHandler(ctx context.Context, config config, searchClient imdb2t
 			remote = remoteIface.(bool)
 		}
 		remoteString := strconv.FormatBool(remote)
+		requestIDPrefix := apiToken + "-" + remoteString + "-" + requestedID
 		if len(torrents720p) > 0 {
-			redirectID := apiToken + "-" + remoteString + "-" + requestedID + "-" + "720p"
-			stream := stremio.StreamItem{
-				URL: config.StreamURLaddr + "/redirect/" + redirectID,
-				// Stremio docs recommend to use the stream quality as title.
-				// See https://github.com/Stremio/stremio-addon-sdk/blob/ddaa3b80def8a44e553349734dd02ec9c3fea52c/docs/api/responses/stream.md#additional-properties-to-provide-information--behaviour-flags
-				Title: "720p",
-			}
-			// We can only set the exact quality string if there's only one torrent.
-			// Otherwise maybe the upcoming RealDebrid conversion fails for one torrent, but works for the next, which has a slightly different quality string.
-			if len(torrents720p) == 1 {
-				stream.Title = torrents720p[0].Quality
-			}
+			stream := handleTorrents(rCtx, config, requestIDPrefix+"-"+"720p", "720p", torrents720p)
 			streams = append(streams, stream)
-
-			// Cache for upcoming redirect request
-			fields := log.Fields{
-				"quality":    "720p",
-				"cache":      "redirect",
-				"redirectID": redirectID,
-			}
-			if data, err := imdb2torrent.NewCacheEntry(rCtx, torrents720p); err != nil {
-				logger.WithError(err).WithFields(fields).Error("Couldn't create cache entry for torrent results")
-			} else {
-				entrySize := strconv.Itoa(len(data)/1024) + "KB"
-				if len(data) > 64*1024 {
-					logger.WithFields(fields).WithField("entrySize", entrySize).Warn("New cacheEntry is bigger than 64KB, which means it won't be stored in the cache when calling fastcache's Set() method. SetBig() (and GetBig()) must be used instead!")
-				} else {
-					logger.WithFields(fields).WithField("entrySize", entrySize).Debug("Caching torrent results")
-				}
-				redirectCache.Set([]byte(redirectID), data)
-			}
 		}
 		if len(torrents1080p) > 0 {
-			redirectID := apiToken + "-" + remoteString + "-" + requestedID + "-" + "1080p"
-			stream := stremio.StreamItem{
-				URL:   config.StreamURLaddr + "/redirect/" + redirectID,
-				Title: "1080p",
-			}
-			if len(torrents1080p) == 1 {
-				stream.Title = torrents1080p[0].Quality
-			}
+			stream := handleTorrents(rCtx, config, requestIDPrefix+"-"+"1080p", "1080p", torrents1080p)
 			streams = append(streams, stream)
-
-			// Cache for upcoming redirect request
-			fields := log.Fields{
-				"quality":    "1080p",
-				"cache":      "redirect",
-				"redirectID": redirectID,
-			}
-			if data, err := imdb2torrent.NewCacheEntry(rCtx, torrents1080p); err != nil {
-				logger.WithError(err).WithFields(fields).Error("Couldn't create cache entry for torrent results")
-			} else {
-				entrySize := strconv.Itoa(len(data)/1024) + "KB"
-				if len(data) > 64*1024 {
-					logger.WithFields(fields).WithField("entrySize", entrySize).Warn("New cacheEntry is bigger than 64KB, which means it won't be stored in the cache when calling fastcache's Set() method. SetBig() (and GetBig()) must be used instead!")
-				} else {
-					logger.WithFields(fields).WithField("entrySize", entrySize).Debug("Caching torrent results")
-				}
-				redirectCache.Set([]byte(redirectID), data)
-			}
 		}
 		if len(torrents1080p10bit) > 0 {
-			redirectID := apiToken + "-" + remoteString + "-" + requestedID + "-" + "1080p-10bit"
-			stream := stremio.StreamItem{
-				URL:   config.StreamURLaddr + "/redirect/" + redirectID,
-				Title: "1080p 10bit",
-			}
-			if len(torrents1080p10bit) == 1 {
-				stream.Title = torrents1080p10bit[0].Quality
-			}
+			stream := handleTorrents(rCtx, config, requestIDPrefix+"-"+"1080p-10bit", "1080p 10bit", torrents1080p10bit)
 			streams = append(streams, stream)
-
-			// Cache for upcoming redirect request
-			fields := log.Fields{
-				"quality":    "1080p 10bit",
-				"cache":      "redirect",
-				"redirectID": redirectID,
-			}
-			if data, err := imdb2torrent.NewCacheEntry(rCtx, torrents1080p10bit); err != nil {
-				logger.WithError(err).WithFields(fields).Error("Couldn't create cache entry for torrent results")
-			} else {
-				entrySize := strconv.Itoa(len(data)/1024) + "KB"
-				if len(data) > 64*1024 {
-					logger.WithFields(fields).WithField("entrySize", entrySize).Warn("New cacheEntry is bigger than 64KB, which means it won't be stored in the cache when calling fastcache's Set() method. SetBig() (and GetBig()) must be used instead!")
-				} else {
-					logger.WithFields(fields).WithField("entrySize", entrySize).Debug("Caching torrent results")
-				}
-				redirectCache.Set([]byte(redirectID), data)
-			}
 		}
 		if len(torrents2160p) > 0 {
-			redirectID := apiToken + "-" + remoteString + "-" + requestedID + "-" + "2160p"
-			stream := stremio.StreamItem{
-				URL:   config.StreamURLaddr + "/redirect/" + redirectID,
-				Title: "2160p",
-			}
-			if len(torrents2160p) == 1 {
-				stream.Title = torrents2160p[0].Quality
-			}
+			stream := handleTorrents(rCtx, config, requestIDPrefix+"-"+"2160p", "2160p", torrents2160p)
 			streams = append(streams, stream)
-
-			// Cache for upcoming redirect request
-			fields := log.Fields{
-				"quality":    "2160p",
-				"cache":      "redirect",
-				"redirectID": redirectID,
-			}
-			if data, err := imdb2torrent.NewCacheEntry(rCtx, torrents2160p); err != nil {
-				logger.WithError(err).WithFields(fields).Error("Couldn't create cache entry for torrent results")
-			} else {
-				entrySize := strconv.Itoa(len(data)/1024) + "KB"
-				if len(data) > 64*1024 {
-					logger.WithFields(fields).WithField("entrySize", entrySize).Warn("New cacheEntry is bigger than 64KB, which means it won't be stored in the cache when calling fastcache's Set() method. SetBig() (and GetBig()) must be used instead!")
-				} else {
-					logger.WithFields(fields).WithField("entrySize", entrySize).Debug("Caching torrent results")
-				}
-				redirectCache.Set([]byte(redirectID), data)
-			}
 		}
 		if len(torrents2160p10bit) > 0 {
-			redirectID := apiToken + "-" + remoteString + "-" + requestedID + "-" + "2160p-10bit"
-			stream := stremio.StreamItem{
-				URL:   config.StreamURLaddr + "/redirect/" + redirectID,
-				Title: "2160p 10bit",
-			}
-			if len(torrents2160p10bit) == 1 {
-				stream.Title = torrents2160p10bit[0].Quality
-			}
+			stream := handleTorrents(rCtx, config, requestIDPrefix+"-"+"2160p-10bit", "2160p 10bit", torrents2160p10bit)
 			streams = append(streams, stream)
-
-			// Cache for upcoming redirect request
-			fields := log.Fields{
-				"quality":    "2160p 10bit",
-				"cache":      "redirect",
-				"redirectID": redirectID,
-			}
-			if data, err := imdb2torrent.NewCacheEntry(rCtx, torrents2160p10bit); err != nil {
-				logger.WithError(err).WithFields(fields).Error("Couldn't create cache entry for torrent results")
-			} else {
-				entrySize := strconv.Itoa(len(data)/1024) + "KB"
-				if len(data) > 64*1024 {
-					logger.WithFields(fields).WithField("entrySize", entrySize).Warn("New cacheEntry is bigger than 64KB, which means it won't be stored in the cache when calling fastcache's Set() method. SetBig() (and GetBig()) must be used instead!")
-				} else {
-					logger.WithFields(fields).WithField("entrySize", entrySize).Debug("Caching torrent results")
-				}
-				redirectCache.Set([]byte(redirectID), data)
-			}
 		}
 
 		streamJSON, _ := json.Marshal(streams)
@@ -297,6 +169,41 @@ func createStreamHandler(ctx context.Context, config config, searchClient imdb2t
 			logger.WithError(err).Error("Coldn't write response")
 		}
 	}
+}
+
+func handleTorrents(ctx context.Context, config config, redirectID, quality string, torrents []imdb2torrent.Result) stremio.StreamItem {
+	logger := log.WithContext(ctx)
+	stream := stremio.StreamItem{
+		URL: config.StreamURLaddr + "/redirect/" + redirectID,
+		// Stremio docs recommend to use the stream quality as title.
+		// See https://github.com/Stremio/stremio-addon-sdk/blob/ddaa3b80def8a44e553349734dd02ec9c3fea52c/docs/api/responses/stream.md#additional-properties-to-provide-information--behaviour-flags
+		Title: quality,
+	}
+	// We can only set the exact quality string if there's only one torrent.
+	// Otherwise maybe the upcoming RealDebrid conversion fails for one torrent, but works for the next, which has a slightly different quality string.
+	if len(torrents) == 1 {
+		stream.Title = torrents[0].Quality
+	}
+
+	// Cache for upcoming redirect request
+	fields := log.Fields{
+		"quality":    quality,
+		"cache":      "redirect",
+		"redirectID": redirectID,
+	}
+	if data, err := imdb2torrent.NewCacheEntry(ctx, torrents); err != nil {
+		logger.WithError(err).WithFields(fields).Error("Couldn't create cache entry for torrent results")
+	} else {
+		entrySize := strconv.Itoa(len(data)/1024) + "KB"
+		if len(data) > 64*1024 {
+			logger.WithFields(fields).WithField("entrySize", entrySize).Warn("New cacheEntry is bigger than 64KB, which means it won't be stored in the cache when calling fastcache's Set() method. SetBig() (and GetBig()) must be used instead!")
+		} else {
+			logger.WithFields(fields).WithField("entrySize", entrySize).Debug("Caching torrent results")
+		}
+		redirectCache.Set([]byte(redirectID), data)
+	}
+
+	return stream
 }
 
 func createRedirectHandler(ctx context.Context, cache *fastcache.Cache, conversionClient realdebrid.Client) http.HandlerFunc {
