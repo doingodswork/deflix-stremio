@@ -137,9 +137,15 @@ func createHandler(ctx context.Context, targetURL, apiKeyHeader string, allowedA
 		}
 
 		r.Host = target.Host
-		// TODO: What about these?
-		//req.URL.Host = url.Host
-		//req.URL.Scheme = url.Scheme
+		// Info: req.URL.Scheme, req.URL.Host and req.URL.Path are set to the target's value in the ReverseProxy's "Director".
+
+		// Remove all headers that CloudFlare might have set, except Authorization and User-Agent.
+		for headerKey := range r.Header {
+			if headerKey == "Authorization" || headerKey == "User-Agent" {
+				continue
+			}
+			r.Header.Del(headerKey)
+		}
 
 		log.Printf("Proxying request from %v\n", r.RemoteAddr)
 
