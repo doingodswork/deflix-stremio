@@ -1,10 +1,10 @@
 FROM golang:1.14-alpine as builder
 
-WORKDIR /go/src/app
-COPY . /go/src/app
+WORKDIR /go/src/app/
+COPY . /go/src/app/
 
 # Without disabling CGO the binary doesn't run in distroless/static
-RUN CGO_ENABLED=0 go build -v -ldflags="-s -w" ./cmd/deflix-stremio
+RUN CGO_ENABLED=0 go build -v -ldflags="-s -w" ./cmd/deflix-stremio/
 
 FROM gcr.io/distroless/static
 
