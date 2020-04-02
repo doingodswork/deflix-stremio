@@ -147,7 +147,7 @@ func createHandler(ctx context.Context, targetURL, apiKeyHeader string, allowedA
 			r.Header.Del(headerKey)
 		}
 
-		log.Printf("Proxying request from %v\n", r.RemoteAddr)
+		log.Printf("Proxying request from %v. Request: %+v\n", r.RemoteAddr, r)
 
 		proxy.ServeHTTP(w, r)
 	}
