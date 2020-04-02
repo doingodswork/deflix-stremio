@@ -187,7 +187,13 @@ func (c Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, re
 		return "", fmt.Errorf("Couldn't get torrent info from real-debrid.com: %v", err)
 	}
 	torrentID := gjson.GetBytes(resBytes, "id").String()
+	if torrentID == "" {
+		return "", errors.New("Couldn't get torrent info from real-debrid.com: response body doesn't contain \"id\" key")
+	}
 	fileResults := gjson.GetBytes(resBytes, "files").Array()
+	if len(fileResults) == 0 || (len(fileResults) == 1 && fileResults[0].Raw == "") {
+		return "", errors.New("Couldn't get torrent info from real-debrid.com: response body doesn't contain \"files\" key")
+	}
 	// TODO: Not required if we pass the instant available file ID from the availability check, but probably no huge performance implication
 	fileID, err := selectFileID(ctx, fileResults)
 	if err != nil {
@@ -308,7 +314,11 @@ func (c Client) get(ctx context.Context, url, apiToken string) ([]byte, error) {
 		} else if res.StatusCode == http.StatusForbidden {
 			return nil, fmt.Errorf("Account locked")
 		}
-		return nil, fmt.Errorf("bad HTTP response status: %v (GET request to '%v')", res.Status, url)
+		resBody, _ := ioutil.ReadAll(res.Body)
+		if len(resBody) == 0 {
+			return nil, fmt.Errorf("bad HTTP response status: %v (GET request to '%v')", res.Status, url)
+		}
+		return nil, fmt.Errorf("bad HTTP response status: %v (GET request to '%v'; response body: '%s')", res.Status, url, resBody)
 	}
 
 	return ioutil.ReadAll(res.Body)
