@@ -21,6 +21,7 @@ var (
 	targetURL    = flag.String("targetURL", "https://api.real-debrid.com", "Reverse proxy target URL")
 	apiKeyHeader = flag.String("apiKeyHeader", "", "Header key for the API key, e.g. \"X-Proxy-Apikey\"")
 	apiKeys      = flag.String("apiKeys", "", "List of comma separated API keys that the reverse proxy allows")
+	logRequest   = flag.Bool("logRequest", false, "Log the full request object")
 )
 
 func main() {
@@ -147,7 +148,11 @@ func createHandler(ctx context.Context, targetURL, apiKeyHeader string, allowedA
 			r.Header.Del(headerKey)
 		}
 
-		log.Printf("Proxying request from %v. Request: %+v\n", r.RemoteAddr, r)
+		if *logRequest {
+			log.Printf("Proxying request from %v. Request: %+v\n", r.RemoteAddr, r)
+		} else {
+			log.Printf("Proxying request from %v\n", r.RemoteAddr)
+		}
 
 		proxy.ServeHTTP(w, r)
 	}
