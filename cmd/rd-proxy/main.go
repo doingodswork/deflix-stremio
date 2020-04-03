@@ -154,13 +154,19 @@ func createHandler(ctx context.Context, targetURL, apiKeyHeader string, allowedA
 			r.Header.Del(headerKey)
 		}
 
+		// Determine remote addr
+		remoteAddr := r.Header.Get("X-Forwarded-For")
+		if remoteAddr == "" {
+			remoteAddr = r.RemoteAddr
+		}
+
 		// Add random IP as "X-Forwarded-For"
 		r.Header.Set("X-Forwarded-For", randIP())
 
 		if *logRequest {
-			log.Printf("Proxying request from %v. Request: %+v\n", r.RemoteAddr, r)
+			log.Printf("Proxying request from %v. Outgoing request: %+v\n", remoteAddr, r)
 		} else {
-			log.Printf("Proxying request from %v\n", r.RemoteAddr)
+			log.Printf("Proxying request from %v\n", remoteAddr)
 		}
 
 		proxy.ServeHTTP(w, r)
