@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -23,6 +24,11 @@ var (
 	apiKeys      = flag.String("apiKeys", "", "List of comma separated API keys that the reverse proxy allows")
 	logRequest   = flag.Bool("logRequest", false, "Log the full request object")
 )
+
+func init() {
+	// Make predicting "random" numbers harder
+	rand.NewSource(time.Now().UnixNano())
+}
 
 func main() {
 	mainCtx := context.Background()
@@ -148,6 +154,9 @@ func createHandler(ctx context.Context, targetURL, apiKeyHeader string, allowedA
 			r.Header.Del(headerKey)
 		}
 
+		// Add random IP as "X-Forwarded-For"
+		r.Header.Set("X-Forwarded-For", randIP())
+
 		if *logRequest {
 			log.Printf("Proxying request from %v. Request: %+v\n", r.RemoteAddr, r)
 		} else {
@@ -156,4 +165,14 @@ func createHandler(ctx context.Context, targetURL, apiKeyHeader string, allowedA
 
 		proxy.ServeHTTP(w, r)
 	}
+}
+
+func randIP() string {
+	return randIPpart() + "." + randIPpart() + "." + randIPpart() + "." + randIPpart()
+}
+
+func randIPpart() string {
+	// Between 2 and 254
+	randNo := rand.Intn(253) + 2
+	return strconv.Itoa(randNo)
 }
