@@ -131,6 +131,13 @@ func (c leetxClient) check(ctx context.Context, imdbID string) ([]Result, error)
 	resultChan := make(chan Result, len(torrentPageURLs))
 
 	for _, torrentPageURL := range torrentPageURLs {
+		// Use configured base URL, which could be a proxy that we want to go through
+		torrentPageURL, err = replaceURL(torrentPageURL, c.baseURL)
+		if err != nil {
+			logger.WithError(err).Warn("Couldn't replace URL which was retrieved from an HTML link")
+			continue
+		}
+
 		go func(goTorrentPageURL string) {
 			doc, err = c.getDoc(ctx, goTorrentPageURL)
 			if err != nil {

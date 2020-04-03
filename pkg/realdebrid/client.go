@@ -182,6 +182,11 @@ func (c Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, re
 	// Check RealDebrid torrent info
 
 	logger.Debug("Checking torrent info...")
+	// Use configured base URL, which could be a proxy that we want to go through
+	rdTorrentURL, err = replaceURL(rdTorrentURL, c.rdBaseURL)
+	if err != nil {
+		return "", fmt.Errorf("Couldn't replace URL which was retrieved from an HTML link: %v", err)
+	}
 	resBytes, err = c.get(ctx, rdTorrentURL, apiToken)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't get torrent info from real-debrid.com: %v", err)
@@ -384,4 +389,14 @@ func selectFileID(ctx context.Context, fileResults []gjson.Result) (string, erro
 	}
 
 	return strconv.FormatInt(fileID, 10), nil
+}
+
+func replaceURL(origURL, newBaseURL string) (string, error) {
+	// Replace by configured URL, which could be a proxy that we want to go through
+	url, err := url.Parse(origURL)
+	if err != nil {
+		return "", fmt.Errorf("Couldn't parse URL. URL: %v; error: %v", origURL, err)
+	}
+	origBaseURL := url.Scheme + "://" + url.Host
+	return strings.Replace(origURL, origBaseURL, newBaseURL, 1), nil
 }

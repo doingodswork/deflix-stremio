@@ -106,6 +106,13 @@ func (c ibitClient) check(ctx context.Context, imdbID string) ([]Result, error) 
 		// Sleeping 100ms between requests still leads to some `429 Too Many Requests` responses
 		time.Sleep(150 * time.Millisecond)
 
+		// Use configured base URL, which could be a proxy that we want to go through
+		torrentPageURL, err = replaceURL(torrentPageURL, c.baseURL)
+		if err != nil {
+			logger.WithError(err).Warn("Couldn't replace URL which was retrieved from an HTML link")
+			continue
+		}
+
 		res, err := http.Get(torrentPageURL)
 		if err != nil {
 			continue

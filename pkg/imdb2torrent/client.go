@@ -3,6 +3,7 @@ package imdb2torrent
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -206,4 +207,14 @@ type Result struct {
 	Quality   string
 	InfoHash  string
 	MagnetURL string
+}
+
+func replaceURL(origURL, newBaseURL string) (string, error) {
+	// Replace by configured URL, which could be a proxy that we want to go through
+	url, err := url.Parse(origURL)
+	if err != nil {
+		return "", fmt.Errorf("Couldn't parse URL. URL: %v; error: %v", origURL, err)
+	}
+	origBaseURL := url.Scheme + "://" + url.Host
+	return strings.Replace(origURL, origBaseURL, newBaseURL, 1), nil
 }
