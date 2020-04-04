@@ -30,6 +30,10 @@ Install
 
 This addon is a remote addon, so it's an HTTP web service and Stremio just sends HTTP requests to it. You dont't need to run any untrusted code on your machine.
 
+Here's the official Deflix website, that guides you through the installation: <https://www.deflix.tv/stremio>
+
+But it's just a few simple steps, so you can do it without the website as well:
+
 1. Get your RealDebrid API token from <https://real-debrid.com/apitoken>
 2. Enter the addon URL in the search box of the addons section of Stremio, like this:
    - `https://stremio.deflix.tv/YOUR-API-TOKEN/manifest.json`  
@@ -76,24 +80,26 @@ Usage of deflix-stremio:
         Base URL for YTS (default "https://yts.mx")
   -bindAddr string
         Local interface address to bind to. "localhost" only allows access from the local host. "0.0.0.0" binds to all network interfaces. (default "localhost")
-  -cacheAgeRD time.ParseDuration
-        Max age of cache entries for instant availability responses from RealDebrid. The format must be acceptable by Go's time.ParseDuration, for example "24h". (default 24h0m0s)
-  -cacheAgeTorrents time.ParseDuration
-        Max age of cache entries for torrents found per IMDb ID. The format must be acceptable by Go's time.ParseDuration, for example "24h". (default 24h0m0s)
+  -cacheAgeRD duration
+        Max age of cache entries for instant availability responses from RealDebrid. The format must be acceptable by Go's 'time.ParseDuration()', for example "24h". (default 24h0m0s)
+  -cacheAgeTorrents duration
+        Max age of cache entries for torrents found per IMDb ID. The format must be acceptable by Go's 'time.ParseDuration()', for example "24h". (default 24h0m0s)
   -cacheMaxMB int
         Max number of megabytes to be used for the in-memory cache. Default (and minimum!) is 160 MB. (default 160)
-  -cachePath os.UserCacheDir()+"/deflix-stremio/"
-        Path for loading a persisted cache on startup and persisting the current cache in regular intervals. An empty value will lead to os.UserCacheDir()+"/deflix-stremio/".
+  -cachePath string
+        Path for loading a persisted cache on startup and persisting the current cache in regular intervals. An empty value will lead to 'os.UserCacheDir()+"/deflix-stremio/"'.
   -envPrefix string
         Prefix for environment variables
-  -extraHeaderRD string
-        Additional HTTP request header to set for request to RealDebrid
+  -extraHeadersRD string
+        Additional HTTP request headers to set for requests to RealDebrid, in a format like "X-Foo: bar", separated by newline characters ("\n")
   -logLevel string
         Log level to show only logs with the given and more severe levels. Can be "trace", "debug", "info", "warn", "error", "fatal", "panic". (default "debug")
   -port int
         Port to listen on (default 8080)
   -rootURL string
         Redirect target for the root (default "https://www.deflix.tv")
+  -socksProxyAddrTPB string
+        SOCKS5 proxy address for accessing TPB, required for accessing TPB via the TOR network (where "127.0.0.1:9050" would be typical value)
   -streamURLaddr string
         Address to be used in a stream URL that's delivered to Stremio and later used to redirect to RealDebrid (default "http://localhost:8080")
   -tpbRetries int
@@ -125,8 +131,8 @@ Usage of rd-tester:
         RealDebrid API token
   -baseURL string
         Base URL of RealDebrid (default "https://api.real-debrid.com")
-  -extraHeader string
-        Additional header to set, for example for a proxy. Format: "X-Foo: bar"
+  -extraHeaders string
+        Additional headers to set, for example for a proxy. Format: "X-Foo: bar". Separated by newline characters ("\n")
 ```
 
 ### rd-proxy
@@ -134,17 +140,18 @@ Usage of rd-tester:
 `rd-proxy` is a *reverse* proxy for proxying requests to RealDebrid. This can be necessary when RealDebrid blocks the IP of the server where `deflix-stremio` runs on, because you can then use a bunch of cheap, low-powered servers with fresh IPs for proxying, without having to run `deflix-stremio` on them.
 
 ```text
-Usage of rd-proxy:
   -apiKeyHeader string
         Header key for the API key, e.g. "X-Proxy-Apikey"
   -apiKeys string
-        List of comma separated API keys that the proxy allows
+        List of comma separated API keys that the reverse proxy allows
   -bindAddr string
         Local interface address to bind to. "localhost" only allows access from the local host. "0.0.0.0" binds to all network interfaces. (default "localhost")
+  -logRequest
+        Log the full request object
   -port int
         Port to listen on (default 8080)
   -targetURL string
-        Proxy target URL (default "https://api.real-debrid.com")
+        Reverse proxy target URL (default "https://api.real-debrid.com")
 ```
 
 Disclaimer
