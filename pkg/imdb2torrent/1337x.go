@@ -16,6 +16,8 @@ import (
 	"github.com/doingodswork/deflix-stremio/pkg/cinemata"
 )
 
+var _ MagnetSearcher = (*leetxClient)(nil)
+
 type leetxClient struct {
 	baseURL        string
 	httpClient     *http.Client
@@ -36,10 +38,10 @@ func newLeetxclient(ctx context.Context, baseURL string, timeout time.Duration, 
 	}
 }
 
-// check scrapes 1337x to find torrents for the given IMDb ID.
+// Check scrapes 1337x to find torrents for the given IMDb ID.
 // It uses the Stremio Cinemata remote addon to get a movie name for a given IMDb ID, so it can search 1337x with the name.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c leetxClient) check(ctx context.Context, imdbID string) ([]Result, error) {
+func (c leetxClient) Check(ctx context.Context, imdbID string) ([]Result, error) {
 	logFields := log.Fields{
 		"imdbID":      imdbID,
 		"torrentSite": "1337x",

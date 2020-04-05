@@ -17,6 +17,8 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
+var _ MagnetSearcher = (*tpbClient)(nil)
+
 type tpbClient struct {
 	baseURL    string
 	httpClient *http.Client
@@ -56,10 +58,14 @@ func newTPBclient(ctx context.Context, baseURL, socksProxyAddr string, timeout t
 	}, nil
 }
 
+func (c tpbClient) Check(ctx context.Context, imdbID string) ([]Result, error) {
+	return c.checkAttempts(ctx, imdbID, 1)
+}
+
 // check scrapes TPB to find torrents for the given IMDb ID.
 // TPB sometimes runs into a timeout, so let's allow multiple attempts *when a timeout occurs*.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c tpbClient) check(ctx context.Context, imdbID string, attempts int) ([]Result, error) {
+func (c tpbClient) checkAttempts(ctx context.Context, imdbID string, attempts int) ([]Result, error) {
 	logFields := log.Fields{
 		"imdbID":      imdbID,
 		"torrentSite": "TPB",
@@ -99,7 +105,7 @@ func (c tpbClient) check(ctx context.Context, imdbID string, attempts int) ([]Re
 			// Simple tests have shown that when a proper connection exists, all requests to TPB work, while when no proper connection exists all requests time out.
 			logger.Debug("Closing connections to TPB and retrying...")
 			c.httpClient.CloseIdleConnections()
-			return c.check(ctx, imdbID, attempts-1)
+			return c.checkAttempts(ctx, imdbID, attempts-1)
 		} else {
 			return nil, fmt.Errorf("Couldn't GET %v: %v", reqUrl, err)
 		}

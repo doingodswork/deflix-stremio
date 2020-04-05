@@ -26,6 +26,8 @@ var (
 		"udp://tracker.leechers-paradise.org:6969"}
 )
 
+var _ MagnetSearcher = (*ytsClient)(nil)
+
 type ytsClient struct {
 	baseURL    string
 	httpClient *http.Client
@@ -44,9 +46,9 @@ func newYTSclient(ctx context.Context, baseURL string, timeout time.Duration, ca
 	}
 }
 
-// check uses YTS' API to find torrents for the given IMDb ID.
+// Check uses YTS' API to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c ytsClient) check(ctx context.Context, imdbID string) ([]Result, error) {
+func (c ytsClient) Check(ctx context.Context, imdbID string) ([]Result, error) {
 	logFields := log.Fields{
 		"imdbID":      imdbID,
 		"torrentSite": "YTS",

@@ -18,6 +18,10 @@ var (
 	regexMagnet          = regexp.MustCompile(`'magnet:?.+?'`) // The "?" makes the ".+" non-greedy
 )
 
+type MagnetSearcher interface {
+	Check(ctx context.Context, imdbID string) ([]Result, error)
+}
+
 type Client struct {
 	timeout     time.Duration
 	ytsClient   ytsClient
@@ -57,7 +61,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 	// YTS
 	go func() {
 		logger.WithField("torrentSite", "YTS").Debug("Started searching torrents...")
-		results, err := c.ytsClient.check(ctx, imdbID)
+		results, err := c.ytsClient.Check(ctx, imdbID)
 		if err != nil {
 			logger.WithError(err).WithField("torrentSite", "YTS").Warn("Couldn't find torrents")
 			errChan <- err
@@ -74,7 +78,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 	// TPB
 	go func() {
 		logger.WithField("torrentSite", "TPB").Debug("Started searching torrents...")
-		results, err := c.tpbClient.check(ctx, imdbID, 1+c.tpbRetries)
+		results, err := c.tpbClient.checkAttempts(ctx, imdbID, 1+c.tpbRetries)
 		if err != nil {
 			logger.WithError(err).WithField("torrentSite", "TPB").Warn("Couldn't find torrents")
 			errChan <- err
@@ -91,7 +95,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 	// 1337x
 	go func() {
 		logger.WithField("torrentSite", "1337x").Debug("Started searching torrents...")
-		results, err := c.leetxClient.check(ctx, imdbID)
+		results, err := c.leetxClient.Check(ctx, imdbID)
 		if err != nil {
 			logger.WithError(err).WithField("torrentSite", "1337x").Warn("Couldn't find torrents")
 			errChan <- err
@@ -113,7 +117,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 	ibitErrChan := make(chan error)
 	go func() {
 		logger.WithField("torrentSite", "ibit").Debug("Started searching torrents...")
-		ibitResults, err := c.ibitClient.check(ctx, imdbID)
+		ibitResults, err := c.ibitClient.Check(ctx, imdbID)
 		if err != nil {
 			logger.WithError(err).WithField("torrentSite", "ibit").Warn("Couldn't find torrents")
 			ibitErrChan <- err
@@ -199,6 +203,15 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 	}
 
 	return noDupResults, nil
+}
+
+func (c Client) GetMagnetSearchers() map[string]MagnetSearcher {
+	return map[string]MagnetSearcher{
+		"YTS":   c.ytsClient,
+		"TPB":   c.tpbClient,
+		"1337x": c.leetxClient,
+		"ibit":  c.ibitClient,
+	}
 }
 
 type Result struct {

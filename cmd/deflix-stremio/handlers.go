@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -16,6 +17,10 @@ import (
 	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
 	"github.com/doingodswork/deflix-stremio/pkg/realdebrid"
 	"github.com/doingodswork/deflix-stremio/pkg/stremio"
+)
+
+const (
+	bigBuckBunnyMagnet = `magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c&dn=Big+Buck+Bunny&tr=udp%3A%2F%2Fexplodie.org%3A6969&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969&tr=udp%3A%2F%2Ftracker.empire-js.us%3A1337&tr=udp%3A%2F%2Ftracker.leechers-paradise.org%3A6969&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337&tr=wss%3A%2F%2Ftracker.btorrent.xyz&tr=wss%3A%2F%2Ftracker.fastcast.nz&tr=wss%3A%2F%2Ftracker.openwebtorrent.com&ws=https%3A%2F%2Fwebtorrent.io%2Ftorrents%2F&xs=https%3A%2F%2Fwebtorrent.io%2Ftorrents%2Fbig-buck-bunny.torrent`
 )
 
 // The example code had this, but apparently it's not required and not used anywhere
@@ -311,5 +316,103 @@ func createRootHandler(ctx context.Context, config config) func(w http.ResponseW
 		logger.WithField("redirectLocation", config.RootURL).Debug("Responding with redirect")
 		w.Header().Set("Location", config.RootURL)
 		w.WriteHeader(http.StatusMovedPermanently)
+	}
+}
+
+func createStatusHandler(mainCtx context.Context, magnetSearchers map[string]imdb2torrent.MagnetSearcher, conversionClient realdebrid.Client, caches map[string]*fastcache.Cache) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rCtx := r.Context()
+		logger := log.WithContext(rCtx)
+		logger.WithField("request", r).Trace("statusHandler called")
+
+		queryVals := r.URL.Query()
+		imdbID := queryVals.Get("imdbid")
+		apiToken := queryVals.Get("apitoken")
+		if imdbID == "" || apiToken == "" {
+			logger.Warn("\"/status\" was called without IMDb ID or API token")
+			w.WriteHeader(http.StatusBadRequest)
+		}
+
+		start := time.Now()
+		res := "{\n"
+
+		// Check magnet searchers
+
+		res += "\t" + `"magnetSearchers": {` + "\n"
+		// Lock for writing to the same string
+		lock := sync.Mutex{}
+		wg := sync.WaitGroup{}
+		wg.Add(len(magnetSearchers))
+		for name, client := range magnetSearchers {
+			go func(goName string, goClient imdb2torrent.MagnetSearcher) {
+				defer wg.Done()
+				startSearch := time.Now()
+				results, err := goClient.Check(rCtx, imdbID)
+				lock.Lock()
+				defer lock.Unlock()
+				res += "\t\t" + `"` + goName + `": {` + "\n"
+				if err != nil {
+					res += "\t\t\t" + `"err":"` + err.Error() + `",` + "\n"
+				} else {
+					resCount := len(results)
+					res += "\t\t\t" + `"resCount":"` + strconv.Itoa(resCount) + `",` + "\n"
+					if resCount > 0 {
+						resExample := fmt.Sprintf("%+v", results[0])
+						resExample = strings.ReplaceAll(resExample, "\n", " ")
+						res += "\t\t\t" + `"resExample":"` + resExample + `",` + "\n"
+					}
+				}
+				durationSearchmillis := time.Since(startSearch).Milliseconds()
+				res += "\t\t\t" + `"duration": "` + strconv.FormatInt(durationSearchmillis, 10) + `ms"` + "\n"
+				res += "\t\t" + `},` + "\n"
+			}(name, client)
+		}
+		wg.Wait()
+		res = strings.TrimRight(res, ",\n") + "\n"
+		res += "\t" + `},` + "\n"
+
+		// Check RD client
+
+		res += "\t" + `"RD": {` + "\n"
+		startRD := time.Now()
+		streamURL, err := conversionClient.GetStreamURL(rCtx, bigBuckBunnyMagnet, apiToken, false)
+		if err != nil {
+			res += "\t\t" + `"err":"` + err.Error() + `",` + "\n"
+		} else {
+			res += "\t\t" + `"res":"` + streamURL + `",` + "\n"
+		}
+		durationRDmillis := time.Since(startRD).Milliseconds()
+		res += "\t\t" + `"duration": "` + strconv.FormatInt(durationRDmillis, 10) + `ms"` + "\n"
+		res += "\t" + `},` + "\n"
+
+		// Check caches
+
+		res += "\t" + `"caches": {` + "\n"
+		stats := fastcache.Stats{}
+		for name, cache := range caches {
+			res += "\t\t" + `"` + name + `": {` + "\n"
+			cache.UpdateStats(&stats)
+			res += "\t\t\t" + `"GetCalls": "` + strconv.FormatUint(stats.GetCalls, 10) + `"` + ",\n"
+			res += "\t\t\t" + `"SetCalls": "` + strconv.FormatUint(stats.SetCalls, 10) + `"` + ",\n"
+			res += "\t\t\t" + `"Misses": "` + strconv.FormatUint(stats.Misses, 10) + `"` + ",\n"
+			res += "\t\t\t" + `"Collisions": "` + strconv.FormatUint(stats.Collisions, 10) + `"` + ",\n"
+			res += "\t\t\t" + `"Corruptions": "` + strconv.FormatUint(stats.Corruptions, 10) + `"` + ",\n"
+			res += "\t\t\t" + `"EntriesCount": "` + strconv.FormatUint(stats.EntriesCount, 10) + `"` + ",\n"
+			res += "\t\t\t" + `"Size": "` + strconv.FormatUint(stats.BytesSize/uint64(1024)/uint64(1024), 10) + "MB" + `"` + "\n"
+			res += "\t\t" + `},` + "\n"
+			stats.Reset()
+		}
+		res = strings.TrimRight(res, ",\n") + "\n"
+		res += "\t" + `},` + "\n"
+
+		durationMillis := time.Since(start).Milliseconds()
+		res += "\t" + `"duration": "` + strconv.FormatInt(durationMillis, 10) + `ms"` + "\n"
+		res += "}"
+
+		logger.WithField("response", res).Debug("Responding")
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write([]byte(res)); err != nil {
+			logger.WithError(err).Error("Couldn't write response")
+		}
 	}
 }

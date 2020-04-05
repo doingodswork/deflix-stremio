@@ -20,6 +20,8 @@ import (
 
 var magnet2InfoHashRegexIbit = regexp.MustCompile(`btih:.+?\\x26dn=`) // The "?" makes the ".+" non-greedy
 
+var _ MagnetSearcher = (*ibitClient)(nil)
+
 type ibitClient struct {
 	baseURL    string
 	httpClient *http.Client
@@ -40,9 +42,9 @@ func newIbitClient(ctx context.Context, baseURL string, timeout time.Duration, c
 	}
 }
 
-// check scrapes ibit to find torrents for the given IMDb ID.
+// Check scrapes ibit to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c ibitClient) check(ctx context.Context, imdbID string) ([]Result, error) {
+func (c ibitClient) Check(ctx context.Context, imdbID string) ([]Result, error) {
 	// Lock for all requests to ibit, because of rate limiting
 	c.lock.Lock()
 	defer c.lock.Unlock()

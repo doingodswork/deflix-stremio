@@ -106,6 +106,17 @@ func main() {
 	redirectCache = fastcache.LoadFromFileOrNew(config.CachePath+"/redirect", cacheMaxBytes/5)
 	cinemataCache = fastcache.LoadFromFileOrNew(config.CachePath+"/cinemata", cacheMaxBytes/5)
 
+	// Create clients
+
+	searchClient, err := imdb2torrent.NewClient(mainCtx, config.BaseURLyts, config.BaseURLtpb, config.BaseURL1337x, config.BaseURLibit, config.SocksProxyAddrTPB, 5*time.Second, config.TPBretries, torrentCache, cinemataCache, config.CacheAgeTorrents)
+	if err != nil {
+		log.WithError(err).Fatal("Couldn't create torrent search client")
+	}
+	conversionClient, err := realdebrid.NewClient(mainCtx, 5*time.Second, tokenCache, availabilityCache, config.CacheAgeRD, config.BaseURLrd, config.ExtraHeadersRD)
+	if err != nil {
+		log.WithError(err).Fatal("Couldn't create RealDebrid client")
+	}
+
 	// Basic middleware and health endpoint
 
 	log.Info("Setting up server")
@@ -117,17 +128,18 @@ func main() {
 		recoveryMiddleware,
 		createLoggingMiddleware(mainCtx, cinemataCache))
 	s.HandleFunc("/health", healthHandler)
+	// Requires URL query: "?imdbid=123&apitoken=foo"
+	caches := map[string]*fastcache.Cache{
+		"token":        tokenCache,
+		"availability": availabilityCache,
+		"torrent":      torrentCache,
+		"redirect":     redirectCache,
+		"cinemata":     cinemataCache,
+	}
+	s.HandleFunc("/status", createStatusHandler(mainCtx, searchClient.GetMagnetSearchers(), conversionClient, caches))
 
 	// Stremio endpoints
 
-	conversionClient, err := realdebrid.NewClient(mainCtx, 5*time.Second, tokenCache, availabilityCache, config.CacheAgeRD, config.BaseURLrd, config.ExtraHeadersRD)
-	if err != nil {
-		log.WithError(err).Fatal("Couldn't create RealDebrid client")
-	}
-	searchClient, err := imdb2torrent.NewClient(mainCtx, config.BaseURLyts, config.BaseURLtpb, config.BaseURL1337x, config.BaseURLibit, config.SocksProxyAddrTPB, 5*time.Second, config.TPBretries, torrentCache, cinemataCache, config.CacheAgeTorrents)
-	if err != nil {
-		log.WithError(err).Fatal("Couldn't create torrent search client")
-	}
 	// Use token middleware only for the Stremio endpoints
 	tokenMiddleware := createTokenMiddleware(mainCtx, conversionClient)
 	manifestHandler := createManifestHandler(mainCtx, conversionClient)
