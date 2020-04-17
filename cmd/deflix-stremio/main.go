@@ -109,19 +109,20 @@ func main() {
 
 	// Create clients
 
-	tpbClient, err := imdb2torrent.NewTPBclient(mainCtx, config.BaseURLtpb, config.SocksProxyAddrTPB, 5*time.Second, torrentCache, config.CacheAgeTorrents, config.TPBretries)
+	timeout := 5 * time.Second
+	cinemataClient := cinemata.NewClient(mainCtx, timeout, cinemataCache)
+	tpbClient, err := imdb2torrent.NewTPBclient(mainCtx, config.BaseURLtpb, config.SocksProxyAddrTPB, timeout, torrentCache, config.CacheAgeTorrents, cinemataClient)
 	if err != nil {
 		log.WithError(err).Fatal("Couldn't create TPB client")
 	}
-	cinemataClient := cinemata.NewClient(mainCtx, 5*time.Second, cinemataCache)
 	siteClients := map[string]imdb2torrent.MagnetSearcher{
-		"YTS":   imdb2torrent.NewYTSclient(mainCtx, config.BaseURLyts, 5*time.Second, torrentCache, config.CacheAgeTorrents),
+		"YTS":   imdb2torrent.NewYTSclient(mainCtx, config.BaseURLyts, timeout, torrentCache, config.CacheAgeTorrents),
 		"TPB":   tpbClient,
-		"1337X": imdb2torrent.NewLeetxclient(mainCtx, config.BaseURL1337x, 5*time.Second, torrentCache, cinemataClient, config.CacheAgeTorrents),
-		"ibit":  imdb2torrent.NewIbitClient(mainCtx, config.BaseURLibit, 5*time.Second, torrentCache, config.CacheAgeTorrents),
+		"1337X": imdb2torrent.NewLeetxclient(mainCtx, config.BaseURL1337x, timeout, torrentCache, cinemataClient, config.CacheAgeTorrents),
+		"ibit":  imdb2torrent.NewIbitClient(mainCtx, config.BaseURLibit, timeout, torrentCache, config.CacheAgeTorrents),
 	}
-	searchClient := imdb2torrent.NewClient(mainCtx, siteClients, 5*time.Second)
-	conversionClient, err := realdebrid.NewClient(mainCtx, 5*time.Second, tokenCache, availabilityCache, config.CacheAgeRD, config.BaseURLrd, config.ExtraHeadersRD)
+	searchClient := imdb2torrent.NewClient(mainCtx, siteClients, timeout)
+	conversionClient, err := realdebrid.NewClient(mainCtx, timeout, tokenCache, availabilityCache, config.CacheAgeRD, config.BaseURLrd, config.ExtraHeadersRD)
 	if err != nil {
 		log.WithError(err).Fatal("Couldn't create RealDebrid client")
 	}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"strconv"
 	"time"
 
@@ -16,7 +15,7 @@ import (
 
 var (
 	// See recommended tracker list on https://yts.mx/api#list_movies
-	trackers = []string{"udp://open.demonii.com:1337/announce",
+	trackersYTS = []string{"udp://open.demonii.com:1337/announce",
 		"udp://tracker.openbittorrent.com:80",
 		"udp://tracker.coppersurfer.tk:6969",
 		"udp://glotorrents.pw:6969/announce",
@@ -98,14 +97,20 @@ func (c ytsClient) Check(ctx context.Context, imdbID string) ([]Result, error) {
 			infoHash := torrent.Get("hash").String()
 			if infoHash == "" {
 				logger.WithField("torrentJSON", torrent.String()).Warn("Couldn't get info_hash from torrent JSON")
+				continue
 			}
-			result := createMagnetURL(ctx, infoHash, title)
-			result.Quality = quality
+			magnetURL := createMagnetURL(ctx, infoHash, title, trackersYTS)
 			ripType := torrent.Get("type").String()
 			if ripType != "" {
-				result.Quality += " (" + ripType + ")"
+				quality += " (" + ripType + ")"
 			}
-			logger.WithFields(log.Fields{"title": title, "quality": quality, "infoHash": infoHash, "magnet": result.MagnetURL}).Trace("Found torrent")
+			logger.WithFields(log.Fields{"title": title, "quality": quality, "infoHash": infoHash, "magnet": magnetURL}).Trace("Found torrent")
+			result := Result{
+				Title:     title,
+				Quality:   quality,
+				InfoHash:  infoHash,
+				MagnetURL: magnetURL,
+			}
 			results = append(results, result)
 		}
 	}
@@ -125,17 +130,4 @@ func (c ytsClient) Check(ctx context.Context, imdbID string) ([]Result, error) {
 	}
 
 	return results, nil
-}
-
-func createMagnetURL(ctx context.Context, infoHash, title string) Result {
-	result := Result{
-		InfoHash: infoHash,
-		Title:    title,
-	}
-
-	result.MagnetURL = "magnet:?xt=urn:btih:" + infoHash + "&dn=" + url.QueryEscape(title)
-	for _, tracker := range trackers {
-		result.MagnetURL += "&tr" + tracker
-	}
-	return result
 }

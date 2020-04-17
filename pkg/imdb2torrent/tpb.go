@@ -3,31 +3,46 @@ package imdb2torrent
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/PuerkitoBio/goquery"
 	"github.com/VictoriaMetrics/fastcache"
+	"github.com/doingodswork/deflix-stremio/pkg/cinemata"
 	log "github.com/sirupsen/logrus"
+	"github.com/tidwall/gjson"
 	"golang.org/x/net/proxy"
 	"golang.org/x/net/publicsuffix"
+)
+
+var (
+	// See the trackers that TPB adds in each magnet to the info_hash received from apibay.org
+	trackersTPB = []string{
+		"udp://tracker.coppersurfer.tk:6969/announce",
+		"udp://9.rarbg.to:2920/announce",
+		"udp://tracker.opentrackr.org:1337",
+		"udp://tracker.internetwarriors.net:1337/announce",
+		"udp://tracker.leechers-paradise.org:6969/announce",
+		"udp://tracker.coppersurfer.tk:6969/announce",
+		"udp://tracker.pirateparty.gr:6969/announce",
+		"udp://tracker.cyberia.is:6969/announce",
+	}
 )
 
 var _ MagnetSearcher = (*tpbClient)(nil)
 
 type tpbClient struct {
-	baseURL    string
-	httpClient *http.Client
-	cache      *fastcache.Cache
-	cacheAge   time.Duration
-	retries    int
+	baseURL        string
+	httpClient     *http.Client
+	cache          *fastcache.Cache
+	cacheAge       time.Duration
+	cinemataClient cinemata.Client
 }
 
-func NewTPBclient(ctx context.Context, baseURL, socksProxyAddr string, timeout time.Duration, cache *fastcache.Cache, cacheAge time.Duration, retries int) (tpbClient, error) {
+func NewTPBclient(ctx context.Context, baseURL, socksProxyAddr string, timeout time.Duration, cache *fastcache.Cache, cacheAge time.Duration, cinemataClient cinemata.Client) (tpbClient, error) {
 	// Using a SOCKS5 proxy allows us to make requests to TPB via the TOR network
 	var httpClient *http.Client
 	if socksProxyAddr != "" {
@@ -52,22 +67,17 @@ func NewTPBclient(ctx context.Context, baseURL, socksProxyAddr string, timeout t
 		}
 	}
 	return tpbClient{
-		baseURL:    baseURL,
-		httpClient: httpClient,
-		cache:      cache,
-		cacheAge:   cacheAge,
-		retries:    retries,
+		baseURL:        baseURL,
+		httpClient:     httpClient,
+		cache:          cache,
+		cacheAge:       cacheAge,
+		cinemataClient: cinemataClient,
 	}, nil
 }
 
-func (c tpbClient) Check(ctx context.Context, imdbID string) ([]Result, error) {
-	return c.checkAttempts(ctx, imdbID, 1+c.retries)
-}
-
-// check scrapes TPB to find torrents for the given IMDb ID.
-// TPB sometimes runs into a timeout, so let's allow multiple attempts *when a timeout occurs*.
+// Check cals the TPB API to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c tpbClient) checkAttempts(ctx context.Context, imdbID string, attempts int) ([]Result, error) {
+func (c tpbClient) Check(ctx context.Context, imdbID string) ([]Result, error) {
 	logFields := log.Fields{
 		"imdbID":      imdbID,
 		"torrentSite": "TPB",
@@ -89,96 +99,71 @@ func (c tpbClient) checkAttempts(ctx context.Context, imdbID string, attempts in
 		}
 	}
 
-	if attempts == 0 {
-		return nil, fmt.Errorf("Cannot check TPB with 0 attempts")
-	}
-	// "/0/7/207" suffix is: ? / sort by seeders / category "HD - Movies"
-	reqUrl := c.baseURL + "/search/" + imdbID + "/0/7/207"
+	// Note: It seems that apibay.org has a "cat=" query parameter, but using the category 207 for "HD Movies" doesn't work (torrents for category 201 ("Movies") are returned as well).
+	reqUrl := c.baseURL + "/q.php?q=" + imdbID
 	res, err := c.httpClient.Get(reqUrl)
 	if err != nil {
-		// HTTP client errors are *always* `*url.Error`s
-		urlErr := err.(*url.Error)
-		if urlErr.Timeout() {
-			logger.Info("Ran into a timeout")
-			if attempts == 1 {
-				return nil, fmt.Errorf("All attempted requests to %v timed out", reqUrl)
-			}
-			// Just retrying again with the same HTTP client, which probably reuses the previous connection, doesn't work.
-			// Simple tests have shown that when a proper connection exists, all requests to TPB work, while when no proper connection exists all requests time out.
-			logger.Debug("Closing connections to TPB and retrying...")
-			c.httpClient.CloseIdleConnections()
-			return c.checkAttempts(ctx, imdbID, attempts-1)
-		} else {
-			return nil, fmt.Errorf("Couldn't GET %v: %v", reqUrl, err)
-		}
+		return nil, fmt.Errorf("Couldn't GET %v: %v", reqUrl, err)
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("Bad GET response: %v", res.StatusCode)
 	}
-
-	// Load the HTML document
-	doc, err := goquery.NewDocumentFromReader(res.Body)
+	resBody, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, fmt.Errorf("Couldn't load the HTML in goquery: %v", err)
+		return nil, fmt.Errorf("Couldn't read response body: %v", err)
 	}
 
-	// Find the review items
-	// Note: Uses "double" and not "single" view!
-	var results []Result
-	doc.Find("tbody tr").Each(func(_ int, s *goquery.Selection) {
-		title := s.Find(".detLink").Text()
-		if title == "" {
-			logger.Warn("Scraped movie title is empty, did the HTML change?")
-			return
-		}
-		title = strings.TrimSpace(title)
+	// Extract data from JSON
+	torrents := gjson.ParseBytes(resBody).Array()
+	if len(torrents) == 0 {
+		// Nil slice is ok, because it can be checked with len()
+		return nil, nil
+	}
 
+	// Get movie name
+	movieName, _, err := c.cinemataClient.GetMovieNameYear(ctx, imdbID)
+	if err != nil {
+		return nil, fmt.Errorf("Couldn't get movie name via Cinemata for IMDb ID %v: %v", imdbID, err)
+	}
+
+	var results []Result
+	for _, torrent := range torrents {
+		torrentName := torrent.Get("name").String()
 		quality := ""
-		if strings.Contains(title, "720p") {
+		if strings.Contains(torrentName, "720p") {
 			quality = "720p"
-		} else if strings.Contains(title, "1080p") {
+		} else if strings.Contains(torrentName, "1080p") {
 			quality = "1080p"
-		} else if strings.Contains(title, "2160p") {
+		} else if strings.Contains(torrentName, "2160p") {
 			quality = "2160p"
 		} else {
-			return
+			continue
 		}
-		if strings.Contains(title, "10bit") {
+		if strings.Contains(torrentName, "10bit") {
 			quality += " 10bit"
 		}
 		// https://en.wikipedia.org/wiki/Pirated_movie_release_types
-		if strings.Contains(title, "HDCAM") {
+		if strings.Contains(torrentName, "HDCAM") {
 			quality += (" (⚠️cam)")
-		} else if strings.Contains(title, "HDTS") {
+		} else if strings.Contains(torrentName, "HDTS") || strings.Contains(torrentName, "HD-TS") {
 			quality += (" (⚠️telesync)")
 		}
-
-		magnet, _ := s.Find(".detName").Next().Attr("href")
-		if !strings.HasPrefix(magnet, "magnet:") {
-			logger.Warn("Scraped magnet URL doesn't look like a magnet URL. Did the HTML change?")
-			return
-		}
-		// look for "btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c&" via regex and then cut out the hash
-		match := magnet2InfoHashRegex.Find([]byte(magnet))
-		infoHash := strings.TrimPrefix(string(match), "btih:")
-		infoHash = strings.TrimSuffix(infoHash, "&")
-		infoHash = strings.ToUpper(infoHash)
-
+		infoHash := torrent.Get("info_hash").String()
 		if infoHash == "" {
-			logger.WithField("magnet", magnet).Warn("Couldn't extract info_hash. Did the HTML change?")
-			return
+			logger.WithField("torrentJSON", torrent.String()).Warn("Couldn't get info_hash from torrent JSON")
+			continue
 		}
-
+		magnetURL := createMagnetURL(ctx, infoHash, movieName, trackersTPB)
+		logger.WithFields(log.Fields{"title": movieName, "quality": quality, "infoHash": infoHash, "magnet": magnetURL}).Trace("Found torrent")
 		result := Result{
-			Title:     title,
+			Title:     movieName,
 			Quality:   quality,
 			InfoHash:  infoHash,
-			MagnetURL: magnet,
+			MagnetURL: magnetURL,
 		}
-		logger.WithFields(log.Fields{"title": title, "quality": quality, "infoHash": infoHash, "magnet": magnet}).Trace("Found torrent")
 		results = append(results, result)
-	})
+	}
 
 	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
 	// Any actual errors would have returned earlier.

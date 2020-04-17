@@ -151,3 +151,11 @@ func replaceURL(origURL, newBaseURL string) (string, error) {
 	origBaseURL := url.Scheme + "://" + url.Host
 	return strings.Replace(origURL, origBaseURL, newBaseURL, 1), nil
 }
+
+func createMagnetURL(ctx context.Context, infoHash, title string, trackers []string) string {
+	magnetURL := "magnet:?xt=urn:btih:" + infoHash + "&dn=" + url.QueryEscape(title)
+	for _, tracker := range trackers {
+		magnetURL += "&tr" + tracker
+	}
+	return magnetURL
+}

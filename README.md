@@ -102,8 +102,6 @@ Usage of deflix-stremio:
         SOCKS5 proxy address for accessing TPB, required for accessing TPB via the TOR network (where "127.0.0.1:9050" would be typical value)
   -streamURLaddr string
         Address to be used in a stream URL that's delivered to Stremio and later used to redirect to RealDebrid (default "http://localhost:8080")
-  -tpbRetries int
-        Number of retries in case TPB times out. Each retry will be done after the previous connection is closed.
 ```
 
 If you want to configure deflix-stremio via environment variables, you can use the according environment variable keys, like this: `baseURL1337x` -> `BASE_URL_1337X`. If you want to use an environment variable prefix you have to set it with the command line argument (for example `-envPrefix DEFLIX` and then the environment variable for the previous example would be `DEFLIX_BASE_URL_1337X`.
