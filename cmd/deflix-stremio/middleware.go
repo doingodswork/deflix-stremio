@@ -87,7 +87,7 @@ func createTokenMiddleware(ctx context.Context, conversionClient realdebrid.Clie
 }
 
 func createLoggingMiddleware(ctx context.Context, cinemataCache *fastcache.Cache) func(http.Handler) http.Handler {
-	// Only 1 second to allow for cache retrieval. The data should be cached from the 1337x scraper.
+	// Only 1 second to allow for cache retrieval. The data should be cached from the TPB or 1337x client.
 	cinemataClient := cinemata.NewClient(ctx, 1*time.Second, cinemataCache)
 	return func(before http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -115,7 +115,7 @@ func createLoggingMiddleware(ctx context.Context, cinemataCache *fastcache.Cache
 					if movieName, movieYear, err := cinemataClient.GetMovieNameYear(rCtx, imdbID); err != nil {
 						log.WithContext(ctx).WithError(err).Warn("Couldn't get movie name and year for request logger")
 					} else {
-						movie = movieName + " " + strconv.Itoa(movieYear)
+						movie = movieName + " (" + strconv.Itoa(movieYear) + ")"
 					}
 				}
 			}
