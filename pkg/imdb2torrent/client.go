@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,12 +56,15 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 			siteResChan := make(chan []Result)
 			siteErrChan := make(chan error)
 			go func() {
+				siteStart := time.Now()
 				results, err := siteClient.Check(ctx, imdbID)
 				if err != nil {
 					siteLogger.WithError(err).Warn("Couldn't find torrents")
 					siteErrChan <- err
 				} else {
-					siteLogger.WithField("torrentCount", len(results)).Debug("Found torrents")
+					duration := time.Since(siteStart).Milliseconds()
+					durationString := strconv.FormatInt(duration, 10)
+					siteLogger.WithField("torrentCount", len(results)).WithField("duration", durationString+"ms").Debug("Found torrents")
 					siteResChan <- results
 				}
 			}()
