@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/VictoriaMetrics/fastcache"
-	"github.com/doingodswork/deflix-stremio/pkg/cinemata"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -24,27 +22,14 @@ type MagnetSearcher interface {
 
 type Client struct {
 	timeout     time.Duration
-	ytsClient   ytsClient
-	tpbClient   tpbClient
-	leetxClient leetxClient
-	ibitClient  ibitClient
-	tpbRetries  int
+	siteClients map[string]MagnetSearcher
 }
 
-func NewClient(ctx context.Context, baseURLyts, baseURLtpb, baseURL1337x, baseURLibit string, socksProxyAddrTPB string, timeout time.Duration, tpbRetries int, torrentCache *fastcache.Cache, cinemataCache *fastcache.Cache, cacheAge time.Duration) (Client, error) {
-	cinemataClient := cinemata.NewClient(ctx, timeout, cinemataCache)
-	tpbClient, err := newTPBclient(ctx, baseURLtpb, socksProxyAddrTPB, timeout, torrentCache, cacheAge)
-	if err != nil {
-		return Client{}, fmt.Errorf("Couldn't create TPB client: %v", err)
-	}
+func NewClient(ctx context.Context, siteClients map[string]MagnetSearcher, timeout time.Duration) Client {
 	return Client{
 		timeout:     timeout,
-		ytsClient:   newYTSclient(ctx, baseURLyts, timeout, torrentCache, cacheAge),
-		tpbClient:   tpbClient,
-		leetxClient: newLeetxclient(ctx, baseURL1337x, timeout, torrentCache, cinemataClient, cacheAge),
-		ibitClient:  newIbitClient(ctx, baseURLibit, timeout, torrentCache, cacheAge),
-		tpbRetries:  tpbRetries,
-	}, nil
+		siteClients: siteClients,
+	}
 }
 
 // FindMagnets tries to find magnet URLs for the given IMDb ID.
@@ -54,129 +39,69 @@ func NewClient(ctx context.Context, baseURLyts, baseURLtpb, baseURL1337x, baseUR
 func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error) {
 	logger := log.WithContext(ctx).WithField("imdbID", imdbID)
 
-	torrentSiteCount := 3
-	resChan := make(chan []Result, torrentSiteCount)
-	errChan := make(chan error, torrentSiteCount)
+	clientCount := len(c.siteClients)
+	resChan := make(chan []Result, clientCount)
+	errChan := make(chan error, clientCount)
 
-	// YTS
-	go func() {
-		logger.WithField("torrentSite", "YTS").Debug("Started searching torrents...")
-		results, err := c.ytsClient.Check(ctx, imdbID)
-		if err != nil {
-			logger.WithError(err).WithField("torrentSite", "YTS").Warn("Couldn't find torrents")
-			errChan <- err
-		} else {
-			fields := log.Fields{
-				"torrentSite":  "YTS",
-				"torrentCount": len(results),
+	// Start all clients' searches in parallel.
+
+	// Use a single timer that we can stop later, because with `case time.After()` ther will be lots of timers that won't be GCed.
+	timer := time.NewTimer(c.timeout)
+	for k, v := range c.siteClients {
+		// Note: Let's not close the channels in the senders, as it would make the receiver's code more complex. The GC takes care of that.
+		go func(clientName string, siteClient MagnetSearcher) {
+			siteLogger := logger.WithField("torrentSite", clientName)
+			siteLogger.Debug("Finding torrents...")
+			siteResChan := make(chan []Result)
+			siteErrChan := make(chan error)
+			go func() {
+				results, err := siteClient.Check(ctx, imdbID)
+				if err != nil {
+					siteLogger.WithError(err).Warn("Couldn't find torrents")
+					siteErrChan <- err
+				} else {
+					siteLogger.WithField("torrentCount", len(results)).Debug("Found torrents")
+					siteResChan <- results
+				}
+			}()
+			select {
+			case res := <-siteResChan:
+				resChan <- res
+			case err := <-siteErrChan:
+				errChan <- err
+			case <-timer.C:
+				siteLogger.Warn("Finding torrents timed out. It will continue to run in the background.")
+				resChan <- nil
 			}
-			logger.WithFields(fields).Debug("Found torrents")
-			resChan <- results
-		}
-	}()
+		}(k, v)
+	}
 
-	// TPB
-	go func() {
-		logger.WithField("torrentSite", "TPB").Debug("Started searching torrents...")
-		results, err := c.tpbClient.checkAttempts(ctx, imdbID, 1+c.tpbRetries)
-		if err != nil {
-			logger.WithError(err).WithField("torrentSite", "TPB").Warn("Couldn't find torrents")
-			errChan <- err
-		} else {
-			fields := log.Fields{
-				"torrentSite":  "TPB",
-				"torrentCount": len(results),
-			}
-			logger.WithFields(fields).Debug("Found torrents")
-			resChan <- results
-		}
-	}()
+	// Collect results from all clients.
 
-	// 1337x
-	go func() {
-		logger.WithField("torrentSite", "1337x").Debug("Started searching torrents...")
-		results, err := c.leetxClient.Check(ctx, imdbID)
-		if err != nil {
-			logger.WithError(err).WithField("torrentSite", "1337x").Warn("Couldn't find torrents")
-			errChan <- err
-		} else {
-			fields := log.Fields{
-				"torrentSite":  "1337x",
-				"torrentCount": len(results),
-			}
-			logger.WithFields(fields).Debug("Found torrents")
-			resChan <- results
-		}
-	}()
-
-	// ibit
-	// Note: An initial movie search takes long, because multiple requests need to be made, but ibit uses rate limiting, so we can't do them concurrently.
-	// So let's treat this special: Make the request, but only wait for 1 second (in case the cache is filled), then don't cancel the operation, but let it run in the background so the cache gets filled.
-	// With the next movie search for the same IMDb ID the cache is used.
-	ibitResChan := make(chan []Result)
-	ibitErrChan := make(chan error)
-	go func() {
-		logger.WithField("torrentSite", "ibit").Debug("Started searching torrents...")
-		ibitResults, err := c.ibitClient.Check(ctx, imdbID)
-		if err != nil {
-			logger.WithError(err).WithField("torrentSite", "ibit").Warn("Couldn't find torrents")
-			ibitErrChan <- err
-		} else {
-			fields := log.Fields{
-				"torrentSite":  "ibit",
-				"torrentCount": len(ibitResults),
-			}
-			logger.WithFields(fields).Debug("Found torrents")
-			ibitResChan <- ibitResults
-		}
-	}()
-
-	// Collect results from all except ibit.
 	var combinedResults []Result
 	var errs []error
 	dupRemovalRequired := false
-	for i := 0; i < torrentSiteCount; i++ {
-		// No timeout for the goroutines because their HTTP client has a timeout already
+	// For each client we get either a result or an error.
+	// The timeout is handled in the site specific goroutine, because if we would use it here, and there were 4 clients and a timeout of 5 seconds, it could lead to 4*5=20 seconds of waiting time.
+	for i := 0; i < clientCount; i++ {
 		select {
-		case err := <-errChan:
-			errs = append(errs, err)
 		case results := <-resChan:
 			if !dupRemovalRequired && len(combinedResults) > 0 && len(results) > 0 {
 				dupRemovalRequired = true
 			}
 			combinedResults = append(combinedResults, results...)
+		case err := <-errChan:
+			errs = append(errs, err)
 		}
 	}
-	close(resChan)
-	close(errChan)
+	timer.Stop()
 
-	returnErrors := len(errs) == torrentSiteCount
-
-	// Now collect result from ibit if it's there.
-	var closeChansOk bool
-	select {
-	case err := <-ibitErrChan:
-		errs = append(errs, err)
-		closeChansOk = true
-	case results := <-ibitResChan:
-		if !dupRemovalRequired && len(combinedResults) > 0 && len(results) > 0 {
-			dupRemovalRequired = true
-		}
-		combinedResults = append(combinedResults, results...)
-		returnErrors = false
-		closeChansOk = true
-	case <-time.After(1 * time.Second):
-		logger.WithField("torrentSite", "ibit").Info("torrent search hasn't finished yet, we'll let it run in the background")
-	}
-	if closeChansOk {
-		close(ibitErrChan)
-		close(ibitResChan)
-	}
+	returnErrors := len(errs) == clientCount
 
 	// Return error (only) if all torrent sites returned actual errors (and not just empty results)
 	if returnErrors {
 		errsMsg := "Couldn't find torrents on any site: "
-		for i := 1; i <= torrentSiteCount; i++ {
+		for i := 1; i <= clientCount; i++ {
 			errsMsg += fmt.Sprintf("%v.: %v; ", i, errs[i-1])
 		}
 		errsMsg = strings.TrimSuffix(errsMsg, "; ")
@@ -206,12 +131,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 }
 
 func (c Client) GetMagnetSearchers() map[string]MagnetSearcher {
-	return map[string]MagnetSearcher{
-		"YTS":   c.ytsClient,
-		"TPB":   c.tpbClient,
-		"1337x": c.leetxClient,
-		"ibit":  c.ibitClient,
-	}
+	return c.siteClients
 }
 
 type Result struct {

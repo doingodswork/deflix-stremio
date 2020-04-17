@@ -18,6 +18,7 @@ import (
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/doingodswork/deflix-stremio/pkg/cinemata"
 	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
 	"github.com/doingodswork/deflix-stremio/pkg/realdebrid"
 	"github.com/doingodswork/deflix-stremio/pkg/stremio"
@@ -108,10 +109,18 @@ func main() {
 
 	// Create clients
 
-	searchClient, err := imdb2torrent.NewClient(mainCtx, config.BaseURLyts, config.BaseURLtpb, config.BaseURL1337x, config.BaseURLibit, config.SocksProxyAddrTPB, 5*time.Second, config.TPBretries, torrentCache, cinemataCache, config.CacheAgeTorrents)
+	tpbClient, err := imdb2torrent.NewTPBclient(mainCtx, config.BaseURLtpb, config.SocksProxyAddrTPB, 5*time.Second, torrentCache, config.CacheAgeTorrents, config.TPBretries)
 	if err != nil {
-		log.WithError(err).Fatal("Couldn't create torrent search client")
+		log.WithError(err).Fatal("Couldn't create TPB client")
 	}
+	cinemataClient := cinemata.NewClient(mainCtx, 5*time.Second, cinemataCache)
+	siteClients := map[string]imdb2torrent.MagnetSearcher{
+		"YTS":   imdb2torrent.NewYTSclient(mainCtx, config.BaseURLyts, 5*time.Second, torrentCache, config.CacheAgeTorrents),
+		"TPB":   tpbClient,
+		"1337X": imdb2torrent.NewLeetxclient(mainCtx, config.BaseURL1337x, 5*time.Second, torrentCache, cinemataClient, config.CacheAgeTorrents),
+		"ibit":  imdb2torrent.NewIbitClient(mainCtx, config.BaseURLibit, 5*time.Second, torrentCache, config.CacheAgeTorrents),
+	}
+	searchClient := imdb2torrent.NewClient(mainCtx, siteClients, 5*time.Second)
 	conversionClient, err := realdebrid.NewClient(mainCtx, 5*time.Second, tokenCache, availabilityCache, config.CacheAgeRD, config.BaseURLrd, config.ExtraHeadersRD)
 	if err != nil {
 		log.WithError(err).Fatal("Couldn't create RealDebrid client")

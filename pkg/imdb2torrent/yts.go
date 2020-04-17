@@ -35,7 +35,7 @@ type ytsClient struct {
 	cacheAge   time.Duration
 }
 
-func newYTSclient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache, cacheAge time.Duration) ytsClient {
+func NewYTSclient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache, cacheAge time.Duration) ytsClient {
 	return ytsClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{

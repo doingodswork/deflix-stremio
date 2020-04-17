@@ -24,9 +24,10 @@ type tpbClient struct {
 	httpClient *http.Client
 	cache      *fastcache.Cache
 	cacheAge   time.Duration
+	retries    int
 }
 
-func newTPBclient(ctx context.Context, baseURL, socksProxyAddr string, timeout time.Duration, cache *fastcache.Cache, cacheAge time.Duration) (tpbClient, error) {
+func NewTPBclient(ctx context.Context, baseURL, socksProxyAddr string, timeout time.Duration, cache *fastcache.Cache, cacheAge time.Duration, retries int) (tpbClient, error) {
 	// Using a SOCKS5 proxy allows us to make requests to TPB via the TOR network
 	var httpClient *http.Client
 	if socksProxyAddr != "" {
@@ -55,11 +56,12 @@ func newTPBclient(ctx context.Context, baseURL, socksProxyAddr string, timeout t
 		httpClient: httpClient,
 		cache:      cache,
 		cacheAge:   cacheAge,
+		retries:    retries,
 	}, nil
 }
 
 func (c tpbClient) Check(ctx context.Context, imdbID string) ([]Result, error) {
-	return c.checkAttempts(ctx, imdbID, 1)
+	return c.checkAttempts(ctx, imdbID, 1+c.retries)
 }
 
 // check scrapes TPB to find torrents for the given IMDb ID.

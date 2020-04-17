@@ -26,7 +26,7 @@ type leetxClient struct {
 	cacheAge       time.Duration
 }
 
-func newLeetxclient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache, cinemataClient cinemata.Client, cacheAge time.Duration) leetxClient {
+func NewLeetxclient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache, cinemataClient cinemata.Client, cacheAge time.Duration) leetxClient {
 	return leetxClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{

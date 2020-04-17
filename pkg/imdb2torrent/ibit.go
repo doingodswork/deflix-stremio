@@ -30,7 +30,7 @@ type ibitClient struct {
 	cacheAge   time.Duration
 }
 
-func newIbitClient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache, cacheAge time.Duration) ibitClient {
+func NewIbitClient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache, cacheAge time.Duration) ibitClient {
 	return ibitClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{
