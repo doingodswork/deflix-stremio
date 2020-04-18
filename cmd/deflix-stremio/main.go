@@ -35,7 +35,7 @@ var manifest = stremio.Manifest{
 	Version:     version,
 
 	ResourceItems: []stremio.ResourceItem{
-		stremio.ResourceItem{
+		{
 			Name:  "stream",
 			Types: []string{"movie"},
 			// Not required as long as we define them globally in the manifest
