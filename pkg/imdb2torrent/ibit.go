@@ -223,3 +223,7 @@ func (c ibitClient) Check(ctx context.Context, imdbID string) ([]Result, error) 
 
 	return results, nil
 }
+
+func (c ibitClient) QuickSkip() bool {
+	return true
+}

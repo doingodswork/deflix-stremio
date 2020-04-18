@@ -232,6 +232,10 @@ func (c leetxClient) Check(ctx context.Context, imdbID string) ([]Result, error)
 	return results, nil
 }
 
+func (c leetxClient) QuickSkip() bool {
+	return false
+}
+
 func (c leetxClient) getDoc(ctx context.Context, url string) (*goquery.Document, error) {
 	res, err := c.httpClient.Get(url)
 	if err != nil {

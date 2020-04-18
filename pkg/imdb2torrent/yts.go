@@ -131,3 +131,7 @@ func (c ytsClient) Check(ctx context.Context, imdbID string) ([]Result, error) {
 
 	return results, nil
 }
+
+func (c ytsClient) QuickSkip() bool {
+	return false
+}

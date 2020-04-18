@@ -19,6 +19,7 @@ var (
 
 type MagnetSearcher interface {
 	Check(ctx context.Context, imdbID string) ([]Result, error)
+	QuickSkip() bool
 }
 
 type Client struct {
@@ -48,6 +49,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 
 	// Use a single timer that we can stop later, because with `case time.After()` ther will be lots of timers that won't be GCed.
 	timer := time.NewTimer(c.timeout)
+	quickSkipTimer := time.NewTimer(2 * time.Second)
 	for k, v := range c.siteClients {
 		// Note: Let's not close the channels in the senders, as it would make the receiver's code more complex. The GC takes care of that.
 		go func(clientName string, siteClient MagnetSearcher) {
@@ -68,12 +70,16 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 					siteResChan <- results
 				}
 			}()
+			timeoutChan := timer.C
+			if siteClient.QuickSkip() {
+				timeoutChan = quickSkipTimer.C
+			}
 			select {
 			case res := <-siteResChan:
 				resChan <- res
 			case err := <-siteErrChan:
 				errChan <- err
-			case <-timer.C:
+			case <-timeoutChan:
 				siteLogger.Warn("Finding torrents timed out. It will continue to run in the background.")
 				resChan <- nil
 			}
@@ -99,6 +105,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 		}
 	}
 	timer.Stop()
+	quickSkipTimer.Stop()
 
 	returnErrors := len(errs) == clientCount
 

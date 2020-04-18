@@ -181,3 +181,7 @@ func (c tpbClient) Check(ctx context.Context, imdbID string) ([]Result, error) {
 
 	return results, nil
 }
+
+func (c tpbClient) QuickSkip() bool {
+	return false
+}
