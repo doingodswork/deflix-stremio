@@ -75,7 +75,7 @@ Usage of deflix-stremio:
   -baseURLrd string
         Base URL for RealDebrid (default "https://api.real-debrid.com")
   -baseURLtpb string
-        Base URL for TPB (default "https://thepiratebay.org")
+        Base URL for TPB (default "https://apibay.org")
   -baseURLyts string
         Base URL for YTS (default "https://yts.mx")
   -bindAddr string
