@@ -1,4 +1,4 @@
-package proxy
+package imdb2torrent
 
 import (
 	"fmt"
@@ -10,8 +10,8 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
-func NewHTTPclient(timeout time.Duration, socksProxyAddr string) (*http.Client, error) {
-	dialer, err := proxy.SOCKS5("tcp", socksProxyAddr, nil, proxy.Direct)
+func newSOCKS5httpClient(timeout time.Duration, socks5ProxyAddr string) (*http.Client, error) {
+	dialer, err := proxy.SOCKS5("tcp", socks5ProxyAddr, nil, proxy.Direct)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't create SOCKS5 dialer: %v", err)
 	}

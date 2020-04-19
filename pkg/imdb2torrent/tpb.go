@@ -14,7 +14,6 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/doingodswork/deflix-stremio/pkg/cinemata"
-	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent/proxy"
 )
 
 var (
@@ -68,7 +67,7 @@ func NewTPBclient(ctx context.Context, opts TPBclientOptions, cache *fastcache.C
 	var httpClient *http.Client
 	if opts.SocksProxyAddr != "" {
 		var err error
-		if httpClient, err = proxy.NewHTTPclient(opts.Timeout, opts.SocksProxyAddr); err != nil {
+		if httpClient, err = newSOCKS5httpClient(opts.Timeout, opts.SocksProxyAddr); err != nil {
 			return tpbClient{}, fmt.Errorf("Couldn't create HTTP client with SOCKS5 proxy: %v", err)
 		}
 	} else {
