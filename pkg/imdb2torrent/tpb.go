@@ -5,17 +5,16 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/http/cookiejar"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
-	"github.com/doingodswork/deflix-stremio/pkg/cinemata"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
-	"golang.org/x/net/proxy"
-	"golang.org/x/net/publicsuffix"
+
+	"github.com/doingodswork/deflix-stremio/pkg/cinemata"
+	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent/proxy"
 )
 
 var (
@@ -68,20 +67,9 @@ func NewTPBclient(ctx context.Context, opts TPBclientOptions, cache *fastcache.C
 	// Using a SOCKS5 proxy allows us to make requests to TPB via the TOR network
 	var httpClient *http.Client
 	if opts.SocksProxyAddr != "" {
-		dialer, err := proxy.SOCKS5("tcp", opts.SocksProxyAddr, nil, proxy.Direct)
-		if err != nil {
-			return tpbClient{}, fmt.Errorf("Couldn't create SOCKS5 dialer: %v", err)
-		}
-		jar, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
-		if err != nil {
-			return tpbClient{}, fmt.Errorf("Couldn't create cookie jar: %v", err)
-		}
-		httpClient = &http.Client{
-			Transport: &http.Transport{
-				Dial: dialer.Dial,
-			},
-			Jar:     jar,
-			Timeout: opts.Timeout,
+		var err error
+		if httpClient, err = proxy.NewHTTPclient(opts.Timeout, opts.SocksProxyAddr); err != nil {
+			return tpbClient{}, fmt.Errorf("Couldn't create HTTP client with SOCKS5 proxy: %v", err)
 		}
 	} else {
 		httpClient = &http.Client{
