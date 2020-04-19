@@ -86,7 +86,7 @@ func NewTPBclient(ctx context.Context, opts TPBclientOptions, cache *fastcache.C
 
 // Check cals the TPB API to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c tpbClient) Check(ctx context.Context, imdbID string) ([]Result, error) {
+func (c tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 	logFields := log.Fields{
 		"imdbID":      imdbID,
 		"torrentSite": "TPB",
@@ -191,6 +191,6 @@ func (c tpbClient) Check(ctx context.Context, imdbID string) ([]Result, error) {
 	return results, nil
 }
 
-func (c tpbClient) QuickSkip() bool {
+func (c tpbClient) IsSlow() bool {
 	return false
 }

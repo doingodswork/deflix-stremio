@@ -67,7 +67,7 @@ func NewYTSclient(ctx context.Context, opts YTSclientOptions, cache *fastcache.C
 
 // Check uses YTS' API to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c ytsClient) Check(ctx context.Context, imdbID string) ([]Result, error) {
+func (c ytsClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 	logFields := log.Fields{
 		"imdbID":      imdbID,
 		"torrentSite": "YTS",
@@ -152,6 +152,6 @@ func (c ytsClient) Check(ctx context.Context, imdbID string) ([]Result, error) {
 	return results, nil
 }
 
-func (c ytsClient) QuickSkip() bool {
+func (c ytsClient) IsSlow() bool {
 	return false
 }

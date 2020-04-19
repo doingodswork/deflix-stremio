@@ -18,8 +18,8 @@ var (
 )
 
 type MagnetSearcher interface {
-	Check(ctx context.Context, imdbID string) ([]Result, error)
-	QuickSkip() bool
+	Find(ctx context.Context, imdbID string) ([]Result, error)
+	IsSlow() bool
 }
 
 type Client struct {
@@ -59,7 +59,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 			siteErrChan := make(chan error)
 			go func() {
 				siteStart := time.Now()
-				results, err := siteClient.Check(ctx, imdbID)
+				results, err := siteClient.Find(ctx, imdbID)
 				if err != nil {
 					siteLogger.WithError(err).Warn("Couldn't find torrents")
 					siteErrChan <- err
@@ -71,7 +71,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 				}
 			}()
 			timeoutChan := timer.C
-			if siteClient.QuickSkip() {
+			if siteClient.IsSlow() {
 				timeoutChan = quickSkipTimer.C
 			}
 			select {

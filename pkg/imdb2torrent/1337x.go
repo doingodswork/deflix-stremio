@@ -61,7 +61,7 @@ func NewLeetxClient(ctx context.Context, opts LeetxClientOptions, cache *fastcac
 // Check scrapes 1337x to find torrents for the given IMDb ID.
 // It uses the Stremio Cinemata remote addon to get a movie name for a given IMDb ID, so it can search 1337x with the name.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c leetxClient) Check(ctx context.Context, imdbID string) ([]Result, error) {
+func (c leetxClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 	logFields := log.Fields{
 		"imdbID":      imdbID,
 		"torrentSite": "1337x",
@@ -252,7 +252,7 @@ func (c leetxClient) Check(ctx context.Context, imdbID string) ([]Result, error)
 	return results, nil
 }
 
-func (c leetxClient) QuickSkip() bool {
+func (c leetxClient) IsSlow() bool {
 	return false
 }
 

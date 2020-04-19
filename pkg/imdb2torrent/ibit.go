@@ -64,7 +64,7 @@ func NewIbitClient(ctx context.Context, opts IbitClientOptions, cache *fastcache
 
 // Check scrapes ibit to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c ibitClient) Check(ctx context.Context, imdbID string) ([]Result, error) {
+func (c ibitClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 	// Lock for all requests to ibit, because of rate limiting
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -244,6 +244,6 @@ func (c ibitClient) Check(ctx context.Context, imdbID string) ([]Result, error) 
 	return results, nil
 }
 
-func (c ibitClient) QuickSkip() bool {
+func (c ibitClient) IsSlow() bool {
 	return true
 }

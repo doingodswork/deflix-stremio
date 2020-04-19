@@ -346,12 +346,12 @@ func createStatusHandler(mainCtx context.Context, magnetSearchers map[string]imd
 		for name, client := range magnetSearchers {
 			go func(goName string, goClient imdb2torrent.MagnetSearcher) {
 				defer wg.Done()
-				if goClient.QuickSkip() {
+				if goClient.IsSlow() {
 					res += "\t\t" + `"` + goName + `": "quick skip",` + "\n"
 					return
 				}
 				startSearch := time.Now()
-				results, err := goClient.Check(rCtx, imdbID)
+				results, err := goClient.Find(rCtx, imdbID)
 				lock.Lock()
 				defer lock.Unlock()
 				res += "\t\t" + `"` + goName + `": {` + "\n"
