@@ -62,6 +62,9 @@ var (
 	cinemataCache     *fastcache.Cache
 )
 
+// Timeout used for HTTP requests in the cinemata, imdb2torrent and realdebrid clients.
+var timeout = 5 * time.Second
+
 func init() {
 	// Timeout for global default HTTP client (for when using `http.Get()`)
 	http.DefaultClient.Timeout = 5 * time.Second
@@ -109,20 +112,24 @@ func main() {
 
 	// Create clients
 
-	timeout := 5 * time.Second
-	cinemataClient := cinemata.NewClient(mainCtx, timeout, cinemataCache)
-	tpbClient, err := imdb2torrent.NewTPBclient(mainCtx, config.BaseURLtpb, config.SocksProxyAddrTPB, timeout, torrentCache, config.CacheAgeTorrents, cinemataClient)
+	ytsClientOpts := imdb2torrent.NewYTSclientOpts(config.BaseURLyts, timeout, config.CacheAgeTorrents)
+	tpbClientOpts := imdb2torrent.NewTPBclientOpts(config.BaseURLtpb, config.SocksProxyAddrTPB, timeout, config.CacheAgeTorrents)
+	leetxClientOpts := imdb2torrent.NewLeetxClientOpts(config.BaseURL1337x, timeout, config.CacheAgeTorrents)
+	ibitClientOpts := imdb2torrent.NewIbitClientOpts(config.BaseURLibit, timeout, config.CacheAgeTorrents)
+	rdClientOpts := realdebrid.NewClientOpts(config.BaseURLrd, timeout, config.CacheAgeRD, config.ExtraHeadersRD)
+	cinemataClient := cinemata.NewClient(mainCtx, cinemata.DefaultClientOpts, cinemataCache)
+	tpbClient, err := imdb2torrent.NewTPBclient(mainCtx, tpbClientOpts, torrentCache, cinemataClient)
 	if err != nil {
 		log.WithError(err).Fatal("Couldn't create TPB client")
 	}
 	siteClients := map[string]imdb2torrent.MagnetSearcher{
-		"YTS":   imdb2torrent.NewYTSclient(mainCtx, config.BaseURLyts, timeout, torrentCache, config.CacheAgeTorrents),
+		"YTS":   imdb2torrent.NewYTSclient(mainCtx, ytsClientOpts, torrentCache),
 		"TPB":   tpbClient,
-		"1337X": imdb2torrent.NewLeetxclient(mainCtx, config.BaseURL1337x, timeout, torrentCache, cinemataClient, config.CacheAgeTorrents),
-		"ibit":  imdb2torrent.NewIbitClient(mainCtx, config.BaseURLibit, timeout, torrentCache, config.CacheAgeTorrents),
+		"1337X": imdb2torrent.NewLeetxClient(mainCtx, leetxClientOpts, torrentCache, cinemataClient),
+		"ibit":  imdb2torrent.NewIbitClient(mainCtx, ibitClientOpts, torrentCache),
 	}
 	searchClient := imdb2torrent.NewClient(mainCtx, siteClients, timeout)
-	conversionClient, err := realdebrid.NewClient(mainCtx, timeout, tokenCache, availabilityCache, config.CacheAgeRD, config.BaseURLrd, config.ExtraHeadersRD)
+	conversionClient, err := realdebrid.NewClient(mainCtx, rdClientOpts, tokenCache, availabilityCache)
 	if err != nil {
 		log.WithError(err).Fatal("Couldn't create RealDebrid client")
 	}

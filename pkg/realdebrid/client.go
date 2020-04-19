@@ -17,33 +17,55 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+type ClientOptions struct {
+	BaseURL      string
+	Timeout      time.Duration
+	CacheAge     time.Duration
+	ExtraHeaders []string
+}
+
+func NewClientOpts(baseURL string, timeout, cacheAge time.Duration, extraHeaders []string) ClientOptions {
+	return ClientOptions{
+		BaseURL:      baseURL,
+		Timeout:      timeout,
+		CacheAge:     cacheAge,
+		ExtraHeaders: extraHeaders,
+	}
+}
+
+var DefaultClientOpts = ClientOptions{
+	BaseURL:  "https://api.real-debrid.com",
+	Timeout:  5 * time.Second,
+	CacheAge: 24 * time.Hour,
+}
+
 type Client struct {
+	baseURL    string
 	httpClient *http.Client
 	// For API token validity
 	tokenCache *fastcache.Cache
 	// For info_hash instant availability
 	availabilityCache *fastcache.Cache
 	cacheAge          time.Duration
-	rdBaseURL         string
 	extraHeaders      map[string]string
 }
 
-func NewClient(ctx context.Context, timeout time.Duration, tokenCache, availabilityCache *fastcache.Cache, cacheAge time.Duration, rdBaseURL string, extraHeaders []string) (Client, error) {
+func NewClient(ctx context.Context, opts ClientOptions, tokenCache, availabilityCache *fastcache.Cache) (Client, error) {
 	// Precondition check
-	if rdBaseURL == "" {
-		return Client{}, errors.New("rdBaseURL parameter must not be empty")
+	if opts.BaseURL == "" {
+		return Client{}, errors.New("opts.BaseURL must not be empty")
 	}
-	for _, extraHeader := range extraHeaders {
+	for _, extraHeader := range opts.ExtraHeaders {
 		if extraHeader != "" {
 			colonIndex := strings.Index(extraHeader, ":")
 			if colonIndex <= 0 || colonIndex == len(extraHeader)-1 {
-				return Client{}, errors.New("extraHeaders elements must have a format like \"X-Foo: bar\"")
+				return Client{}, errors.New("opts.ExtraHeaders elements must have a format like \"X-Foo: bar\"")
 			}
 		}
 	}
 
-	extraHeaderMap := make(map[string]string, len(extraHeaders))
-	for _, extraHeader := range extraHeaders {
+	extraHeaderMap := make(map[string]string, len(opts.ExtraHeaders))
+	for _, extraHeader := range opts.ExtraHeaders {
 		if extraHeader != "" {
 			extraHeaderParts := strings.SplitN(extraHeader, ":", 2)
 			extraHeaderMap[extraHeaderParts[0]] = extraHeaderParts[1]
@@ -51,13 +73,13 @@ func NewClient(ctx context.Context, timeout time.Duration, tokenCache, availabil
 	}
 
 	return Client{
+		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
-			Timeout: timeout,
+			Timeout: opts.Timeout,
 		},
 		tokenCache:        tokenCache,
 		availabilityCache: availabilityCache,
-		cacheAge:          cacheAge,
-		rdBaseURL:         rdBaseURL,
+		cacheAge:          opts.CacheAge,
 		extraHeaders:      extraHeaderMap,
 	}, nil
 }
@@ -81,7 +103,7 @@ func (c Client) TestToken(ctx context.Context, apiToken string) error {
 		}
 	}
 
-	resBytes, err := c.get(ctx, c.rdBaseURL+"/rest/1.0/user", apiToken)
+	resBytes, err := c.get(ctx, c.baseURL+"/rest/1.0/user", apiToken)
 	if err != nil {
 		return fmt.Errorf("Couldn't fetch user info from real-debrid.com with the provided token: %v", err)
 	}
@@ -109,7 +131,7 @@ func (c Client) CheckInstantAvailability(ctx context.Context, apiToken string, i
 		return nil
 	}
 
-	url := c.rdBaseURL + "/rest/1.0/torrents/instantAvailability"
+	url := c.baseURL + "/rest/1.0/torrents/instantAvailability"
 	// Only check the ones of which we don't know that they're valid (or which our knowledge that they're valid is more than 24 hours old).
 	// We don't cache unavailable ones, because that might change often!
 	var result []string
@@ -172,7 +194,7 @@ func (c Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, re
 	logger.Debug("Adding torrent to RealDebrid...")
 	data := url.Values{}
 	data.Set("magnet", magnetURL)
-	resBytes, err := c.post(ctx, c.rdBaseURL+"/rest/1.0/torrents/addMagnet", apiToken, data)
+	resBytes, err := c.post(ctx, c.baseURL+"/rest/1.0/torrents/addMagnet", apiToken, data)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't add torrent to RealDebrid: %v", err)
 	}
@@ -183,7 +205,7 @@ func (c Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, re
 
 	logger.Debug("Checking torrent info...")
 	// Use configured base URL, which could be a proxy that we want to go through
-	rdTorrentURL, err = replaceURL(rdTorrentURL, c.rdBaseURL)
+	rdTorrentURL, err = replaceURL(rdTorrentURL, c.baseURL)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't replace URL which was retrieved from an HTML link: %v", err)
 	}
@@ -211,7 +233,7 @@ func (c Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, re
 	logger.Debug("Adding torrent to RealDebrid downloads...")
 	data = url.Values{}
 	data.Set("files", fileID)
-	_, err = c.post(ctx, c.rdBaseURL+"/rest/1.0/torrents/selectFiles/"+torrentID, apiToken, data)
+	_, err = c.post(ctx, c.baseURL+"/rest/1.0/torrents/selectFiles/"+torrentID, apiToken, data)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't add torrent to RealDebrid downloads: %v", err)
 	}
@@ -283,7 +305,7 @@ func (c Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, re
 	if remote {
 		data.Set("remote", "1")
 	}
-	resBytes, err = c.post(ctx, c.rdBaseURL+"/rest/1.0/unrestrict/link", apiToken, data)
+	resBytes, err = c.post(ctx, c.baseURL+"/rest/1.0/unrestrict/link", apiToken, data)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't unrestrict link: %v", err)
 	}

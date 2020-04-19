@@ -20,6 +20,26 @@ import (
 
 var magnet2InfoHashRegexIbit = regexp.MustCompile(`btih:.+?\\x26dn=`) // The "?" makes the ".+" non-greedy
 
+type IbitClientOptions struct {
+	BaseURL  string
+	Timeout  time.Duration
+	CacheAge time.Duration
+}
+
+func NewIbitClientOpts(baseURL string, timeout, cacheAge time.Duration) IbitClientOptions {
+	return IbitClientOptions{
+		BaseURL:  baseURL,
+		Timeout:  timeout,
+		CacheAge: cacheAge,
+	}
+}
+
+var DefaultIbitClientOpts = IbitClientOptions{
+	BaseURL:  "https://ibit.am",
+	Timeout:  5 * time.Second,
+	CacheAge: 24 * time.Hour,
+}
+
 var _ MagnetSearcher = (*ibitClient)(nil)
 
 type ibitClient struct {
@@ -30,15 +50,15 @@ type ibitClient struct {
 	cacheAge   time.Duration
 }
 
-func NewIbitClient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache, cacheAge time.Duration) ibitClient {
+func NewIbitClient(ctx context.Context, opts IbitClientOptions, cache *fastcache.Cache) ibitClient {
 	return ibitClient{
-		baseURL: baseURL,
+		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
-			Timeout: timeout,
+			Timeout: opts.Timeout,
 		},
 		cache:    cache,
 		lock:     &sync.Mutex{},
-		cacheAge: cacheAge,
+		cacheAge: opts.CacheAge,
 	}
 }
 

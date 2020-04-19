@@ -13,11 +13,26 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const baseURL = "https://v3-cinemeta.strem.io"
-
 type movie struct {
 	Name string
 	Year int
+}
+
+type ClientOptions struct {
+	BaseURL string
+	Timeout time.Duration
+}
+
+func NewClientOpts(baseURL string, timeout time.Duration) ClientOptions {
+	return ClientOptions{
+		BaseURL: baseURL,
+		Timeout: timeout,
+	}
+}
+
+var DefaultClientOpts = ClientOptions{
+	BaseURL: "https://v3-cinemeta.strem.io",
+	Timeout: 5 * time.Second,
 }
 
 type Client struct {
@@ -26,11 +41,11 @@ type Client struct {
 	cache      *fastcache.Cache
 }
 
-func NewClient(ctx context.Context, timeout time.Duration, cache *fastcache.Cache) Client {
+func NewClient(ctx context.Context, opts ClientOptions, cache *fastcache.Cache) Client {
 	return Client{
-		baseURL: baseURL,
+		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
-			Timeout: timeout,
+			Timeout: opts.Timeout,
 		},
 		cache: cache,
 	}

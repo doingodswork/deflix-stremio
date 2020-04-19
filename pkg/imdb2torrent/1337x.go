@@ -16,6 +16,26 @@ import (
 	"github.com/doingodswork/deflix-stremio/pkg/cinemata"
 )
 
+type LeetxClientOptions struct {
+	BaseURL  string
+	Timeout  time.Duration
+	CacheAge time.Duration
+}
+
+func NewLeetxClientOpts(baseURL string, timeout, cacheAge time.Duration) LeetxClientOptions {
+	return LeetxClientOptions{
+		BaseURL:  baseURL,
+		Timeout:  timeout,
+		CacheAge: cacheAge,
+	}
+}
+
+var DefaultLeetxClientOpts = LeetxClientOptions{
+	BaseURL:  "https://1337x.to",
+	Timeout:  5 * time.Second,
+	CacheAge: 24 * time.Hour,
+}
+
 var _ MagnetSearcher = (*leetxClient)(nil)
 
 type leetxClient struct {
@@ -26,15 +46,15 @@ type leetxClient struct {
 	cacheAge       time.Duration
 }
 
-func NewLeetxclient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache, cinemataClient cinemata.Client, cacheAge time.Duration) leetxClient {
+func NewLeetxClient(ctx context.Context, opts LeetxClientOptions, cache *fastcache.Cache, cinemataClient cinemata.Client) leetxClient {
 	return leetxClient{
-		baseURL: baseURL,
+		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
-			Timeout: timeout,
+			Timeout: opts.Timeout,
 		},
 		cache:          cache,
 		cinemataClient: cinemataClient,
-		cacheAge:       cacheAge,
+		cacheAge:       opts.CacheAge,
 	}
 }
 

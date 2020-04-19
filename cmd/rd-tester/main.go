@@ -43,7 +43,9 @@ func main() {
 		}
 	}
 
-	rdClient, err := realdebrid.NewClient(ctx, 5*time.Second, nil, nil, time.Duration(0), *baseURL, extraHeaderSlice)
+	rdClientOpts := realdebrid.NewClientOpts(*baseURL, 5*time.Second, time.Duration(0), extraHeaderSlice)
+	// Note: We can pass nil for the cache parameters here because we don't call a method that uses the caches.
+	rdClient, err := realdebrid.NewClient(ctx, rdClientOpts, nil, nil)
 	if err != nil {
 		log.Fatalf("Couldn't create RD client: %v", err)
 	}

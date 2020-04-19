@@ -32,6 +32,28 @@ var (
 	}
 )
 
+type TPBclientOptions struct {
+	BaseURL        string
+	SocksProxyAddr string
+	Timeout        time.Duration
+	CacheAge       time.Duration
+}
+
+func NewTPBclientOpts(baseURL, socksProxyAddr string, timeout, cacheAge time.Duration) TPBclientOptions {
+	return TPBclientOptions{
+		BaseURL:        baseURL,
+		SocksProxyAddr: socksProxyAddr,
+		Timeout:        timeout,
+		CacheAge:       cacheAge,
+	}
+}
+
+var DefaultTPBclientOpts = TPBclientOptions{
+	BaseURL:  "https://apibay.org",
+	Timeout:  5 * time.Second,
+	CacheAge: 24 * time.Hour,
+}
+
 var _ MagnetSearcher = (*tpbClient)(nil)
 
 type tpbClient struct {
@@ -42,11 +64,11 @@ type tpbClient struct {
 	cinemataClient cinemata.Client
 }
 
-func NewTPBclient(ctx context.Context, baseURL, socksProxyAddr string, timeout time.Duration, cache *fastcache.Cache, cacheAge time.Duration, cinemataClient cinemata.Client) (tpbClient, error) {
+func NewTPBclient(ctx context.Context, opts TPBclientOptions, cache *fastcache.Cache, cinemataClient cinemata.Client) (tpbClient, error) {
 	// Using a SOCKS5 proxy allows us to make requests to TPB via the TOR network
 	var httpClient *http.Client
-	if socksProxyAddr != "" {
-		dialer, err := proxy.SOCKS5("tcp", socksProxyAddr, nil, proxy.Direct)
+	if opts.SocksProxyAddr != "" {
+		dialer, err := proxy.SOCKS5("tcp", opts.SocksProxyAddr, nil, proxy.Direct)
 		if err != nil {
 			return tpbClient{}, fmt.Errorf("Couldn't create SOCKS5 dialer: %v", err)
 		}
@@ -59,18 +81,18 @@ func NewTPBclient(ctx context.Context, baseURL, socksProxyAddr string, timeout t
 				Dial: dialer.Dial,
 			},
 			Jar:     jar,
-			Timeout: timeout,
+			Timeout: opts.Timeout,
 		}
 	} else {
 		httpClient = &http.Client{
-			Timeout: timeout,
+			Timeout: opts.Timeout,
 		}
 	}
 	return tpbClient{
-		baseURL:        baseURL,
+		baseURL:        opts.BaseURL,
 		httpClient:     httpClient,
 		cache:          cache,
-		cacheAge:       cacheAge,
+		cacheAge:       opts.CacheAge,
 		cinemataClient: cinemataClient,
 	}, nil
 }

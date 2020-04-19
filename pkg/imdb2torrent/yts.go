@@ -25,6 +25,26 @@ var (
 		"udp://tracker.leechers-paradise.org:6969"}
 )
 
+type YTSclientOptions struct {
+	BaseURL  string
+	Timeout  time.Duration
+	CacheAge time.Duration
+}
+
+func NewYTSclientOpts(baseURL string, timeout, cacheAge time.Duration) YTSclientOptions {
+	return YTSclientOptions{
+		BaseURL:  baseURL,
+		Timeout:  timeout,
+		CacheAge: cacheAge,
+	}
+}
+
+var DefaultYTSclientOpts = YTSclientOptions{
+	BaseURL:  "https://yts.mx",
+	Timeout:  5 * time.Second,
+	CacheAge: 24 * time.Hour,
+}
+
 var _ MagnetSearcher = (*ytsClient)(nil)
 
 type ytsClient struct {
@@ -34,14 +54,14 @@ type ytsClient struct {
 	cacheAge   time.Duration
 }
 
-func NewYTSclient(ctx context.Context, baseURL string, timeout time.Duration, cache *fastcache.Cache, cacheAge time.Duration) ytsClient {
+func NewYTSclient(ctx context.Context, opts YTSclientOptions, cache *fastcache.Cache) ytsClient {
 	return ytsClient{
-		baseURL: baseURL,
+		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
-			Timeout: timeout,
+			Timeout: opts.Timeout,
 		},
 		cache:    cache,
-		cacheAge: cacheAge,
+		cacheAge: opts.CacheAge,
 	}
 }
 

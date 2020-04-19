@@ -88,7 +88,8 @@ func createTokenMiddleware(ctx context.Context, conversionClient realdebrid.Clie
 
 func createLoggingMiddleware(ctx context.Context, cinemataCache *fastcache.Cache) func(http.Handler) http.Handler {
 	// Only 1 second to allow for cache retrieval. The data should be cached from the TPB or 1337x client.
-	cinemataClient := cinemata.NewClient(ctx, 1*time.Second, cinemataCache)
+	cinemataClientOpts := cinemata.NewClientOpts(cinemata.DefaultClientOpts.BaseURL, 1*time.Second)
+	cinemataClient := cinemata.NewClient(ctx, cinemataClientOpts, cinemataCache)
 	return func(before http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			rCtx := r.Context()
