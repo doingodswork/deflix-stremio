@@ -146,10 +146,13 @@ func (c Client) GetMagnetSearchers() map[string]MagnetSearcher {
 }
 
 type Result struct {
+	// Movie title, e.g. "Big Buck Bunny"
 	Title string
-	// For example "720p" or "720p (web)"
-	Quality   string
-	InfoHash  string
+	// Video resolution and source, e.g. "720p" or "720p (web)"
+	Quality string
+	// Torrent info_hash
+	InfoHash string
+	// MagnetURL, usually containing the info_hash, torrent name and a list of torrent trackers
 	MagnetURL string
 }
 

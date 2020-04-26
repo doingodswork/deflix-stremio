@@ -8,12 +8,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/VictoriaMetrics/fastcache"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 )
 
-type movie struct {
+type Movie struct {
 	Name string
 	Year int
 }
@@ -38,10 +37,10 @@ var DefaultClientOpts = ClientOptions{
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
-	cache      *fastcache.Cache
+	cache      Cache
 }
 
-func NewClient(ctx context.Context, opts ClientOptions, cache *fastcache.Cache) Client {
+func NewClient(ctx context.Context, opts ClientOptions, cache Cache) Client {
 	return Client{
 		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
@@ -55,17 +54,17 @@ func (c Client) GetMovieNameYear(ctx context.Context, imdbID string) (string, in
 	logger := log.WithContext(ctx).WithField("imdbID", imdbID)
 
 	// Check cache first
-	if movieGob, ok := c.cache.HasGet(nil, []byte(imdbID)); ok {
-		movie, created, err := fromCacheEntry(ctx, movieGob)
-		if err != nil {
-			logger.WithError(err).Error("Couldn't decode movie")
-		} else if time.Since(created) < (24 * time.Hour * 30) {
-			logger.Debug("Hit cache for movie, returning result")
-			return movie.Name, movie.Year, nil
-		} else {
-			expiredSince := time.Since(created.Add(24 * time.Hour * 30))
-			logger.WithField("expiredSince", expiredSince).Debug("Hit cache for movie, but entry is expired")
-		}
+	movie, created, found, err := c.cache.Get(imdbID)
+	if err != nil {
+		logger.WithError(err).Error("Couldn't decode movie")
+	} else if !found {
+		logger.Debug("Movie not found in cache")
+	} else if time.Since(created) > (24 * time.Hour * 30) { // 30 days
+		expiredSince := time.Since(created.Add(24 * time.Hour * 30))
+		logger.WithField("expiredSince", expiredSince).Debug("Hit cache for movie, but item is expired")
+	} else {
+		logger.Debug("Hit cache for movie, returning result")
+		return movie.Name, movie.Year, nil
 	}
 
 	reqUrl := c.baseURL + "/meta/movie/" + imdbID + ".json"
@@ -96,14 +95,12 @@ func (c Client) GetMovieNameYear(ctx context.Context, imdbID string) (string, in
 	}
 
 	// Fill cache
-	movie := movie{
+	movie = Movie{
 		Name: movieName,
 		Year: movieYearInt,
 	}
-	if movieGob, err := newCacheEntry(ctx, movie); err != nil {
-		logger.WithError(err).WithField("cache", "movie").Error("Couldn't create cache entry for movie")
-	} else {
-		c.cache.Set([]byte(imdbID), movieGob)
+	if err = c.cache.Set(imdbID, movie); err != nil {
+		logger.WithError(err).WithField("cache", "movie").Error("Couldn't cache movie")
 	}
 
 	return movieName, movieYearInt, nil

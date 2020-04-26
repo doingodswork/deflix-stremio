@@ -1,39 +1,52 @@
 package imdb2torrent
 
 import (
-	"bytes"
-	"context"
-	"encoding/gob"
-	"fmt"
+	"sync"
 	"time"
 )
 
-type cacheEntry struct {
-	Created time.Time
+// CacheItem combines Result objects and a creation time in a single struct.
+// This can be useful for implementing the Cache interface, but is not necessarily required.
+// See the InMemoryCache example implementation of the Cache interface for its usage.
+type CacheItem struct {
 	Results []Result
+	Created time.Time
 }
 
-// NewCacheEntry turns data into a single cacheEntry and returns the cacheEntry's gob-encoded bytes.
-func NewCacheEntry(ctx context.Context, data []Result) ([]byte, error) {
-	entry := cacheEntry{
+// Cache is the interface that the imdb2torrent clients use for caching results.
+// A package user must pass an implementation of this interface.
+// Usually you create a simple wrapper around an existing cache package.
+// An example implementation is the InMemoryCache in this package.
+type Cache interface {
+	Set(key string, results []Result) error
+	Get(key string) ([]Result, time.Time, bool, error)
+}
+
+var _ Cache = (*InMemoryCache)(nil)
+
+// InMemoryCache is an example implementation of the Cache interface.
+// It doesn't persist its data, so it's not suited for production use of the imdb2torrent package.
+type InMemoryCache struct {
+	cache map[string]CacheItem
+	lock  *sync.RWMutex
+}
+
+// Set stores Result objects and the current time in the cache.
+func (c InMemoryCache) Set(key string, results []Result) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.cache[key] = CacheItem{
+		Results: results,
 		Created: time.Now(),
-		Results: data,
 	}
-	writer := bytes.Buffer{}
-	encoder := gob.NewEncoder(&writer)
-	if err := encoder.Encode(entry); err != nil {
-		return nil, fmt.Errorf("Couldn't encode cacheEntry: %v", err)
-	}
-	return writer.Bytes(), nil
+	return nil
 }
 
-// FromCacheEntry turns data via gob-decoding into a cacheEntry and returns its results and creation time.
-func FromCacheEntry(ctx context.Context, data []byte) ([]Result, time.Time, error) {
-	reader := bytes.NewReader(data)
-	decoder := gob.NewDecoder(reader)
-	var entry cacheEntry
-	if err := decoder.Decode(&entry); err != nil {
-		return nil, time.Time{}, fmt.Errorf("Couldn't decode cacheEntry: %v", err)
-	}
-	return entry.Results, entry.Created, nil
+// Get returns Result objects and the time they were cached from the cache.
+// The boolean return value signals if the value was found in the cache.
+func (c InMemoryCache) Get(key string) ([]Result, time.Time, bool, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	cacheItem, found := c.cache[key]
+	return cacheItem.Results, cacheItem.Created, found, nil
 }

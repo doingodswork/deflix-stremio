@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/VictoriaMetrics/fastcache"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 )
@@ -43,14 +42,14 @@ type Client struct {
 	baseURL    string
 	httpClient *http.Client
 	// For API token validity
-	tokenCache *fastcache.Cache
+	tokenCache Cache
 	// For info_hash instant availability
-	availabilityCache *fastcache.Cache
+	availabilityCache Cache
 	cacheAge          time.Duration
 	extraHeaders      map[string]string
 }
 
-func NewClient(ctx context.Context, opts ClientOptions, tokenCache, availabilityCache *fastcache.Cache) (Client, error) {
+func NewClient(ctx context.Context, opts ClientOptions, tokenCache, availabilityCache Cache) (Client, error) {
 	// Precondition check
 	if opts.BaseURL == "" {
 		return Client{}, errors.New("opts.BaseURL must not be empty")
@@ -89,18 +88,18 @@ func (c Client) TestToken(ctx context.Context, apiToken string) error {
 	logger.Debug("Testing token...")
 
 	// Check cache first.
-	// Note: Only when a token is valid a cache entry was created, because a token is probably valid for another 24 hours, while when a token is invalid it's likely that the user makes a payment to RealDebrid to extend his premium status and make his token valid again *within* 24 hours.
-	if tokenGob, ok := c.tokenCache.HasGet(nil, []byte(apiToken)); ok {
-		created, err := fromCacheEntry(ctx, tokenGob)
-		if err != nil {
-			logger.WithError(err).Error("Couldn't decode token cache entry")
-		} else if time.Since(created) < (24 * time.Hour) {
-			logger.Debug("Token cached as valid")
-			return nil
-		} else {
-			expiredSince := time.Since(created.Add(24 * time.Hour))
-			logger.WithField("expiredSince", expiredSince).Debug("Token cached as valid, but entry is expired")
-		}
+	// Note: Only when a token is valid a cache item was created, because a token is probably valid for another 24 hours, while when a token is invalid it's likely that the user makes a payment to RealDebrid to extend his premium status and make his token valid again *within* 24 hours.
+	created, found, err := c.tokenCache.Get(apiToken)
+	if err != nil {
+		logger.WithError(err).Error("Couldn't decode token cache item")
+	} else if !found {
+		logger.Debug("API token not found in cache")
+	} else if time.Since(created) > (24 * time.Hour) {
+		expiredSince := time.Since(created.Add(24 * time.Hour))
+		logger.WithField("expiredSince", expiredSince).Debug("Token cached as valid, but item is expired")
+	} else {
+		logger.Debug("Token cached as valid")
+		return nil
 	}
 
 	resBytes, err := c.get(ctx, c.baseURL+"/rest/1.0/user", apiToken)
@@ -113,11 +112,9 @@ func (c Client) TestToken(ctx context.Context, apiToken string) error {
 
 	logger.Debug("Token OK")
 
-	// Create cache entry
-	if tokenGob, err := newCacheEntry(ctx); err != nil {
-		logger.WithError(err).Error("Couldn't encode token cache entry")
-	} else {
-		c.tokenCache.Set([]byte(apiToken), tokenGob)
+	// Create cache item
+	if err = c.tokenCache.Set(apiToken); err != nil {
+		logger.WithError(err).Error("Couldn't cache API token")
 	}
 
 	return nil
@@ -137,27 +134,24 @@ func (c Client) CheckInstantAvailability(ctx context.Context, apiToken string, i
 	var result []string
 	requestRequired := false
 	for _, infoHash := range infoHashes {
-		if availabilityGob, ok := c.availabilityCache.HasGet(nil, []byte(infoHash)); ok {
-			created, err := fromCacheEntry(ctx, availabilityGob)
-			if err != nil {
-				logger.WithError(err).WithField("infoHash", infoHash).Error("Couldn't decode availability cache entry")
-				requestRequired = true
-				url += "/" + infoHash
-			} else if time.Since(created) < (c.cacheAge) {
-				logger.WithField("infoHash", infoHash).Debug("Availability cached as valid")
-				result = append(result, infoHash)
-			} else {
-				fields := log.Fields{
-					"infoHash":     infoHash,
-					"expiredSince": time.Since(created.Add(c.cacheAge)),
-				}
-				logger.WithFields(fields).Debug("Availability cached as valid, but entry is expired")
-				requestRequired = true
-				url += "/" + infoHash
-			}
-		} else {
+		infoHashLogger := logger.WithField("infoHash", infoHash)
+		created, found, err := c.availabilityCache.Get(infoHash)
+		if err != nil {
+			infoHashLogger.WithError(err).Error("Couldn't decode availability cache item")
 			requestRequired = true
 			url += "/" + infoHash
+		} else if !found {
+			infoHashLogger.Debug("info_hash not found in availability cache")
+			requestRequired = true
+			url += "/" + infoHash
+		} else if time.Since(created) > (c.cacheAge) {
+			expiredSince := time.Since(created.Add(c.cacheAge))
+			infoHashLogger.WithField("expiredSince", expiredSince).Debug("Availability cached as valid, but item is expired")
+			requestRequired = true
+			url += "/" + infoHash
+		} else {
+			infoHashLogger.Debug("Availability cached as valid")
+			result = append(result, infoHash)
 		}
 	}
 
@@ -175,11 +169,9 @@ func (c Client) CheckInstantAvailability(ctx context.Context, apiToken string, i
 					infoHash := key.String()
 					infoHash = strings.ToUpper(infoHash)
 					result = append(result, infoHash)
-					// Create cache entry
-					if availabilityGob, err := newCacheEntry(ctx); err != nil {
-						logger.WithError(err).Error("Couldn't encode availability cache entry")
-					} else {
-						c.availabilityCache.Set([]byte(infoHash), availabilityGob)
+					// Create cache item
+					if err = c.availabilityCache.Set(infoHash); err != nil {
+						logger.WithError(err).Error("Couldn't cache availability")
 					}
 				}
 				return true

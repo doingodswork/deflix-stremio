@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
@@ -86,7 +85,7 @@ func createTokenMiddleware(ctx context.Context, conversionClient realdebrid.Clie
 	}
 }
 
-func createLoggingMiddleware(ctx context.Context, cinemataCache *fastcache.Cache) func(http.Handler) http.Handler {
+func createLoggingMiddleware(ctx context.Context, cinemataCache cinemata.Cache) func(http.Handler) http.Handler {
 	// Only 1 second to allow for cache retrieval. The data should be cached from the TPB or 1337x client.
 	cinemataClientOpts := cinemata.NewClientOpts(cinemata.DefaultClientOpts.BaseURL, 1*time.Second)
 	cinemataClient := cinemata.NewClient(ctx, cinemataClientOpts, cinemataCache)

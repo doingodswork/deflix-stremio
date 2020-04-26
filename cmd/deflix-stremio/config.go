@@ -36,13 +36,11 @@ func parseConfig(ctx context.Context) config {
 
 	// Flags
 	var (
-		bindAddr      = flag.String("bindAddr", "localhost", `Local interface address to bind to. "localhost" only allows access from the local host. "0.0.0.0" binds to all network interfaces.`)
-		port          = flag.Int("port", 8080, "Port to listen on")
-		streamURLaddr = flag.String("streamURLaddr", "http://localhost:8080", "Address to be used in a stream URL that's delivered to Stremio and later used to redirect to RealDebrid")
-		cachePath     = flag.String("cachePath", "", "Path for loading a persisted cache on startup and persisting the current cache in regular intervals. An empty value will lead to 'os.UserCacheDir()+\"/deflix-stremio/\"'.")
-		// We split this number into 5 equal sized caches à 32 MB.
-		// Note: fastcache uses 32 MB as minimum, that's why we use `5*32 MB = 160 MB` as minimum.
-		cacheMaxMB        = flag.Int("cacheMaxMB", 160, "Max number of megabytes to be used for the in-memory cache. Default (and minimum!) is 160 MB.")
+		bindAddr          = flag.String("bindAddr", "localhost", `Local interface address to bind to. "localhost" only allows access from the local host. "0.0.0.0" binds to all network interfaces.`)
+		port              = flag.Int("port", 8080, "Port to listen on")
+		streamURLaddr     = flag.String("streamURLaddr", "http://localhost:8080", "Address to be used in a stream URL that's delivered to Stremio and later used to redirect to RealDebrid")
+		cachePath         = flag.String("cachePath", "", "Path for loading a persisted cache on startup and persisting the current cache in regular intervals. An empty value will lead to 'os.UserCacheDir()+\"/deflix-stremio/\"'.")
+		cacheMaxMB        = flag.Int("cacheMaxMB", 32, "Max number of megabytes to be used for the in-memory torrent cache. Default (and minimum!) is 32 MB.")
 		cacheAgeRD        = flag.Duration("cacheAgeRD", 24*time.Hour, "Max age of cache entries for instant availability responses from RealDebrid. The format must be acceptable by Go's 'time.ParseDuration()', for example \"24h\".")
 		cacheAgeTorrents  = flag.Duration("cacheAgeTorrents", 24*time.Hour, "Max age of cache entries for torrents found per IMDb ID. The format must be acceptable by Go's 'time.ParseDuration()', for example \"24h\".")
 		baseURLyts        = flag.String("baseURLyts", "https://yts.mx", "Base URL for YTS")

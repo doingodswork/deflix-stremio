@@ -8,13 +8,11 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/VictoriaMetrics/fastcache"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -45,12 +43,12 @@ var _ MagnetSearcher = (*ibitClient)(nil)
 type ibitClient struct {
 	baseURL    string
 	httpClient *http.Client
-	cache      *fastcache.Cache
+	cache      Cache
 	lock       *sync.Mutex
 	cacheAge   time.Duration
 }
 
-func NewIbitClient(ctx context.Context, opts IbitClientOptions, cache *fastcache.Cache) ibitClient {
+func NewIbitClient(ctx context.Context, opts IbitClientOptions, cache Cache) ibitClient {
 	return ibitClient{
 		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
@@ -77,17 +75,17 @@ func (c ibitClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 
 	// Check cache first
 	cacheKey := imdbID + "-ibit"
-	if torrentsGob, ok := c.cache.HasGet(nil, []byte(cacheKey)); ok {
-		torrentList, created, err := FromCacheEntry(ctx, torrentsGob)
-		if err != nil {
-			logger.WithError(err).Error("Couldn't decode torrent results")
-		} else if time.Since(created) < (c.cacheAge) {
-			logger.WithField("torrentCount", len(torrentList)).Debug("Hit cache for torrents, returning results")
-			return torrentList, nil
-		} else {
-			expiredSince := time.Since(created.Add(c.cacheAge))
-			logger.WithField("expiredSince", expiredSince).Debug("Hit cache for torrents, but entry is expired")
-		}
+	torrentList, created, found, err := c.cache.Get(cacheKey)
+	if err != nil {
+		logger.WithError(err).Error("Couldn't get torrent results from cache")
+	} else if !found {
+		logger.Debug("Torrent results not found in cache")
+	} else if time.Since(created) > (c.cacheAge) {
+		expiredSince := time.Since(created.Add(c.cacheAge))
+		logger.WithField("expiredSince", expiredSince).Debug("Hit cache for torrents, but item is expired")
+	} else {
+		logger.WithField("torrentCount", len(torrentList)).Debug("Hit cache for torrents, returning results")
+		return torrentList, nil
 	}
 
 	reqUrl := c.baseURL + "/torrent-search/" + imdbID
@@ -229,16 +227,8 @@ func (c ibitClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 
 	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
 	// Any actual errors would have returned earlier.
-	if torrentsGob, err := NewCacheEntry(ctx, results); err != nil {
-		logger.WithError(err).WithField("cache", "torrent").Error("Couldn't create cache entry for torrents")
-	} else {
-		entrySize := strconv.Itoa(len(torrentsGob)/1024) + "KB"
-		if len(torrentsGob) > 64*1024 {
-			logger.WithField("cache", "torrent").WithField("entrySize", entrySize).Warn("New cacheEntry is bigger than 64KB, which means it won't be stored in the cache when calling fastcache's Set() method. SetBig() (and GetBig()) must be used instead!")
-		} else {
-			logger.WithField("cache", "torrent").WithField("entrySize", entrySize).Debug("Caching torrent results")
-		}
-		c.cache.Set([]byte(cacheKey), torrentsGob)
+	if err := c.cache.Set(cacheKey, results); err != nil {
+		logger.WithError(err).WithField("cache", "torrent").Error("Couldn't cache torrents")
 	}
 
 	return results, nil

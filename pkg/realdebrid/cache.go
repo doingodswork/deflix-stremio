@@ -1,30 +1,42 @@
 package realdebrid
 
 import (
-	"bytes"
-	"context"
-	"encoding/gob"
-	"fmt"
+	"sync"
 	"time"
 )
 
-// newCacheEntry turns the current time into bytes via gob encoding.
-func newCacheEntry(ctx context.Context) ([]byte, error) {
-	writer := bytes.Buffer{}
-	encoder := gob.NewEncoder(&writer)
-	if err := encoder.Encode(time.Now()); err != nil {
-		return nil, fmt.Errorf("Couldn't encode cacheEntry: %v", err)
-	}
-	return writer.Bytes(), nil
+// Cache is the interface that the RealDebrid client uses for caching a user's API token validity and the "instant availability" of a torrent (via info_hash).
+// A package user must pass an implementation of this interface.
+// Usually you create a simple wrapper around an existing cache package.
+// An example implementation is the InMemoryCache in this package.
+type Cache interface {
+	Set(key string) error
+	Get(key string) (time.Time, bool, error)
 }
 
-// fromCacheEntry turns gob-encoded bytes into a time object.
-func fromCacheEntry(ctx context.Context, data []byte) (time.Time, error) {
-	reader := bytes.NewReader(data)
-	decoder := gob.NewDecoder(reader)
-	var entry time.Time
-	if err := decoder.Decode(&entry); err != nil {
-		return time.Time{}, fmt.Errorf("Couldn't decode cacheEntry: %v", err)
-	}
-	return entry, nil
+var _ Cache = (*InMemoryCache)(nil)
+
+// InMemoryCache is an example implementation of the Cache interface.
+// It doesn't persist its data, so it's not suited for production use of the realdebrid package.
+type InMemoryCache struct {
+	cache map[string]time.Time
+	lock  *sync.RWMutex
+}
+
+// Set caches the validity of a user's API token or the "instant availability" for a torrent (via info_hash).
+// There's no need to pass a boolean or so - if a value gets cached it means the token is valid / the torrent is "instantly available".
+func (c InMemoryCache) Set(key string) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.cache[key] = time.Now()
+	return nil
+}
+
+// Get returns the time the API token / "instant availability" was cached.
+// The boolean return value signals if the value was found in the cache.
+func (c InMemoryCache) Get(key string) (time.Time, bool, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	created, found := c.cache[key]
+	return created, found, nil
 }

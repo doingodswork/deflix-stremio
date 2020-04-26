@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/VictoriaMetrics/fastcache"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 
@@ -57,12 +55,12 @@ var _ MagnetSearcher = (*tpbClient)(nil)
 type tpbClient struct {
 	baseURL        string
 	httpClient     *http.Client
-	cache          *fastcache.Cache
+	cache          Cache
 	cacheAge       time.Duration
 	cinemataClient cinemata.Client
 }
 
-func NewTPBclient(ctx context.Context, opts TPBclientOptions, cache *fastcache.Cache, cinemataClient cinemata.Client) (tpbClient, error) {
+func NewTPBclient(ctx context.Context, opts TPBclientOptions, cache Cache, cinemataClient cinemata.Client) (tpbClient, error) {
 	// Using a SOCKS5 proxy allows us to make requests to TPB via the TOR network
 	var httpClient *http.Client
 	if opts.SocksProxyAddr != "" {
@@ -95,17 +93,17 @@ func (c tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 
 	// Check cache first
 	cacheKey := imdbID + "-TPB"
-	if torrentsGob, ok := c.cache.HasGet(nil, []byte(cacheKey)); ok {
-		torrentList, created, err := FromCacheEntry(ctx, torrentsGob)
-		if err != nil {
-			logger.WithError(err).Error("Couldn't decode torrent results")
-		} else if time.Since(created) < (c.cacheAge) {
-			logger.WithField("torrentCount", len(torrentList)).Debug("Hit cache for torrents, returning results")
-			return torrentList, nil
-		} else {
-			expiredSince := time.Since(created.Add(c.cacheAge))
-			logger.WithField("expiredSince", expiredSince).Debug("Hit cache for torrents, but entry is expired")
-		}
+	torrentList, created, found, err := c.cache.Get(cacheKey)
+	if err != nil {
+		logger.WithError(err).Error("Couldn't get torrent results from cache")
+	} else if !found {
+		logger.Debug("Torrent results not found in cache")
+	} else if time.Since(created) > (c.cacheAge) {
+		expiredSince := time.Since(created.Add(c.cacheAge))
+		logger.WithField("expiredSince", expiredSince).Debug("Hit cache for torrents, but item is expired")
+	} else {
+		logger.WithField("torrentCount", len(torrentList)).Debug("Hit cache for torrents, returning results")
+		return torrentList, nil
 	}
 
 	// Note: It seems that apibay.org has a "cat=" query parameter, but using the category 207 for "HD Movies" doesn't work (torrents for category 201 ("Movies") are returned as well).
@@ -176,16 +174,8 @@ func (c tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 
 	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
 	// Any actual errors would have returned earlier.
-	if torrentsGob, err := NewCacheEntry(ctx, results); err != nil {
-		logger.WithError(err).WithField("cache", "torrent").Error("Couldn't create cache entry for torrents")
-	} else {
-		entrySize := strconv.Itoa(len(torrentsGob)/1024) + "KB"
-		if len(torrentsGob) > 64*1024 {
-			logger.WithField("cache", "torrent").WithField("entrySize", entrySize).Warn("New cacheEntry is bigger than 64KB, which means it won't be stored in the cache when calling fastcache's Set() method. SetBig() (and GetBig()) must be used instead!")
-		} else {
-			logger.WithField("cache", "torrent").WithField("entrySize", entrySize).Debug("Caching torrent results")
-		}
-		c.cache.Set([]byte(cacheKey), torrentsGob)
+	if err := c.cache.Set(cacheKey, results); err != nil {
+		logger.WithError(err).WithField("cache", "torrent").Error("Couldn't cache torrents")
 	}
 
 	return results, nil
