@@ -75,7 +75,7 @@ Usage of deflix-stremio:
   -baseURLrd string
         Base URL for RealDebrid (default "https://api.real-debrid.com")
   -baseURLtpb string
-        Base URL for TPB (default "https://apibay.org")
+        Base URL for the TPB API (default "https://apibay.org")
   -baseURLyts string
         Base URL for YTS (default "https://yts.mx")
   -bindAddr string
@@ -85,7 +85,7 @@ Usage of deflix-stremio:
   -cacheAgeTorrents duration
         Max age of cache entries for torrents found per IMDb ID. The format must be acceptable by Go's 'time.ParseDuration()', for example "24h". (default 24h0m0s)
   -cacheMaxMB int
-        Max number of megabytes to be used for the in-memory cache. Default (and minimum!) is 160 MB. (default 160)
+        Max number of megabytes to be used for the in-memory torrent cache. Default (and minimum!) is 32 MB. (default 32)
   -cachePath string
         Path for loading a persisted cache on startup and persisting the current cache in regular intervals. An empty value will lead to 'os.UserCacheDir()+"/deflix-stremio/"'.
   -envPrefix string
