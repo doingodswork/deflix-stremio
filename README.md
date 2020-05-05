@@ -20,10 +20,7 @@ Contents
 2. [Run locally](#run-locally)
    1. [Configuration](#configuration)
    2. [Warning](#warning)
-3. [Tools](#tools)
-   1. [rd-tester](#rd-tester)
-   2. [rd-proxy](#rd-proxy)
-4. [Disclaimer](#disclaimer)
+3. [Disclaimer](#disclaimer)
 
 Install
 -------
@@ -113,44 +110,6 @@ If you *run* this web service on your local laptop or server, i.e. if you *self-
 Deflix doesn't download or upload any torrents, but it *does* send HTTP requests to YTS, The Pirate Bay, 1337x and ibit, which *might* be illegal in some countries. Streaming movies from RealDebrid *might* also be illegal in some countries.
 
 > To encrypt your traffic so that your ISP can't see where those HTTP requests are sent and to not expose your real IP address to RealDebrid you can use a VPN.
-
-Tools
------
-
-This repository also contains some useful tools for running deflix-stremio in production:
-
-### rd-tester
-
-`rd-tester` is a command line program that tests if the RealDebrid API can be used from the machine where the program is executed. It uses the magnet URL of "Big Buck Bunny" to do so and requires a RealDebrid API token.
-
-```text
-Usage of rd-tester:
-  -apiToken string
-        RealDebrid API token
-  -baseURL string
-        Base URL of RealDebrid (default "https://api.real-debrid.com")
-  -extraHeaders string
-        Additional headers to set, for example for a proxy. Format: "X-Foo: bar". Separated by newline characters ("\n")
-```
-
-### rd-proxy
-
-`rd-proxy` is a *reverse* proxy for proxying requests to RealDebrid. This can be necessary when RealDebrid blocks the IP of the server where `deflix-stremio` runs on, because you can then use a bunch of cheap, low-powered servers with fresh IPs for proxying, without having to run `deflix-stremio` on them.
-
-```text
-  -apiKeyHeader string
-        Header key for the API key, e.g. "X-Proxy-Apikey"
-  -apiKeys string
-        List of comma separated API keys that the reverse proxy allows
-  -bindAddr string
-        Local interface address to bind to. "localhost" only allows access from the local host. "0.0.0.0" binds to all network interfaces. (default "localhost")
-  -logRequest
-        Log the full request object
-  -port int
-        Port to listen on (default 8080)
-  -targetURL string
-        Reverse proxy target URL (default "https://api.real-debrid.com")
-```
 
 Disclaimer
 ----------
