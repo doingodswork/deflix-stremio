@@ -31,8 +31,16 @@ type InMemoryCache struct {
 	lock  *sync.RWMutex
 }
 
+// NewInMemoryCache creates a new InMemoryCache.
+func NewInMemoryCache() *InMemoryCache {
+	return &InMemoryCache{
+		cache: map[string]CacheItem{},
+		lock:  &sync.RWMutex{},
+	}
+}
+
 // Set stores Result objects and the current time in the cache.
-func (c InMemoryCache) Set(key string, results []Result) error {
+func (c *InMemoryCache) Set(key string, results []Result) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.cache[key] = CacheItem{
@@ -44,7 +52,7 @@ func (c InMemoryCache) Set(key string, results []Result) error {
 
 // Get returns Result objects and the time they were cached from the cache.
 // The boolean return value signals if the value was found in the cache.
-func (c InMemoryCache) Get(key string) ([]Result, time.Time, bool, error) {
+func (c *InMemoryCache) Get(key string) ([]Result, time.Time, bool, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	cacheItem, found := c.cache[key]

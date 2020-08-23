@@ -23,9 +23,17 @@ type InMemoryCache struct {
 	lock  *sync.RWMutex
 }
 
+// NewInMemoryCache creates a new InMemoryCache.
+func NewInMemoryCache() *InMemoryCache {
+	return &InMemoryCache{
+		cache: map[string]time.Time{},
+		lock:  &sync.RWMutex{},
+	}
+}
+
 // Set caches the validity of a user's API token or the "instant availability" for a torrent (via info_hash).
 // There's no need to pass a boolean or so - if a value gets cached it means the token is valid / the torrent is "instantly available".
-func (c InMemoryCache) Set(key string) error {
+func (c *InMemoryCache) Set(key string) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.cache[key] = time.Now()
@@ -34,7 +42,7 @@ func (c InMemoryCache) Set(key string) error {
 
 // Get returns the time the API token / "instant availability" was cached.
 // The boolean return value signals if the value was found in the cache.
-func (c InMemoryCache) Get(key string) (time.Time, bool, error) {
+func (c *InMemoryCache) Get(key string) (time.Time, bool, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	created, found := c.cache[key]
