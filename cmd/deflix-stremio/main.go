@@ -72,13 +72,13 @@ var (
 // Also use different cache types - fastcache seems to be inefficient for small values (600 items with a short string and time leads to 32 MB) for example, while go-cache can't be limited in size. So we use fastcache for caches that could grow really big, and go-cache for caches where we know it'll stay small, or were we purge old entries regularly.
 var (
 	// fastcache
-	torrentCache resultCache
+	torrentCache *resultCache
 	// go-cache
-	availabilityCache creationCache
-	cinemetaCache     metaCache
+	availabilityCache *creationCache
+	cinemetaCache     *metaCache
 	redirectCache     *gocache.Cache
 	streamCache       *gocache.Cache
-	tokenCache        creationCache
+	tokenCache        *creationCache
 )
 
 // Clients
@@ -251,7 +251,7 @@ func initCaches(ctx context.Context, config config, logger *zap.Logger) {
 
 	// fastcache
 	cacheMaxBytes := config.CacheMaxMB * 1000 * 1000
-	torrentCache = resultCache{
+	torrentCache = &resultCache{
 		cache: fastcache.LoadFromFileOrNew(config.CachePath+"/torrent", cacheMaxBytes),
 	}
 
@@ -262,7 +262,7 @@ func initCaches(ctx context.Context, config config, logger *zap.Logger) {
 		logger.Error("Couldn't load availability cache from file - continuing with an empty cache", zap.Error(err))
 		availabilityCacheItems = map[string]gocache.Item{}
 	}
-	availabilityCache = creationCache{
+	availabilityCache = &creationCache{
 		cache: gocache.NewFrom(config.CacheAgeRD, 24*time.Hour, availabilityCacheItems),
 	}
 
@@ -271,7 +271,7 @@ func initCaches(ctx context.Context, config config, logger *zap.Logger) {
 		logger.Error("Couldn't load cinemeta cache from file - continuing with an empty cache", zap.Error(err))
 		cinemetaCacheItems = map[string]gocache.Item{}
 	}
-	cinemetaCache = metaCache{
+	cinemetaCache = &metaCache{
 		cache: gocache.NewFrom(cinemetaExpiration, 24*time.Hour, cinemetaCacheItems),
 	}
 
@@ -294,7 +294,7 @@ func initCaches(ctx context.Context, config config, logger *zap.Logger) {
 		logger.Error("Couldn't load token cache from file - continuing with an empty cache", zap.Error(err))
 		tokenCacheItems = map[string]gocache.Item{}
 	}
-	tokenCache = creationCache{
+	tokenCache = &creationCache{
 		cache: gocache.NewFrom(tokenExpiration, 24*time.Hour, tokenCacheItems),
 	}
 

@@ -43,7 +43,7 @@ type resultCache struct {
 }
 
 // Set implements the imdb2torrent.Cache interface.
-func (c resultCache) Set(key string, results []imdb2torrent.Result) error {
+func (c *resultCache) Set(key string, results []imdb2torrent.Result) error {
 	item := imdb2torrent.CacheItem{
 		Results: results,
 		Created: time.Now(),
@@ -52,7 +52,7 @@ func (c resultCache) Set(key string, results []imdb2torrent.Result) error {
 }
 
 // Get implements the imdb2torrent.Cache interface.
-func (c resultCache) Get(key string) ([]imdb2torrent.Result, time.Time, bool, error) {
+func (c *resultCache) Get(key string) ([]imdb2torrent.Result, time.Time, bool, error) {
 	var item imdb2torrent.CacheItem
 	found, err := gobGet(c.cache, key, &item)
 	return item.Results, item.Created, found, err
@@ -66,7 +66,7 @@ type metaCache struct {
 }
 
 // Set implements the cinemeta.Cache interface.
-func (c metaCache) Set(key string, meta cinemeta.Meta) error {
+func (c *metaCache) Set(key string, meta cinemeta.Meta) error {
 	item := cinemeta.CacheItem{
 		Meta:    meta,
 		Created: time.Now(),
@@ -76,7 +76,7 @@ func (c metaCache) Set(key string, meta cinemeta.Meta) error {
 }
 
 // Get implements the cinemeta.Cache interface.
-func (c metaCache) Get(key string) (cinemeta.Meta, time.Time, bool, error) {
+func (c *metaCache) Get(key string) (cinemeta.Meta, time.Time, bool, error) {
 	itemIface, found := c.cache.Get(key)
 	if !found {
 		return cinemeta.Meta{}, time.Time{}, found, nil
@@ -96,13 +96,13 @@ type creationCache struct {
 }
 
 // Set implements the cinemeta.Cache interface.
-func (c creationCache) Set(key string) error {
+func (c *creationCache) Set(key string) error {
 	c.cache.Set(key, time.Now(), 0)
 	return nil
 }
 
 // Get implements the cinemeta.Cache interface.
-func (c creationCache) Get(key string) (time.Time, bool, error) {
+func (c *creationCache) Get(key string) (time.Time, bool, error) {
 	createdIface, found := c.cache.Get(key)
 	if !found {
 		return time.Time{}, found, nil
