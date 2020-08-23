@@ -230,16 +230,6 @@ func main() {
 		}
 	}()
 
-	// Log cache stats every hour
-	go func() {
-		// Don't run at the same time as the persistence
-		time.Sleep(time.Minute)
-		for {
-			logCacheStats(fastCaches, goCaches, logger)
-			time.Sleep(time.Hour)
-		}
-	}()
-
 	// Start addon
 
 	addon.Run(stoppingChan)
