@@ -50,16 +50,16 @@ type Client struct {
 	logger            *zap.Logger
 }
 
-func NewClient(ctx context.Context, opts ClientOptions, tokenCache, availabilityCache Cache, logger *zap.Logger) (Client, error) {
+func NewClient(ctx context.Context, opts ClientOptions, tokenCache, availabilityCache Cache, logger *zap.Logger) (*Client, error) {
 	// Precondition check
 	if opts.BaseURL == "" {
-		return Client{}, errors.New("opts.BaseURL must not be empty")
+		return nil, errors.New("opts.BaseURL must not be empty")
 	}
 	for _, extraHeader := range opts.ExtraHeaders {
 		if extraHeader != "" {
 			colonIndex := strings.Index(extraHeader, ":")
 			if colonIndex <= 0 || colonIndex == len(extraHeader)-1 {
-				return Client{}, errors.New("opts.ExtraHeaders elements must have a format like \"X-Foo: bar\"")
+				return nil, errors.New("opts.ExtraHeaders elements must have a format like \"X-Foo: bar\"")
 			}
 		}
 	}
@@ -72,7 +72,7 @@ func NewClient(ctx context.Context, opts ClientOptions, tokenCache, availability
 		}
 	}
 
-	return Client{
+	return &Client{
 		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
 			Timeout: opts.Timeout,
@@ -85,7 +85,7 @@ func NewClient(ctx context.Context, opts ClientOptions, tokenCache, availability
 	}, nil
 }
 
-func (c Client) TestToken(ctx context.Context, apiToken string) error {
+func (c *Client) TestToken(ctx context.Context, apiToken string) error {
 	zapFieldAPItoken := zap.String("apiToken", apiToken)
 	c.logger.Debug("Testing token...", zapFieldAPItoken)
 
@@ -122,7 +122,7 @@ func (c Client) TestToken(ctx context.Context, apiToken string) error {
 	return nil
 }
 
-func (c Client) CheckInstantAvailability(ctx context.Context, apiToken string, infoHashes ...string) []string {
+func (c *Client) CheckInstantAvailability(ctx context.Context, apiToken string, infoHashes ...string) []string {
 	zapFieldAPItoken := zap.String("apiToken", apiToken)
 
 	// Precondition check
@@ -183,7 +183,7 @@ func (c Client) CheckInstantAvailability(ctx context.Context, apiToken string, i
 	return result
 }
 
-func (c Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, remote bool) (string, error) {
+func (c *Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, remote bool) (string, error) {
 	zapFieldAPItoken := zap.String("apiToken", apiToken)
 	c.logger.Debug("Adding torrent to RealDebrid...", zapFieldAPItoken)
 	data := url.Values{}
@@ -301,7 +301,7 @@ func (c Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, re
 	return streamURL, nil
 }
 
-func (c Client) get(ctx context.Context, url, apiToken string) ([]byte, error) {
+func (c *Client) get(ctx context.Context, url, apiToken string) ([]byte, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't create GET request: %v", err)
@@ -337,7 +337,7 @@ func (c Client) get(ctx context.Context, url, apiToken string) ([]byte, error) {
 	return ioutil.ReadAll(res.Body)
 }
 
-func (c Client) post(ctx context.Context, url, apiToken string, data url.Values) ([]byte, error) {
+func (c *Client) post(ctx context.Context, url, apiToken string, data url.Values) ([]byte, error) {
 	req, err := http.NewRequest("POST", url, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't create POST request: %v", err)

@@ -11,7 +11,7 @@ import (
 )
 
 // createTokenMiddleware creates a middleware that checks the validity of RealDebrid API tokens.
-func createTokenMiddleware(ctx context.Context, conversionClient realdebrid.Client, logger *zap.Logger) fiber.Handler {
+func createTokenMiddleware(ctx context.Context, conversionClient *realdebrid.Client, logger *zap.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) {
 		rCtx := c.Context()
 		apiToken := c.Params("userData", "")
