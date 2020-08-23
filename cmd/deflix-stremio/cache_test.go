@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
 	"github.com/google/go-cmp/cmp"
 	gocache "github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/require"
+
+	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
 )
 
 func TestGoCacheItem(t *testing.T) {

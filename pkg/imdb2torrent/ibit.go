@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 var magnet2InfoHashRegexIbit = regexp.MustCompile(`btih:.+?\\x26dn=`) // The "?" makes the ".+" non-greedy
@@ -46,9 +46,10 @@ type ibitClient struct {
 	cache      Cache
 	lock       *sync.Mutex
 	cacheAge   time.Duration
+	logger     *zap.Logger
 }
 
-func NewIbitClient(ctx context.Context, opts IbitClientOptions, cache Cache) ibitClient {
+func NewIbitClient(ctx context.Context, opts IbitClientOptions, cache Cache, logger *zap.Logger) ibitClient {
 	return ibitClient{
 		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
@@ -57,34 +58,32 @@ func NewIbitClient(ctx context.Context, opts IbitClientOptions, cache Cache) ibi
 		cache:    cache,
 		lock:     &sync.Mutex{},
 		cacheAge: opts.CacheAge,
+		logger:   logger,
 	}
 }
 
-// Check scrapes ibit to find torrents for the given IMDb ID.
+// Find scrapes ibit to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
 func (c ibitClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 	// Lock for all requests to ibit, because of rate limiting
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	logFields := log.Fields{
-		"imdbID":      imdbID,
-		"torrentSite": "ibit",
-	}
-	logger := log.WithContext(ctx).WithFields(logFields)
+	zapFieldID := zap.String("imdbID", imdbID)
+	zapFieldTorrentSite := zap.String("torrentSite", "ibit")
 
 	// Check cache first
 	cacheKey := imdbID + "-ibit"
 	torrentList, created, found, err := c.cache.Get(cacheKey)
 	if err != nil {
-		logger.WithError(err).Error("Couldn't get torrent results from cache")
+		c.logger.Error("Couldn't get torrent results from cache", zap.Error(err), zapFieldID, zapFieldTorrentSite)
 	} else if !found {
-		logger.Debug("Torrent results not found in cache")
+		c.logger.Debug("Torrent results not found in cache", zapFieldID, zapFieldTorrentSite)
 	} else if time.Since(created) > (c.cacheAge) {
 		expiredSince := time.Since(created.Add(c.cacheAge))
-		logger.WithField("expiredSince", expiredSince).Debug("Hit cache for torrents, but item is expired")
+		c.logger.Debug("Hit cache for torrents, but item is expired", zap.Duration("expiredSince", expiredSince), zapFieldID, zapFieldTorrentSite)
 	} else {
-		logger.WithField("torrentCount", len(torrentList)).Debug("Hit cache for torrents, returning results")
+		c.logger.Debug("Hit cache for torrents, returning results", zap.Int("torrentCount", len(torrentList)), zapFieldID, zapFieldTorrentSite)
 		return torrentList, nil
 	}
 
@@ -109,7 +108,7 @@ func (c ibitClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 	doc.Find(".torrents tr").Each(func(_ int, s *goquery.Selection) {
 		torrentPageHref, ok := s.Find("a").Attr("href")
 		if !ok || torrentPageHref == "" {
-			logger.Warn("Couldn't find link to the torrent page, did the HTML change?")
+			c.logger.Warn("Couldn't find link to the torrent page, did the HTML change?", zapFieldID, zapFieldTorrentSite)
 			return
 		}
 		torrentPageURLs = append(torrentPageURLs, c.baseURL+torrentPageHref)
@@ -129,7 +128,7 @@ func (c ibitClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 		// Use configured base URL, which could be a proxy that we want to go through
 		torrentPageURL, err = replaceURL(torrentPageURL, c.baseURL)
 		if err != nil {
-			logger.WithError(err).Warn("Couldn't replace URL which was retrieved from an HTML link")
+			c.logger.Warn("Couldn't replace URL which was retrieved from an HTML link", zap.Error(err), zapFieldID, zapFieldTorrentSite)
 			continue
 		}
 
@@ -200,7 +199,7 @@ func (c ibitClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 			if infoHash != "" {
 				magnetTailIndex := strings.Index(magnet, `\x26tr=`)
 				if magnetTailIndex == -1 {
-					logger.WithField("magnet", magnet).Warn(`Couldn't recreate magnet URL by cutting at \x26tr=. Did the HTML change?`)
+					c.logger.Warn(`Couldn't recreate magnet URL by cutting at \x26tr=. Did the HTML change?`, zap.String("magnet", magnet), zapFieldID, zapFieldTorrentSite)
 					continue
 				}
 				magnetTail := string(([]byte(magnet))[magnetTailIndex:])
@@ -210,7 +209,7 @@ func (c ibitClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 		}
 
 		if infoHash == "" {
-			logger.WithField("magnet", magnet).Warn("Couldn't extract info_hash. Did the HTML change?")
+			c.logger.Warn("Couldn't extract info_hash. Did the HTML change?", zap.String("magnet", magnet), zapFieldID, zapFieldTorrentSite)
 			continue
 		}
 
@@ -220,7 +219,7 @@ func (c ibitClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 			InfoHash:  infoHash,
 			MagnetURL: magnet,
 		}
-		logger.WithFields(log.Fields{"title": title, "quality": quality, "infoHash": infoHash, "magnet": magnet}).Trace("Found torrent")
+		c.logger.Debug("Found torrent", zap.String("title", title), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnet), zapFieldID, zapFieldTorrentSite)
 
 		results = append(results, result)
 	}
@@ -228,7 +227,7 @@ func (c ibitClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
 	// Any actual errors would have returned earlier.
 	if err := c.cache.Set(cacheKey, results); err != nil {
-		logger.WithError(err).WithField("cache", "torrent").Error("Couldn't cache torrents")
+		c.logger.Error("Couldn't cache torrents", zap.Error(err), zap.String("cache", "torrent"), zapFieldID, zapFieldTorrentSite)
 	}
 
 	return results, nil

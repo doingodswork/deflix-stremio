@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 type config struct {
@@ -31,7 +31,7 @@ type config struct {
 	EnvPrefix         string        `json:"envPrefix"`
 }
 
-func parseConfig(ctx context.Context) config {
+func parseConfig(ctx context.Context, logger *zap.Logger) config {
 	result := config{}
 
 	// Flags
@@ -74,7 +74,7 @@ func parseConfig(ctx context.Context) config {
 	if !isArgSet(ctx, "port") {
 		if val, ok := os.LookupEnv(*envPrefix + "PORT"); ok {
 			if *port, err = strconv.Atoi(val); err != nil {
-				log.WithError(err).WithField("envVar", "PORT").Fatal("Couldn't convert environment variable from string to int")
+				logger.Fatal("Couldn't convert environment variable from string to int", zap.Error(err), zap.String("envVar", "PORT"))
 			}
 		}
 	}
@@ -97,7 +97,8 @@ func parseConfig(ctx context.Context) config {
 	if !isArgSet(ctx, "cacheMaxMB") {
 		if val, ok := os.LookupEnv(*envPrefix + "CACHE_MAX_MB"); ok {
 			if *cacheMaxMB, err = strconv.Atoi(val); err != nil {
-				log.WithError(err).WithField("envVar", "CACHE_MAX_MB").Fatal("Couldn't convert environment variable from string to int")
+				logger.Fatal("Couldn't convert environment variable from string to int", zap.Error(err), zap.String("envVar", "CACHE_MAX_MB"))
+
 			}
 		}
 	}
@@ -106,7 +107,7 @@ func parseConfig(ctx context.Context) config {
 	if !isArgSet(ctx, "cacheAgeRD") {
 		if val, ok := os.LookupEnv(*envPrefix + "CACHE_AGE_RD"); ok {
 			if *cacheAgeRD, err = time.ParseDuration(val); err != nil {
-				log.WithError(err).WithField("envVar", "CACHE_AGE_RD").Fatal("Couldn't convert environment variable from string to time.Duration")
+				logger.Fatal("Couldn't convert environment variable from string to time.Duration", zap.Error(err), zap.String("envVar", "CACHE_AGE_RD"))
 			}
 		}
 	}
@@ -115,7 +116,7 @@ func parseConfig(ctx context.Context) config {
 	if !isArgSet(ctx, "cacheAgeTorrents") {
 		if val, ok := os.LookupEnv(*envPrefix + "CACHE_AGE_TORRENTS"); ok {
 			if *cacheAgeTorrents, err = time.ParseDuration(val); err != nil {
-				log.WithError(err).WithField("envVar", "CACHE_AGE_TORRENTS").Fatal("Couldn't convert environment variable from string to time.Duration")
+				logger.Fatal("Couldn't convert environment variable from string to time.Duration", zap.Error(err), zap.String("envVar", "CACHE_AGE_TORRENTS"))
 			}
 		}
 	}

@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
+	"go.uber.org/zap"
 )
 
 var (
@@ -50,9 +50,10 @@ type ytsClient struct {
 	httpClient *http.Client
 	cache      Cache
 	cacheAge   time.Duration
+	logger     *zap.Logger
 }
 
-func NewYTSclient(ctx context.Context, opts YTSclientOptions, cache Cache) ytsClient {
+func NewYTSclient(ctx context.Context, opts YTSclientOptions, cache Cache, logger *zap.Logger) ytsClient {
 	return ytsClient{
 		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
@@ -60,30 +61,28 @@ func NewYTSclient(ctx context.Context, opts YTSclientOptions, cache Cache) ytsCl
 		},
 		cache:    cache,
 		cacheAge: opts.CacheAge,
+		logger:   logger,
 	}
 }
 
-// Check uses YTS' API to find torrents for the given IMDb ID.
+// Find uses YTS' API to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
 func (c ytsClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
-	logFields := log.Fields{
-		"imdbID":      imdbID,
-		"torrentSite": "YTS",
-	}
-	logger := log.WithContext(ctx).WithFields(logFields)
+	zapFieldID := zap.String("imdbID", imdbID)
+	zapFieldTorrentSite := zap.String("torrentSite", "YTS")
 
 	// Check cache first
 	cacheKey := imdbID + "-YTS"
 	torrentList, created, found, err := c.cache.Get(cacheKey)
 	if err != nil {
-		logger.WithError(err).Error("Couldn't get torrent results from cache")
+		c.logger.Error("Couldn't get torrent results from cache", zap.Error(err), zapFieldID, zapFieldTorrentSite)
 	} else if !found {
-		logger.Debug("Torrent results not found in cache")
+		c.logger.Debug("Torrent results not found in cache", zapFieldID, zapFieldTorrentSite)
 	} else if time.Since(created) > (c.cacheAge) {
 		expiredSince := time.Since(created.Add(c.cacheAge))
-		logger.WithField("expiredSince", expiredSince).Debug("Hit cache for torrents, but item is expired")
+		c.logger.Debug("Hit cache for torrents, but item is expired", zap.Duration("expiredSince", expiredSince), zapFieldID, zapFieldTorrentSite)
 	} else {
-		logger.WithField("torrentCount", len(torrentList)).Debug("Hit cache for torrents, returning results")
+		c.logger.Debug("Hit cache for torrents, returning results", zap.Int("torrentCount", len(torrentList)), zapFieldID, zapFieldTorrentSite)
 		return torrentList, nil
 	}
 
@@ -114,7 +113,7 @@ func (c ytsClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 		if quality == "720p" || quality == "1080p" || quality == "2160p" {
 			infoHash := torrent.Get("hash").String()
 			if infoHash == "" {
-				logger.WithField("torrentJSON", torrent.String()).Warn("Couldn't get info_hash from torrent JSON")
+				c.logger.Warn("Couldn't get info_hash from torrent JSON", zap.String("torrentJSON", torrent.String()), zapFieldID, zapFieldTorrentSite)
 				continue
 			}
 			magnetURL := createMagnetURL(ctx, infoHash, title, trackersYTS)
@@ -122,7 +121,7 @@ func (c ytsClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 			if ripType != "" {
 				quality += " (" + ripType + ")"
 			}
-			logger.WithFields(log.Fields{"title": title, "quality": quality, "infoHash": infoHash, "magnet": magnetURL}).Trace("Found torrent")
+			c.logger.Debug("Found torrent", zap.String("title", title), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnetURL), zapFieldID, zapFieldTorrentSite)
 			result := Result{
 				Title:     title,
 				Quality:   quality,
@@ -136,7 +135,7 @@ func (c ytsClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
 	// Any actual errors would have returned earlier.
 	if err := c.cache.Set(cacheKey, results); err != nil {
-		logger.WithError(err).WithField("cache", "torrent").Error("Couldn't cache torrents")
+		c.logger.Error("Couldn't cache torrents", zap.Error(err), zap.String("cache", "torrent"), zapFieldID, zapFieldTorrentSite)
 	}
 
 	return results, nil

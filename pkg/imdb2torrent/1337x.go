@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 
-	"github.com/doingodswork/deflix-stremio/pkg/cinemata"
+	"github.com/deflix-tv/go-stremio/pkg/cinemeta"
 )
 
 type LeetxClientOptions struct {
@@ -41,55 +40,54 @@ type leetxClient struct {
 	baseURL        string
 	httpClient     *http.Client
 	cache          Cache
-	cinemataClient cinemata.Client
+	cinemetaClient *cinemeta.Client
 	cacheAge       time.Duration
+	logger         *zap.Logger
 }
 
-func NewLeetxClient(ctx context.Context, opts LeetxClientOptions, cache Cache, cinemataClient cinemata.Client) leetxClient {
+func NewLeetxClient(ctx context.Context, opts LeetxClientOptions, cache Cache, cinemetaClient *cinemeta.Client, logger *zap.Logger) leetxClient {
 	return leetxClient{
 		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
 			Timeout: opts.Timeout,
 		},
 		cache:          cache,
-		cinemataClient: cinemataClient,
+		cinemetaClient: cinemetaClient,
 		cacheAge:       opts.CacheAge,
+		logger:         logger,
 	}
 }
 
-// Check scrapes 1337x to find torrents for the given IMDb ID.
-// It uses the Stremio Cinemata remote addon to get a movie name for a given IMDb ID, so it can search 1337x with the name.
+// Find scrapes 1337x to find torrents for the given IMDb ID.
+// It uses the Stremio Cinemeta remote addon to get a movie name for a given IMDb ID, so it can search 1337x with the name.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
 func (c leetxClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
-	logFields := log.Fields{
-		"imdbID":      imdbID,
-		"torrentSite": "1337x",
-	}
-	logger := log.WithContext(ctx).WithFields(logFields)
+	zapFieldID := zap.String("imdbID", imdbID)
+	zapFieldTorrentSite := zap.String("torrentSite", "1337x")
 
 	// Check cache first
 	cacheKey := imdbID + "-1337x"
 	torrentList, created, found, err := c.cache.Get(cacheKey)
 	if err != nil {
-		logger.WithError(err).Error("Couldn't get torrent results from cache")
+		c.logger.Error("Couldn't get torrent results from cache", zap.Error(err), zapFieldID, zapFieldTorrentSite)
 	} else if !found {
-		logger.Debug("Torrent results not found in cache")
+		c.logger.Debug("Torrent results not found in cache", zapFieldID, zapFieldTorrentSite)
 	} else if time.Since(created) > (c.cacheAge) {
 		expiredSince := time.Since(created.Add(c.cacheAge))
-		logger.WithField("expiredSince", expiredSince).Debug("Hit cache for torrents, but item is expired")
+		c.logger.Debug("Hit cache for torrents, but item is expired", zap.Duration("expiredSince", expiredSince), zapFieldID, zapFieldTorrentSite)
 	} else {
-		logger.WithField("torrentCount", len(torrentList)).Debug("Hit cache for torrents, returning results")
+		c.logger.Debug("Hit cache for torrents, returning results", zap.Int("torrentCount", len(torrentList)), zapFieldID, zapFieldTorrentSite)
 		return torrentList, nil
 	}
 
 	// Get movie name
-	movieName, movieYear, err := c.cinemataClient.GetMovieNameYear(ctx, imdbID)
+	meta, err := c.cinemetaClient.GetMovie(ctx, imdbID)
 	if err != nil {
-		return nil, fmt.Errorf("Couldn't get movie name via Cinemata for IMDb ID %v: %v", imdbID, err)
+		return nil, fmt.Errorf("Couldn't get movie name via Cinemeta for IMDb ID %v: %v", imdbID, err)
 	}
-	movieSearch := movieName
-	if movieYear != 0 {
-		movieSearch += " " + strconv.Itoa(movieYear)
+	movieSearch := meta.Name
+	if meta.ReleaseInfo != "" {
+		movieSearch += " " + meta.ReleaseInfo
 	}
 	// Use this for general searching in URL "https://1337x.to/search/foo+bar/1/"
 	//movieSearch = strings.Replace(movieSearch, " ", "+", -1)
@@ -136,7 +134,7 @@ func (c leetxClient) Find(ctx context.Context, imdbID string) ([]Result, error) 
 		if strings.Contains(linkText, "720p") || strings.Contains(linkText, "1080p") || strings.Contains(linkText, "2160p") {
 			torrentLink, ok := s.Find("a").Next().Attr("href")
 			if !ok || torrentLink == "" {
-				logger.Warn("Couldn't find link to the torrent page, did the HTML change?")
+				c.logger.Warn("Couldn't find link to the torrent page, did the HTML change?", zapFieldID, zapFieldTorrentSite)
 				return
 			}
 			torrentPageURLs = append(torrentPageURLs, c.baseURL+torrentLink)
@@ -155,7 +153,7 @@ func (c leetxClient) Find(ctx context.Context, imdbID string) ([]Result, error) 
 		// Use configured base URL, which could be a proxy that we want to go through
 		torrentPageURL, err = replaceURL(torrentPageURL, c.baseURL)
 		if err != nil {
-			logger.WithError(err).Warn("Couldn't replace URL which was retrieved from an HTML link")
+			c.logger.Warn("Couldn't replace URL which was retrieved from an HTML link", zap.Error(err), zapFieldID, zapFieldTorrentSite)
 			continue
 		}
 
@@ -171,8 +169,6 @@ func (c leetxClient) Find(ctx context.Context, imdbID string) ([]Result, error) 
 				resultChan <- Result{}
 				return
 			}
-
-			title := movieName
 
 			quality := ""
 			if strings.Contains(magnet, "720p") {
@@ -208,18 +204,18 @@ func (c leetxClient) Find(ctx context.Context, imdbID string) ([]Result, error) 
 			infoHash = strings.ToUpper(infoHash)
 
 			if infoHash == "" {
-				logger.WithField("magnet", magnet).Warn("Couldn't extract info_hash. Did the HTML change?")
+				c.logger.Warn("Couldn't extract info_hash. Did the HTML change?", zap.String("magnet", magnet), zapFieldID, zapFieldTorrentSite)
 				resultChan <- Result{}
 				return
 			}
 
 			result := Result{
-				Title:     title,
+				Title:     meta.Name,
 				Quality:   quality,
 				InfoHash:  infoHash,
 				MagnetURL: magnet,
 			}
-			logger.WithFields(log.Fields{"title": title, "quality": quality, "infoHash": infoHash, "magnet": magnet}).Trace("Found torrent")
+			c.logger.Debug("Found torrent", zap.String("title", meta.Name), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnet), zapFieldID, zapFieldTorrentSite)
 
 			resultChan <- result
 		}(torrentPageURL)
@@ -237,7 +233,7 @@ func (c leetxClient) Find(ctx context.Context, imdbID string) ([]Result, error) 
 	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
 	// Any actual errors would have returned earlier.
 	if err := c.cache.Set(cacheKey, results); err != nil {
-		logger.WithError(err).WithField("cache", "torrent").Error("Couldn't cache torrents")
+		c.logger.Error("Couldn't cache torrents", zap.Error(err), zap.String("cache", "torrent"), zapFieldID, zapFieldTorrentSite)
 	}
 
 	return results, nil

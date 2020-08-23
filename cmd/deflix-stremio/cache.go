@@ -12,9 +12,9 @@ import (
 
 	"github.com/VictoriaMetrics/fastcache"
 	gocache "github.com/patrickmn/go-cache"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 
-	"github.com/doingodswork/deflix-stremio/pkg/cinemata"
+	"github.com/deflix-tv/go-stremio/pkg/cinemeta"
 	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
 	"github.com/doingodswork/deflix-stremio/pkg/realdebrid"
 )
@@ -22,8 +22,8 @@ import (
 func registerTypes() {
 	// For RealDebrid availability and token cache
 	gob.Register(time.Time{})
-	// For cinemata cache
-	gob.Register(cinemata.CacheItem{})
+	// For cinemeta cache
+	gob.Register(cinemeta.CacheItem{})
 	// For redirect cache
 	gob.Register([]imdb2torrent.Result{})
 	// For stream cache
@@ -58,34 +58,34 @@ func (c resultCache) Get(key string) ([]imdb2torrent.Result, time.Time, bool, er
 	return item.Results, item.Created, found, err
 }
 
-var _ cinemata.Cache = (*movieCache)(nil)
+var _ cinemeta.Cache = (*metaCache)(nil)
 
-// movieCache is the cache for cinemata.Movie objects.
-type movieCache struct {
+// metaCache is the cache for cinemeta.Meta objects.
+type metaCache struct {
 	cache *gocache.Cache
 }
 
-// Set implements the cinemata.Cache interface.
-func (c movieCache) Set(key string, movie cinemata.Movie) error {
-	item := cinemata.CacheItem{
-		Movie:   movie,
+// Set implements the cinemeta.Cache interface.
+func (c metaCache) Set(key string, meta cinemeta.Meta) error {
+	item := cinemeta.CacheItem{
+		Meta:    meta,
 		Created: time.Now(),
 	}
 	c.cache.Set(key, item, 0)
 	return nil
 }
 
-// Get implements the cinemata.Cache interface.
-func (c movieCache) Get(key string) (cinemata.Movie, time.Time, bool, error) {
+// Get implements the cinemeta.Cache interface.
+func (c metaCache) Get(key string) (cinemeta.Meta, time.Time, bool, error) {
 	itemIface, found := c.cache.Get(key)
 	if !found {
-		return cinemata.Movie{}, time.Time{}, found, nil
+		return cinemeta.Meta{}, time.Time{}, found, nil
 	}
-	item, ok := itemIface.(cinemata.CacheItem)
+	item, ok := itemIface.(cinemeta.CacheItem)
 	if !ok {
-		return cinemata.Movie{}, time.Time{}, found, fmt.Errorf("Couldn't cast cached value to cinemata.CacheItem: type was: %T", itemIface)
+		return cinemeta.Meta{}, time.Time{}, found, fmt.Errorf("Couldn't cast cached value to cinemeta.CacheItem: type was: %T", itemIface)
 	}
-	return item.Movie, item.Created, found, nil
+	return item.Meta, item.Created, found, nil
 }
 
 var _ realdebrid.Cache = (*creationCache)(nil)
@@ -95,13 +95,13 @@ type creationCache struct {
 	cache *gocache.Cache
 }
 
-// Set implements the cinemata.Cache interface.
+// Set implements the cinemeta.Cache interface.
 func (c creationCache) Set(key string) error {
 	c.cache.Set(key, time.Now(), 0)
 	return nil
 }
 
-// Get implements the cinemata.Cache interface.
+// Get implements the cinemeta.Cache interface.
 func (c creationCache) Get(key string) (time.Time, bool, error) {
 	createdIface, found := c.cache.Get(key)
 	if !found {
@@ -162,52 +162,52 @@ func loadGoCache(filePath string) (map[string]gocache.Item, error) {
 	return result, nil
 }
 
-func persistCaches(ctx context.Context, cacheFilePath string, stoppingPtr *bool, fastCaches map[string]*fastcache.Cache, goCaches map[string]*gocache.Cache) {
+func persistCaches(ctx context.Context, cacheFilePath string, stoppingPtr *bool, fastCaches map[string]*fastcache.Cache, goCaches map[string]*gocache.Cache, logger *zap.Logger) {
 	// TODO: We might want to overthink this - persisting caches on shutdown might be useful, especially for the redirect cache!
 	if *stoppingPtr {
-		log.Warn("Regular cache persistence triggered, but server is shutting down")
+		logger.Warn("Regular cache persistence triggered, but server is shutting down")
 		return
 	}
 
-	log.WithField("cacheFilePath", cacheFilePath).Info("Persisting caches...")
+	logger.Info("Persisting caches...", zap.String("cacheFilePath", cacheFilePath))
 	start := time.Now()
 
 	for name, fastCache := range fastCaches {
 		if err := fastCache.SaveToFileConcurrent(cacheFilePath+"/"+name, runtime.NumCPU()); err != nil {
-			log.WithError(err).WithField("cache", name).Error("Couldn't save cache to file")
+			logger.Error("Couldn't save cache to file", zap.Error(err), zap.String("cache", name))
 		}
 	}
 
 	for name, goCache := range goCaches {
 		if err := saveGoCache(goCache.Items(), cacheFilePath+"/"+name+".gob"); err != nil {
-			log.WithError(err).WithField("cache", name).Error("Couldn't save cache to file")
+			logger.Error("Couldn't save cache to file", zap.Error(err), zap.String("cache", name))
 		}
 	}
 
 	duration := time.Since(start).Milliseconds()
 	durationString := strconv.FormatInt(duration, 10) + "ms"
-	log.WithField("duration", durationString).Info("Persisted caches")
+	logger.Info("Persisted caches", zap.String("duration", durationString))
 }
 
-func logCacheStats(ctx context.Context, fastCaches map[string]*fastcache.Cache, goCaches map[string]*gocache.Cache) {
+func logCacheStats(ctx context.Context, fastCaches map[string]*fastcache.Cache, goCaches map[string]*gocache.Cache, logger *zap.Logger) {
 	stats := fastcache.Stats{}
 	for name, fastCache := range fastCaches {
 		fastCache.UpdateStats(&stats)
-		fields := log.Fields{
-			"cache":        name,
-			"GetCalls":     stats.GetCalls,
-			"SetCalls":     stats.SetCalls,
-			"Misses":       stats.Misses,
-			"Collisions":   stats.Collisions,
-			"Corruptions":  stats.Corruptions,
-			"EntriesCount": stats.EntriesCount,
-			"Size":         strconv.FormatUint(stats.BytesSize/uint64(1024)/uint64(1024), 10) + "MB",
+		fields := []zap.Field{
+			zap.String("cache", name),
+			zap.Uint64("GetCalls", stats.GetCalls),
+			zap.Uint64("SetCalls", stats.SetCalls),
+			zap.Uint64("Misses", stats.Misses),
+			zap.Uint64("Collisions", stats.Collisions),
+			zap.Uint64("Corruptions", stats.Corruptions),
+			zap.Uint64("EntriesCount", stats.EntriesCount),
+			zap.String("Size", strconv.FormatUint(stats.BytesSize/uint64(1024)/uint64(1024), 10)+"MB"),
 		}
-		log.WithFields(fields).Info("Cache stats")
+		logger.Info("Cache stats", fields...)
 		stats.Reset()
 	}
 
 	for name, goCache := range goCaches {
-		log.WithField("cache", name).WithField("itemCount", goCache.ItemCount()).Info("Cache stats")
+		logger.Info("Cache stats", zap.String("cache", name), zap.Int("itemCount", goCache.ItemCount()))
 	}
 }

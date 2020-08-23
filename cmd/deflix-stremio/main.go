@@ -6,23 +6,19 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
-	"github.com/gorilla/handlers"
-	"github.com/gorilla/mux"
 	gocache "github.com/patrickmn/go-cache"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 
-	"github.com/doingodswork/deflix-stremio/pkg/cinemata"
+	"github.com/deflix-tv/go-stremio"
+	"github.com/deflix-tv/go-stremio/pkg/cinemeta"
 	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
 	"github.com/doingodswork/deflix-stremio/pkg/realdebrid"
-	"github.com/doingodswork/deflix-stremio/pkg/stremio"
 )
 
 const (
@@ -54,10 +50,10 @@ var manifest = stremio.Manifest{
 }
 
 var (
-	// Timeout used for HTTP requests in the cinemata, imdb2torrent and realdebrid clients.
+	// Timeout used for HTTP requests in the cinemeta, imdb2torrent and realdebrid clients.
 	timeout = 5 * time.Second
-	// Expiration for cached cinemata.Movie objects. They rarely (if ever) change, so make it 1 month.
-	cinemataExpiration = 30 * 24 * time.Hour
+	// Expiration for cached cinemeta.Meta objects. They rarely (if ever) change, so make it 1 month.
+	cinemetaExpiration = 30 * 24 * time.Hour
 	// Expiration for the data that's passed from the stream handler to the redirect handler.
 	// 24h so that a user who selects a movie and sees the list of streams can click on a stream within this time.
 	// If a user stops/exits a stream and later resumes it, Stremio sends him to the redirect handler. If the stream cache doesn't hold the cache anymore, we just get fresh torrents - no need to cache this for so long.
@@ -79,7 +75,7 @@ var (
 	torrentCache resultCache
 	// go-cache
 	availabilityCache creationCache
-	cinemataCache     movieCache
+	cinemetaCache     metaCache
 	redirectCache     *gocache.Cache
 	streamCache       *gocache.Cache
 	tokenCache        creationCache
@@ -87,7 +83,7 @@ var (
 
 // Clients
 var (
-	cinemataClient   cinemata.Client
+	cinemetaClient   *cinemeta.Client
 	searchClient     imdb2torrent.Client
 	conversionClient realdebrid.Client
 )
@@ -106,11 +102,6 @@ func init() {
 	// Make predicting "random" numbers harder
 	rand.NewSource(time.Now().UnixNano())
 
-	// Configure logging (except for level, which we only know from the config which is obtained later).
-	log.SetFormatter(&log.TextFormatter{
-		FullTimestamp: true,
-	})
-
 	// Register types for gob en- and decoding, required when using go-cache, because a go-cache item is always an `interface{}`.
 	registerTypes()
 }
@@ -118,23 +109,34 @@ func init() {
 func main() {
 	mainCtx := context.Background()
 
-	// Parse config
-
-	log.Info("Parsing config...")
-	config := parseConfig(mainCtx)
-	configJSON, err := json.Marshal(config)
+	// Create an "info" logger at first, replace later in case the logging level is configured to be something else
+	logger, err := stremio.NewLogger("info")
 	if err != nil {
-		log.WithError(err).Fatal("Couldn't marshal config to JSON")
+		panic(err)
 	}
 
-	setLogLevel(config)
+	// Parse config
 
-	log.WithField("config", string(configJSON)).Info("Parsed config")
+	logger.Info("Parsing config...")
+	config := parseConfig(mainCtx, logger)
+	configJSON, err := json.Marshal(config)
+	if err != nil {
+		logger.Fatal("Couldn't marshal config to JSON", zap.Error(err))
+	}
+
+	if config.LogLevel != "info" {
+		// Replace previously created logger
+		if logger, err = stremio.NewLogger(config.LogLevel); err != nil {
+			logger.Fatal("Couldn't create new logger", zap.Error(err))
+		}
+	}
+
+	logger.Info("Parsed config", zap.ByteString("config", configJSON))
 
 	if config.CachePath == "" {
 		userCacheDir, err := os.UserCacheDir()
 		if err != nil {
-			log.WithError(err).Fatal("Couldn't determine user cache directory via `os.UserCacheDir()`")
+			logger.Fatal("Couldn't determine user cache directory via `os.UserCacheDir()`", zap.Error(err))
 		}
 		// Add two levels, because even if we're in `os.UserCacheDir()`, on Windows that's for example `C:\Users\John\AppData\Local`
 		config.CachePath = userCacheDir + "/deflix-stremio/cache"
@@ -144,89 +146,87 @@ func main() {
 
 	// Load or create caches
 
-	initCaches(mainCtx, config)
+	initCaches(mainCtx, config, logger)
 
 	// Create clients
 
-	initClients(mainCtx, config)
+	initClients(mainCtx, config, logger)
 
-	// Basic middleware and health endpoint
+	// Init cache maps
 
-	log.Info("Setting up server")
-	r := mux.NewRouter()
-	s := r.Methods("GET").Subrouter()
-	s.Use(createTimerMiddleware(mainCtx),
-		createCorsMiddleware(mainCtx), // Stremio doesn't show stream responses when no CORS middleware is used!
-		handlers.ProxyHeaders,
-		recoveryMiddleware,
-		createLoggingMiddleware(mainCtx, cinemataCache))
-	s.HandleFunc("/health", healthHandler)
 	fastCaches := map[string]*fastcache.Cache{
 		"torrent": torrentCache.cache,
 	}
 	goCaches := map[string]*gocache.Cache{
 		"availability": availabilityCache.cache,
-		"cinemata":     cinemataCache.cache,
+		"cinemeta":     cinemetaCache.cache,
 		"redirect":     redirectCache,
 		"stream":       streamCache,
 		"token":        tokenCache.cache,
 	}
-	// Requires URL query: "?imdbid=123&apitoken=foo"
-	s.HandleFunc("/status", createStatusHandler(mainCtx, searchClient.GetMagnetSearchers(), conversionClient, fastCaches, goCaches))
-
-	// Stremio endpoints
-
-	// Use token middleware only for the Stremio endpoints
-	tokenMiddleware := createTokenMiddleware(mainCtx, conversionClient)
-	manifestHandler := createManifestHandler(mainCtx, conversionClient)
-	streamHandler := createStreamHandler(mainCtx, config, searchClient, conversionClient, redirectCache)
-	s.HandleFunc("/{apitoken}/manifest.json", tokenMiddleware(manifestHandler).ServeHTTP)
-	s.HandleFunc("/{apitoken}/stream/{type}/{id}.json", tokenMiddleware(streamHandler).ServeHTTP)
-
-	// Additional endpoints
-
-	// Redirects stream URLs (previously sent to Stremio) to the actual RealDebrid stream URLs
-	s.HandleFunc("/redirect/{id}", createRedirectHandler(mainCtx, redirectCache, conversionClient))
-	// Root redirects to website
-	s.HandleFunc("/", createRootHandler(mainCtx, config))
-
-	srv := &http.Server{
-		Addr:    config.BindAddr + ":" + strconv.Itoa(config.Port),
-		Handler: s,
-		// Timeouts to avoid Slowloris attacks
-		ReadTimeout:    time.Second * 5,
-		WriteTimeout:   time.Second * 15,
-		IdleTimeout:    time.Second * 60,
-		MaxHeaderBytes: 1 * 1000, // 1 KB
-	}
-
-	stopping := false
-	stoppingPtr := &stopping
-
-	log.WithField("address", srv.Addr).Info("Starting server")
+	// Log cache stats every hour
 	go func() {
-		if err := srv.ListenAndServe(); err != nil {
-			if !*stoppingPtr {
-				log.WithError(err).Fatal("Couldn't start server")
-			} else {
-				log.WithError(err).Fatal("Error in srv.ListenAndServe() during server shutdown (probably context deadline expired before the server could shutdown cleanly)")
-			}
+		// Don't run at the same time as the persistence
+		time.Sleep(time.Minute)
+		for {
+			logCacheStats(mainCtx, fastCaches, goCaches, logger)
+			time.Sleep(time.Hour)
 		}
 	}()
 
-	// Timed logger for easier debugging with logs
+	// Prepare addon creation
+
+	streamHandler := createStreamHandler(mainCtx, config, searchClient, conversionClient, redirectCache, logger)
+	streamHandlers := map[string]stremio.StreamHandler{"movie": streamHandler}
+
+	options := stremio.Options{
+		BindAddr: config.BindAddr,
+		Port:     config.Port,
+		// We already have a logger
+		Logger:       logger,
+		LogIPs:       true,
+		RedirectURL:  config.RootURL,
+		LogMediaName: true,
+		// We already have a Cinemeta Client
+		CinemetaClient: cinemetaClient,
+	}
+
+	// Create addon
+
+	addon, err := stremio.NewAddon(manifest, nil, streamHandlers, options)
+	if err != nil {
+		logger.Fatal("Couldn't create new addon", zap.Error(err))
+	}
+
+	// Customize addon
+
+	tokenMiddleware := createTokenMiddleware(mainCtx, conversionClient, logger)
+	addon.AddMiddleware("/:userData/manifest.json", tokenMiddleware)
+	addon.AddMiddleware("/:userData/stream/:type/:id.json", tokenMiddleware)
+	// Also set the middleware for the endpoints without userData, so that in the handlers we don't have to deal with the possibility that the token isn't set.
+	addon.AddMiddleware("/manifest.json", tokenMiddleware)
+	addon.AddMiddleware("/stream/:type/:id.json", tokenMiddleware)
+
+	// Requires URL query: "?imdbid=123&apitoken=foo"
+	statusEndpoint := createStatusHandler(mainCtx, searchClient.GetMagnetSearchers(), conversionClient, fastCaches, goCaches, logger)
+	addon.AddEndpoint("GET", "/status", statusEndpoint)
+
+	// Redirects stream URLs (previously sent to Stremio) to the actual RealDebrid stream URLs
+	addon.AddEndpoint("GET", "/redirect/:id", createRedirectHandler(mainCtx, redirectCache, conversionClient, logger))
+
+	stoppingChan := make(chan bool, 1)
+	stopping := false
+	stoppingPtr := &stopping
 	go func() {
-		for {
-			log.Trace("...")
-			time.Sleep(time.Second)
-		}
+		<-stoppingChan
+		*stoppingPtr = true
 	}()
 
 	// Save cache to file every hour
 	go func() {
 		for {
 			time.Sleep(time.Hour)
-			persistCaches(mainCtx, config.CachePath, stoppingPtr, fastCaches, goCaches)
+			persistCaches(mainCtx, config.CachePath, stoppingPtr, fastCaches, goCaches, logger)
 		}
 	}()
 
@@ -235,52 +235,18 @@ func main() {
 		// Don't run at the same time as the persistence
 		time.Sleep(time.Minute)
 		for {
-			logCacheStats(mainCtx, fastCaches, goCaches)
+			logCacheStats(mainCtx, fastCaches, goCaches, logger)
 			time.Sleep(time.Hour)
 		}
 	}()
 
-	// Graceful shutdown
+	// Start addon
 
-	c := make(chan os.Signal, 1)
-	// Accept SIGINT (Ctrl+C) and SIGTERM (`docker stop`)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	sig := <-c
-	log.WithField("signal", sig).Info("Received signal, shutting down...")
-	*stoppingPtr = true
-	// Create a deadline to wait for. `docker stop` gives us 10 seconds.
-	// No need to get the cancel func and defer calling it, because srv.Shutdown() will consider the timeout from the context.
-	ctx, _ := context.WithTimeout(context.Background(), 9*time.Second)
-	// Doesn't block if no connections, but will otherwise wait until the timeout deadline
-	if err := srv.Shutdown(ctx); err != nil {
-		log.WithError(err).Fatal("Error shutting down server")
-	}
-	log.Info("Server shut down")
+	addon.Run(stoppingChan)
 }
 
-func setLogLevel(cfg config) {
-	switch cfg.LogLevel {
-	case "trace":
-		log.SetLevel(log.TraceLevel)
-	case "debug":
-		log.SetLevel(log.DebugLevel)
-	case "info":
-		log.SetLevel(log.InfoLevel)
-	case "warn":
-		log.SetLevel(log.WarnLevel)
-	case "error":
-		log.SetLevel(log.ErrorLevel)
-	case "fatal":
-		log.SetLevel(log.FatalLevel)
-	case "panic":
-		log.SetLevel(log.PanicLevel)
-	default:
-		log.WithField("logLevel", cfg.LogLevel).Fatal("Unknown logLevel")
-	}
-}
-
-func initCaches(ctx context.Context, config config) {
-	log.Info("Initiating caches...")
+func initCaches(ctx context.Context, config config, logger *zap.Logger) {
+	logger.Info("Initiating caches...")
 	start := time.Now()
 
 	// fastcache
@@ -293,31 +259,31 @@ func initCaches(ctx context.Context, config config) {
 
 	availabilityCacheItems, err := loadGoCache(config.CachePath + "/availability.gob")
 	if err != nil {
-		log.WithError(err).Error("Couldn't load availability cache from file - continuing with an empty cache")
+		logger.Error("Couldn't load availability cache from file - continuing with an empty cache", zap.Error(err))
 		availabilityCacheItems = map[string]gocache.Item{}
 	}
 	availabilityCache = creationCache{
 		cache: gocache.NewFrom(config.CacheAgeRD, 24*time.Hour, availabilityCacheItems),
 	}
 
-	cinemataCacheItems, err := loadGoCache(config.CachePath + "/cinemata.gob")
+	cinemetaCacheItems, err := loadGoCache(config.CachePath + "/cinemeta.gob")
 	if err != nil {
-		log.WithError(err).Error("Couldn't load cinemata cache from file - continuing with an empty cache")
-		cinemataCacheItems = map[string]gocache.Item{}
+		logger.Error("Couldn't load cinemeta cache from file - continuing with an empty cache", zap.Error(err))
+		cinemetaCacheItems = map[string]gocache.Item{}
 	}
-	cinemataCache = movieCache{
-		cache: gocache.NewFrom(cinemataExpiration, 24*time.Hour, cinemataCacheItems),
+	cinemetaCache = metaCache{
+		cache: gocache.NewFrom(cinemetaExpiration, 24*time.Hour, cinemetaCacheItems),
 	}
 
 	if redirectCacheItems, err := loadGoCache(config.CachePath + "/redirect.gob"); err != nil {
-		log.WithError(err).Error("Couldn't load redirect cache from file - continuing with an empty cache")
+		logger.Error("Couldn't load redirect cache from file - continuing with an empty cache", zap.Error(err))
 		redirectCache = gocache.New(redirectExpiration, 24*time.Hour)
 	} else {
 		redirectCache = gocache.NewFrom(redirectExpiration, 24*time.Hour, redirectCacheItems)
 	}
 
 	if streamCacheItems, err := loadGoCache(config.CachePath + "/stream.gob"); err != nil {
-		log.WithError(err).Error("Couldn't load stream cache from file - continuing with an empty cache")
+		logger.Error("Couldn't load stream cache from file - continuing with an empty cache", zap.Error(err))
 		streamCache = gocache.New(streamExpiration, 24*time.Hour)
 	} else {
 		streamCache = gocache.NewFrom(streamExpiration, 24*time.Hour, streamCacheItems)
@@ -325,7 +291,7 @@ func initCaches(ctx context.Context, config config) {
 
 	tokenCacheItems, err := loadGoCache(config.CachePath + "/token.gob")
 	if err != nil {
-		log.WithError(err).Error("Couldn't load token cache from file - continuing with an empty cache")
+		logger.Error("Couldn't load token cache from file - continuing with an empty cache", zap.Error(err))
 		tokenCacheItems = map[string]gocache.Item{}
 	}
 	tokenCache = creationCache{
@@ -334,11 +300,11 @@ func initCaches(ctx context.Context, config config) {
 
 	duration := time.Since(start).Milliseconds()
 	durationString := strconv.FormatInt(duration, 10) + "ms"
-	log.WithField("duration", durationString).Info("Initiated caches")
+	logger.Info("Initiated caches", zap.String("duration", durationString))
 }
 
-func initClients(ctx context.Context, config config) {
-	log.Info("Initiating clients...")
+func initClients(ctx context.Context, config config, logger *zap.Logger) {
+	logger.Info("Initiating clients...")
 	start := time.Now()
 
 	ytsClientOpts := imdb2torrent.NewYTSclientOpts(config.BaseURLyts, timeout, config.CacheAgeTorrents)
@@ -347,24 +313,24 @@ func initClients(ctx context.Context, config config) {
 	ibitClientOpts := imdb2torrent.NewIbitClientOpts(config.BaseURLibit, timeout, config.CacheAgeTorrents)
 	rdClientOpts := realdebrid.NewClientOpts(config.BaseURLrd, timeout, config.CacheAgeRD, config.ExtraHeadersRD)
 
-	cinemataClient = cinemata.NewClient(ctx, cinemata.DefaultClientOpts, cinemataCache)
-	tpbClient, err := imdb2torrent.NewTPBclient(ctx, tpbClientOpts, torrentCache, cinemataClient)
+	cinemetaClient = cinemeta.NewClient(cinemeta.DefaultClientOpts, cinemetaCache, logger)
+	tpbClient, err := imdb2torrent.NewTPBclient(ctx, tpbClientOpts, torrentCache, cinemetaClient, logger)
 	if err != nil {
-		log.WithError(err).Fatal("Couldn't create TPB client")
+		logger.Fatal("Couldn't create TPB client", zap.Error(err))
 	}
 	siteClients := map[string]imdb2torrent.MagnetSearcher{
-		"YTS":   imdb2torrent.NewYTSclient(ctx, ytsClientOpts, torrentCache),
+		"YTS":   imdb2torrent.NewYTSclient(ctx, ytsClientOpts, torrentCache, logger),
 		"TPB":   tpbClient,
-		"1337X": imdb2torrent.NewLeetxClient(ctx, leetxClientOpts, torrentCache, cinemataClient),
-		"ibit":  imdb2torrent.NewIbitClient(ctx, ibitClientOpts, torrentCache),
+		"1337X": imdb2torrent.NewLeetxClient(ctx, leetxClientOpts, torrentCache, cinemetaClient, logger),
+		"ibit":  imdb2torrent.NewIbitClient(ctx, ibitClientOpts, torrentCache, logger),
 	}
-	searchClient = imdb2torrent.NewClient(ctx, siteClients, timeout)
-	conversionClient, err = realdebrid.NewClient(ctx, rdClientOpts, tokenCache, availabilityCache)
+	searchClient = imdb2torrent.NewClient(ctx, siteClients, timeout, logger)
+	conversionClient, err = realdebrid.NewClient(ctx, rdClientOpts, tokenCache, availabilityCache, logger)
 	if err != nil {
-		log.WithError(err).Fatal("Couldn't create RealDebrid client")
+		logger.Fatal("Couldn't create RealDebrid client", zap.Error(err))
 	}
 
 	duration := time.Since(start).Milliseconds()
 	durationString := strconv.FormatInt(duration, 10) + "ms"
-	log.WithField("duration", durationString).Info("Initiated clients")
+	logger.Info("Initiated clients", zap.String("duration", durationString))
 }

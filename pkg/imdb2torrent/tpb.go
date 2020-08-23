@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
+	"go.uber.org/zap"
 
-	"github.com/doingodswork/deflix-stremio/pkg/cinemata"
+	"github.com/deflix-tv/go-stremio/pkg/cinemeta"
 )
 
 var (
@@ -57,10 +57,11 @@ type tpbClient struct {
 	httpClient     *http.Client
 	cache          Cache
 	cacheAge       time.Duration
-	cinemataClient cinemata.Client
+	cinemetaClient *cinemeta.Client
+	logger         *zap.Logger
 }
 
-func NewTPBclient(ctx context.Context, opts TPBclientOptions, cache Cache, cinemataClient cinemata.Client) (tpbClient, error) {
+func NewTPBclient(ctx context.Context, opts TPBclientOptions, cache Cache, cinemetaClient *cinemeta.Client, logger *zap.Logger) (tpbClient, error) {
 	// Using a SOCKS5 proxy allows us to make requests to TPB via the TOR network
 	var httpClient *http.Client
 	if opts.SocksProxyAddr != "" {
@@ -78,31 +79,29 @@ func NewTPBclient(ctx context.Context, opts TPBclientOptions, cache Cache, cinem
 		httpClient:     httpClient,
 		cache:          cache,
 		cacheAge:       opts.CacheAge,
-		cinemataClient: cinemataClient,
+		cinemetaClient: cinemetaClient,
+		logger:         logger,
 	}, nil
 }
 
-// Check cals the TPB API to find torrents for the given IMDb ID.
+// Find cals the TPB API to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
 func (c tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
-	logFields := log.Fields{
-		"imdbID":      imdbID,
-		"torrentSite": "TPB",
-	}
-	logger := log.WithContext(ctx).WithFields(logFields)
+	zapFieldID := zap.String("imdbID", imdbID)
+	zapFieldTorrentSite := zap.String("torrentSite", "TPB")
 
 	// Check cache first
 	cacheKey := imdbID + "-TPB"
 	torrentList, created, found, err := c.cache.Get(cacheKey)
 	if err != nil {
-		logger.WithError(err).Error("Couldn't get torrent results from cache")
+		c.logger.Error("Couldn't get torrent results from cache", zap.Error(err), zapFieldID, zapFieldTorrentSite)
 	} else if !found {
-		logger.Debug("Torrent results not found in cache")
+		c.logger.Debug("Torrent results not found in cache", zapFieldID, zapFieldTorrentSite)
 	} else if time.Since(created) > (c.cacheAge) {
 		expiredSince := time.Since(created.Add(c.cacheAge))
-		logger.WithField("expiredSince", expiredSince).Debug("Hit cache for torrents, but item is expired")
+		c.logger.Debug("Hit cache for torrents, but item is expired", zap.Duration("expiredSince", expiredSince), zapFieldID, zapFieldTorrentSite)
 	} else {
-		logger.WithField("torrentCount", len(torrentList)).Debug("Hit cache for torrents, returning results")
+		c.logger.Debug("Hit cache for torrents, returning results", zap.Int("torrentCount", len(torrentList)), zapFieldID, zapFieldTorrentSite)
 		return torrentList, nil
 	}
 
@@ -129,9 +128,9 @@ func (c tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 	}
 
 	// Get movie name
-	movieName, _, err := c.cinemataClient.GetMovieNameYear(ctx, imdbID)
+	meta, err := c.cinemetaClient.GetMovie(ctx, imdbID)
 	if err != nil {
-		return nil, fmt.Errorf("Couldn't get movie name via Cinemata for IMDb ID %v: %v", imdbID, err)
+		return nil, fmt.Errorf("Couldn't get movie name via Cinemeta for IMDb ID %v: %v", imdbID, err)
 	}
 
 	var results []Result
@@ -158,13 +157,13 @@ func (c tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 		}
 		infoHash := torrent.Get("info_hash").String()
 		if infoHash == "" {
-			logger.WithField("torrentJSON", torrent.String()).Warn("Couldn't get info_hash from torrent JSON")
+			c.logger.Warn("Couldn't get info_hash from torrent JSON", zap.String("torrentJSON", torrent.String()), zapFieldID, zapFieldTorrentSite)
 			continue
 		}
-		magnetURL := createMagnetURL(ctx, infoHash, movieName, trackersTPB)
-		logger.WithFields(log.Fields{"title": movieName, "quality": quality, "infoHash": infoHash, "magnet": magnetURL}).Trace("Found torrent")
+		magnetURL := createMagnetURL(ctx, infoHash, meta.Name, trackersTPB)
+		c.logger.Debug("Found torrent", zap.String("title", meta.Name), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnetURL), zapFieldID, zapFieldTorrentSite)
 		result := Result{
-			Title:     movieName,
+			Title:     meta.Name,
 			Quality:   quality,
 			InfoHash:  infoHash,
 			MagnetURL: magnetURL,
@@ -175,7 +174,7 @@ func (c tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 	// Fill cache, even if there are no results, because that's just the current state of the torrent site.
 	// Any actual errors would have returned earlier.
 	if err := c.cache.Set(cacheKey, results); err != nil {
-		logger.WithError(err).WithField("cache", "torrent").Error("Couldn't cache torrents")
+		c.logger.Error("Couldn't cache torrents", zap.Error(err), zap.String("cache", "torrent"), zapFieldID, zapFieldTorrentSite)
 	}
 
 	return results, nil

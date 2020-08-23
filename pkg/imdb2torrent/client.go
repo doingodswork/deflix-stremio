@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 var (
@@ -25,12 +25,14 @@ type MagnetSearcher interface {
 type Client struct {
 	timeout     time.Duration
 	siteClients map[string]MagnetSearcher
+	logger      *zap.Logger
 }
 
-func NewClient(ctx context.Context, siteClients map[string]MagnetSearcher, timeout time.Duration) Client {
+func NewClient(ctx context.Context, siteClients map[string]MagnetSearcher, timeout time.Duration, logger *zap.Logger) Client {
 	return Client{
 		timeout:     timeout,
 		siteClients: siteClients,
+		logger:      logger,
 	}
 }
 
@@ -39,7 +41,7 @@ func NewClient(ctx context.Context, siteClients map[string]MagnetSearcher, timeo
 // It caches results once they're found.
 // It can return an empty slice and no error if no actual error occurred (for example if torrents where found but no >=720p videos).
 func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error) {
-	logger := log.WithContext(ctx).WithField("imdbID", imdbID)
+	zapFieldID := zap.String("imdbID", imdbID)
 
 	clientCount := len(c.siteClients)
 	resChan := make(chan []Result, clientCount)
@@ -53,20 +55,20 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 	for k, v := range c.siteClients {
 		// Note: Let's not close the channels in the senders, as it would make the receiver's code more complex. The GC takes care of that.
 		go func(clientName string, siteClient MagnetSearcher) {
-			siteLogger := logger.WithField("torrentSite", clientName)
-			siteLogger.Debug("Finding torrents...")
+			zapFieldTorrentSite := zap.String("torrentSite", clientName)
+			c.logger.Debug("Finding torrents...", zapFieldID, zapFieldTorrentSite)
 			siteResChan := make(chan []Result)
 			siteErrChan := make(chan error)
 			go func() {
 				siteStart := time.Now()
 				results, err := siteClient.Find(ctx, imdbID)
 				if err != nil {
-					siteLogger.WithError(err).Warn("Couldn't find torrents")
+					c.logger.Warn("Couldn't find torrents", zap.Error(err), zapFieldID, zapFieldTorrentSite)
 					siteErrChan <- err
 				} else {
 					duration := time.Since(siteStart).Milliseconds()
 					durationString := strconv.FormatInt(duration, 10)
-					siteLogger.WithField("torrentCount", len(results)).WithField("duration", durationString+"ms").Debug("Found torrents")
+					c.logger.Debug("Found torrents", zap.Int("torrentCount", len(results)), zap.String("duration", durationString+"ms"), zapFieldID, zapFieldTorrentSite)
 					siteResChan <- results
 				}
 			}()
@@ -80,7 +82,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 			case err := <-siteErrChan:
 				errChan <- err
 			case <-timeoutChan:
-				siteLogger.Warn("Finding torrents timed out. It will continue to run in the background.")
+				c.logger.Warn("Finding torrents timed out. It will continue to run in the background.", zapFieldID, zapFieldTorrentSite)
 				resChan <- nil
 			}
 		}(k, v)
@@ -135,7 +137,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 	}
 
 	if len(noDupResults) == 0 {
-		logger.Warn("Couldn't find ANY torrents")
+		c.logger.Warn("Couldn't find ANY torrents", zapFieldID)
 	}
 
 	return noDupResults, nil
