@@ -162,9 +162,9 @@ func loadGoCache(filePath string) (map[string]gocache.Item, error) {
 	return result, nil
 }
 
-func persistCaches(ctx context.Context, cacheFilePath string, stoppingPtr *bool, fastCaches map[string]*fastcache.Cache, goCaches map[string]*gocache.Cache, logger *zap.Logger) {
+func persistCaches(ctx context.Context, cacheFilePath string, fastCaches map[string]*fastcache.Cache, goCaches map[string]*gocache.Cache, logger *zap.Logger) {
 	// TODO: We might want to overthink this - persisting caches on shutdown might be useful, especially for the redirect cache!
-	if *stoppingPtr {
+	if ctx.Err() != nil {
 		logger.Warn("Regular cache persistence triggered, but server is shutting down")
 		return
 	}

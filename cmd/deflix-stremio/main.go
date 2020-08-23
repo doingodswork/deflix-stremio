@@ -107,7 +107,7 @@ func init() {
 }
 
 func main() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 
 	// Create an "info" logger at first, replace later in case the logging level is configured to be something else
 	logger, err := stremio.NewLogger("info")
@@ -214,23 +214,21 @@ func main() {
 	// Redirects stream URLs (previously sent to Stremio) to the actual RealDebrid stream URLs
 	addon.AddEndpoint("GET", "/redirect/:id", createRedirectHandler(redirectCache, conversionClient, logger))
 
-	stoppingChan := make(chan bool, 1)
-	stopping := false
-	stoppingPtr := &stopping
-	go func() {
-		<-stoppingChan
-		*stoppingPtr = true
-	}()
-
 	// Save cache to file every hour
 	go func() {
 		for {
 			time.Sleep(time.Hour)
-			persistCaches(ctx, config.CachePath, stoppingPtr, fastCaches, goCaches, logger)
+			persistCaches(ctx, config.CachePath, fastCaches, goCaches, logger)
 		}
 	}()
 
 	// Start addon
+
+	stoppingChan := make(chan bool, 1)
+	go func() {
+		<-stoppingChan
+		cancel()
+	}()
 
 	addon.Run(stoppingChan)
 }
