@@ -46,22 +46,24 @@ var DefaultYTSclientOpts = YTSclientOptions{
 var _ MagnetSearcher = (*ytsClient)(nil)
 
 type ytsClient struct {
-	baseURL    string
-	httpClient *http.Client
-	cache      Cache
-	cacheAge   time.Duration
-	logger     *zap.Logger
+	baseURL          string
+	httpClient       *http.Client
+	cache            Cache
+	cacheAge         time.Duration
+	logger           *zap.Logger
+	logFoundTorrents bool
 }
 
-func NewYTSclient(opts YTSclientOptions, cache Cache, logger *zap.Logger) *ytsClient {
+func NewYTSclient(opts YTSclientOptions, cache Cache, logger *zap.Logger, logFoundTorrents bool) *ytsClient {
 	return &ytsClient{
 		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
 			Timeout: opts.Timeout,
 		},
-		cache:    cache,
-		cacheAge: opts.CacheAge,
-		logger:   logger,
+		cache:            cache,
+		cacheAge:         opts.CacheAge,
+		logger:           logger,
+		logFoundTorrents: logFoundTorrents,
 	}
 }
 
@@ -121,7 +123,9 @@ func (c *ytsClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 			if ripType != "" {
 				quality += " (" + ripType + ")"
 			}
-			c.logger.Debug("Found torrent", zap.String("title", title), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnetURL), zapFieldID, zapFieldTorrentSite)
+			if c.logFoundTorrents {
+				c.logger.Debug("Found torrent", zap.String("title", title), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnetURL), zapFieldID, zapFieldTorrentSite)
+			}
 			result := Result{
 				Title:     title,
 				Quality:   quality,

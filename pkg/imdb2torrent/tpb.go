@@ -53,15 +53,16 @@ var DefaultTPBclientOpts = TPBclientOptions{
 var _ MagnetSearcher = (*tpbClient)(nil)
 
 type tpbClient struct {
-	baseURL        string
-	httpClient     *http.Client
-	cache          Cache
-	cacheAge       time.Duration
-	cinemetaClient *cinemeta.Client
-	logger         *zap.Logger
+	baseURL          string
+	httpClient       *http.Client
+	cache            Cache
+	cacheAge         time.Duration
+	cinemetaClient   *cinemeta.Client
+	logger           *zap.Logger
+	logFoundTorrents bool
 }
 
-func NewTPBclient(opts TPBclientOptions, cache Cache, cinemetaClient *cinemeta.Client, logger *zap.Logger) (*tpbClient, error) {
+func NewTPBclient(opts TPBclientOptions, cache Cache, cinemetaClient *cinemeta.Client, logger *zap.Logger, logFoundTorrents bool) (*tpbClient, error) {
 	// Using a SOCKS5 proxy allows us to make requests to TPB via the TOR network
 	var httpClient *http.Client
 	if opts.SocksProxyAddr != "" {
@@ -75,12 +76,13 @@ func NewTPBclient(opts TPBclientOptions, cache Cache, cinemetaClient *cinemeta.C
 		}
 	}
 	return &tpbClient{
-		baseURL:        opts.BaseURL,
-		httpClient:     httpClient,
-		cache:          cache,
-		cacheAge:       opts.CacheAge,
-		cinemetaClient: cinemetaClient,
-		logger:         logger,
+		baseURL:          opts.BaseURL,
+		httpClient:       httpClient,
+		cache:            cache,
+		cacheAge:         opts.CacheAge,
+		cinemetaClient:   cinemetaClient,
+		logger:           logger,
+		logFoundTorrents: logFoundTorrents,
 	}, nil
 }
 
@@ -161,7 +163,9 @@ func (c *tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 			continue
 		}
 		magnetURL := createMagnetURL(ctx, infoHash, meta.Name, trackersTPB)
-		c.logger.Debug("Found torrent", zap.String("title", meta.Name), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnetURL), zapFieldID, zapFieldTorrentSite)
+		if c.logFoundTorrents {
+			c.logger.Debug("Found torrent", zap.String("title", meta.Name), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnetURL), zapFieldID, zapFieldTorrentSite)
+		}
 		result := Result{
 			Title:     meta.Name,
 			Quality:   quality,

@@ -89,8 +89,10 @@ Usage of deflix-stremio:
         Prefix for environment variables
   -extraHeadersRD string
         Additional HTTP request headers to set for requests to RealDebrid, in a format like "X-Foo: bar", separated by newline characters ("\n")
+  -logFoundTorrents
+        Set to true to log each single torrent that was found by one of the torrent site clients (with DEBUG level)
   -logLevel string
-        Log level to show only logs with the given and more severe levels. Can be "trace", "debug", "info", "warn", "error", "fatal", "panic". (default "debug")
+        Log level to show only logs with the given and more severe levels. Can be "debug", "info", "warn", "error". (default "debug")
   -port int
         Port to listen on (default 8080)
   -rootURL string

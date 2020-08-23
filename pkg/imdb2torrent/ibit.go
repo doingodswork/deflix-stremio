@@ -41,24 +41,26 @@ var DefaultIbitClientOpts = IbitClientOptions{
 var _ MagnetSearcher = (*ibitClient)(nil)
 
 type ibitClient struct {
-	baseURL    string
-	httpClient *http.Client
-	cache      Cache
-	lock       *sync.Mutex
-	cacheAge   time.Duration
-	logger     *zap.Logger
+	baseURL          string
+	httpClient       *http.Client
+	cache            Cache
+	lock             *sync.Mutex
+	cacheAge         time.Duration
+	logger           *zap.Logger
+	logFoundTorrents bool
 }
 
-func NewIbitClient(opts IbitClientOptions, cache Cache, logger *zap.Logger) *ibitClient {
+func NewIbitClient(opts IbitClientOptions, cache Cache, logger *zap.Logger, logFoundTorrents bool) *ibitClient {
 	return &ibitClient{
 		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
 			Timeout: opts.Timeout,
 		},
-		cache:    cache,
-		lock:     &sync.Mutex{},
-		cacheAge: opts.CacheAge,
-		logger:   logger,
+		cache:            cache,
+		lock:             &sync.Mutex{},
+		cacheAge:         opts.CacheAge,
+		logger:           logger,
+		logFoundTorrents: logFoundTorrents,
 	}
 }
 
@@ -219,7 +221,9 @@ func (c *ibitClient) Find(ctx context.Context, imdbID string) ([]Result, error) 
 			InfoHash:  infoHash,
 			MagnetURL: magnet,
 		}
-		c.logger.Debug("Found torrent", zap.String("title", title), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnet), zapFieldID, zapFieldTorrentSite)
+		if c.logFoundTorrents {
+			c.logger.Debug("Found torrent", zap.String("title", title), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnet), zapFieldID, zapFieldTorrentSite)
+		}
 
 		results = append(results, result)
 	}

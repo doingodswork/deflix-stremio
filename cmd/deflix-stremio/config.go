@@ -24,6 +24,7 @@ type config struct {
 	BaseURLibit       string        `json:"baseURLibit"`
 	BaseURLrd         string        `json:"baseURLrd"`
 	LogLevel          string        `json:"logLevel"`
+	LogFoundTorrents  bool          `json:logFoundTorrents`
 	RootURL           string        `json:"rootURL"`
 	ExtraHeadersRD    []string      `json:"extraHeadersRD"`
 	SocksProxyAddrTPB string        `json:"socksProxyAddrTPB"`
@@ -47,7 +48,8 @@ func parseConfig(logger *zap.Logger) config {
 		baseURL1337x      = flag.String("baseURL1337x", "https://1337x.to", "Base URL for 1337x")
 		baseURLibit       = flag.String("baseURLibit", "https://ibit.am", "Base URL for ibit")
 		baseURLrd         = flag.String("baseURLrd", "https://api.real-debrid.com", "Base URL for RealDebrid")
-		logLevel          = flag.String("logLevel", "debug", `Log level to show only logs with the given and more severe levels. Can be "trace", "debug", "info", "warn", "error", "fatal", "panic".`)
+		logLevel          = flag.String("logLevel", "debug", `Log level to show only logs with the given and more severe levels. Can be "debug", "info", "warn", "error".`)
+		logFoundTorrents  = flag.Bool("logFoundTorrents", false, "Set to true to log each single torrent that was found by one of the torrent site clients (with DEBUG level)")
 		rootURL           = flag.String("rootURL", "https://www.deflix.tv", "Redirect target for the root")
 		extraHeadersRD    = flag.String("extraHeadersRD", "", "Additional HTTP request headers to set for requests to RealDebrid, in a format like \"X-Foo: bar\", separated by newline characters (\"\\n\")")
 		socksProxyAddrTPB = flag.String("socksProxyAddrTPB", "", "SOCKS5 proxy address for accessing TPB, required for accessing TPB via the TOR network (where \"127.0.0.1:9050\" would be typical value)")
@@ -162,6 +164,15 @@ func parseConfig(logger *zap.Logger) config {
 		}
 	}
 	result.LogLevel = *logLevel
+
+	if !isArgSet("logFoundTorrents") {
+		if val, ok := os.LookupEnv(*envPrefix + "LOG_FOUND_TORRENTS"); ok {
+			if *logFoundTorrents, err = strconv.ParseBool(val); err != nil {
+				logger.Fatal("Couldn't convert environment variable from string to bool", zap.Error(err), zap.String("envVar", "LOG_FOUND_TORRENTS"))
+			}
+		}
+	}
+	result.LogFoundTorrents = *logFoundTorrents
 
 	if !isArgSet("rootURL") {
 		if val, ok := os.LookupEnv(*envPrefix + "ROOT_URL"); ok {

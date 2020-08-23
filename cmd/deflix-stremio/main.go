@@ -302,15 +302,15 @@ func initClients(config config, logger *zap.Logger) {
 	rdClientOpts := realdebrid.NewClientOpts(config.BaseURLrd, timeout, config.CacheAgeRD, config.ExtraHeadersRD)
 
 	cinemetaClient = cinemeta.NewClient(cinemeta.DefaultClientOpts, cinemetaCache, logger)
-	tpbClient, err := imdb2torrent.NewTPBclient(tpbClientOpts, torrentCache, cinemetaClient, logger)
+	tpbClient, err := imdb2torrent.NewTPBclient(tpbClientOpts, torrentCache, cinemetaClient, logger, config.LogFoundTorrents)
 	if err != nil {
 		logger.Fatal("Couldn't create TPB client", zap.Error(err))
 	}
 	siteClients := map[string]imdb2torrent.MagnetSearcher{
-		"YTS":   imdb2torrent.NewYTSclient(ytsClientOpts, torrentCache, logger),
+		"YTS":   imdb2torrent.NewYTSclient(ytsClientOpts, torrentCache, logger, config.LogFoundTorrents),
 		"TPB":   tpbClient,
-		"1337X": imdb2torrent.NewLeetxClient(leetxClientOpts, torrentCache, cinemetaClient, logger),
-		"ibit":  imdb2torrent.NewIbitClient(ibitClientOpts, torrentCache, logger),
+		"1337X": imdb2torrent.NewLeetxClient(leetxClientOpts, torrentCache, cinemetaClient, logger, config.LogFoundTorrents),
+		"ibit":  imdb2torrent.NewIbitClient(ibitClientOpts, torrentCache, logger, config.LogFoundTorrents),
 	}
 	searchClient = imdb2torrent.NewClient(siteClients, timeout, logger)
 	conversionClient, err = realdebrid.NewClient(rdClientOpts, tokenCache, availabilityCache, logger)

@@ -37,24 +37,26 @@ var DefaultLeetxClientOpts = LeetxClientOptions{
 var _ MagnetSearcher = (*leetxClient)(nil)
 
 type leetxClient struct {
-	baseURL        string
-	httpClient     *http.Client
-	cache          Cache
-	cinemetaClient *cinemeta.Client
-	cacheAge       time.Duration
-	logger         *zap.Logger
+	baseURL          string
+	httpClient       *http.Client
+	cache            Cache
+	cinemetaClient   *cinemeta.Client
+	cacheAge         time.Duration
+	logger           *zap.Logger
+	logFoundTorrents bool
 }
 
-func NewLeetxClient(opts LeetxClientOptions, cache Cache, cinemetaClient *cinemeta.Client, logger *zap.Logger) *leetxClient {
+func NewLeetxClient(opts LeetxClientOptions, cache Cache, cinemetaClient *cinemeta.Client, logger *zap.Logger, logFoundTorrents bool) *leetxClient {
 	return &leetxClient{
 		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
 			Timeout: opts.Timeout,
 		},
-		cache:          cache,
-		cinemetaClient: cinemetaClient,
-		cacheAge:       opts.CacheAge,
-		logger:         logger,
+		cache:            cache,
+		cinemetaClient:   cinemetaClient,
+		cacheAge:         opts.CacheAge,
+		logger:           logger,
+		logFoundTorrents: logFoundTorrents,
 	}
 }
 
@@ -215,7 +217,9 @@ func (c *leetxClient) Find(ctx context.Context, imdbID string) ([]Result, error)
 				InfoHash:  infoHash,
 				MagnetURL: magnet,
 			}
-			c.logger.Debug("Found torrent", zap.String("title", meta.Name), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnet), zapFieldID, zapFieldTorrentSite)
+			if c.logFoundTorrents {
+				c.logger.Debug("Found torrent", zap.String("title", meta.Name), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnet), zapFieldID, zapFieldTorrentSite)
+			}
 
 			resultChan <- result
 		}(torrentPageURL)
