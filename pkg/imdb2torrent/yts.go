@@ -53,8 +53,8 @@ type ytsClient struct {
 	logger     *zap.Logger
 }
 
-func NewYTSclient(ctx context.Context, opts YTSclientOptions, cache Cache, logger *zap.Logger) ytsClient {
-	return ytsClient{
+func NewYTSclient(ctx context.Context, opts YTSclientOptions, cache Cache, logger *zap.Logger) *ytsClient {
+	return &ytsClient{
 		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
 			Timeout: opts.Timeout,
@@ -67,7 +67,7 @@ func NewYTSclient(ctx context.Context, opts YTSclientOptions, cache Cache, logge
 
 // Find uses YTS' API to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c ytsClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
+func (c *ytsClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 	zapFieldID := zap.String("imdbID", imdbID)
 	zapFieldTorrentSite := zap.String("torrentSite", "YTS")
 
@@ -141,6 +141,6 @@ func (c ytsClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 	return results, nil
 }
 
-func (c ytsClient) IsSlow() bool {
+func (c *ytsClient) IsSlow() bool {
 	return false
 }

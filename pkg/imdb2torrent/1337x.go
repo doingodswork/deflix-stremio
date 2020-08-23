@@ -45,8 +45,8 @@ type leetxClient struct {
 	logger         *zap.Logger
 }
 
-func NewLeetxClient(ctx context.Context, opts LeetxClientOptions, cache Cache, cinemetaClient *cinemeta.Client, logger *zap.Logger) leetxClient {
-	return leetxClient{
+func NewLeetxClient(ctx context.Context, opts LeetxClientOptions, cache Cache, cinemetaClient *cinemeta.Client, logger *zap.Logger) *leetxClient {
+	return &leetxClient{
 		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
 			Timeout: opts.Timeout,
@@ -61,7 +61,7 @@ func NewLeetxClient(ctx context.Context, opts LeetxClientOptions, cache Cache, c
 // Find scrapes 1337x to find torrents for the given IMDb ID.
 // It uses the Stremio Cinemeta remote addon to get a movie name for a given IMDb ID, so it can search 1337x with the name.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c leetxClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
+func (c *leetxClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 	zapFieldID := zap.String("imdbID", imdbID)
 	zapFieldTorrentSite := zap.String("torrentSite", "1337x")
 
@@ -239,11 +239,11 @@ func (c leetxClient) Find(ctx context.Context, imdbID string) ([]Result, error) 
 	return results, nil
 }
 
-func (c leetxClient) IsSlow() bool {
+func (c *leetxClient) IsSlow() bool {
 	return false
 }
 
-func (c leetxClient) getDoc(ctx context.Context, url string) (*goquery.Document, error) {
+func (c *leetxClient) getDoc(ctx context.Context, url string) (*goquery.Document, error) {
 	res, err := c.httpClient.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't GET %v: %v", url, err)

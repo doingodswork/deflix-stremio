@@ -61,20 +61,20 @@ type tpbClient struct {
 	logger         *zap.Logger
 }
 
-func NewTPBclient(ctx context.Context, opts TPBclientOptions, cache Cache, cinemetaClient *cinemeta.Client, logger *zap.Logger) (tpbClient, error) {
+func NewTPBclient(ctx context.Context, opts TPBclientOptions, cache Cache, cinemetaClient *cinemeta.Client, logger *zap.Logger) (*tpbClient, error) {
 	// Using a SOCKS5 proxy allows us to make requests to TPB via the TOR network
 	var httpClient *http.Client
 	if opts.SocksProxyAddr != "" {
 		var err error
 		if httpClient, err = newSOCKS5httpClient(opts.Timeout, opts.SocksProxyAddr); err != nil {
-			return tpbClient{}, fmt.Errorf("Couldn't create HTTP client with SOCKS5 proxy: %v", err)
+			return nil, fmt.Errorf("Couldn't create HTTP client with SOCKS5 proxy: %v", err)
 		}
 	} else {
 		httpClient = &http.Client{
 			Timeout: opts.Timeout,
 		}
 	}
-	return tpbClient{
+	return &tpbClient{
 		baseURL:        opts.BaseURL,
 		httpClient:     httpClient,
 		cache:          cache,
@@ -86,7 +86,7 @@ func NewTPBclient(ctx context.Context, opts TPBclientOptions, cache Cache, cinem
 
 // Find cals the TPB API to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
+func (c *tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 	zapFieldID := zap.String("imdbID", imdbID)
 	zapFieldTorrentSite := zap.String("torrentSite", "TPB")
 
@@ -180,6 +180,6 @@ func (c tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 	return results, nil
 }
 
-func (c tpbClient) IsSlow() bool {
+func (c *tpbClient) IsSlow() bool {
 	return false
 }
