@@ -1,8 +1,12 @@
 FROM golang:1.15-alpine as builder
 
 WORKDIR /go/src/app/
-COPY . /go/src/app/
 
+# Fill cache with source code of dependencies
+COPY go.mod /go/src/app/
+RUN go mod download -x
+
+COPY . /go/src/app/
 # Without disabling CGO the binary doesn't run in distroless/static
 RUN CGO_ENABLED=0 go build -v -ldflags="-s -w" ./cmd/deflix-stremio/
 
