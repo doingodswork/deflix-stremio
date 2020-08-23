@@ -45,7 +45,7 @@ type leetxClient struct {
 	logger         *zap.Logger
 }
 
-func NewLeetxClient(ctx context.Context, opts LeetxClientOptions, cache Cache, cinemetaClient *cinemeta.Client, logger *zap.Logger) *leetxClient {
+func NewLeetxClient(opts LeetxClientOptions, cache Cache, cinemetaClient *cinemeta.Client, logger *zap.Logger) *leetxClient {
 	return &leetxClient{
 		baseURL: opts.BaseURL,
 		httpClient: &http.Client{

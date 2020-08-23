@@ -28,7 +28,7 @@ type Client struct {
 	logger      *zap.Logger
 }
 
-func NewClient(ctx context.Context, siteClients map[string]MagnetSearcher, timeout time.Duration, logger *zap.Logger) *Client {
+func NewClient(siteClients map[string]MagnetSearcher, timeout time.Duration, logger *zap.Logger) *Client {
 	return &Client{
 		timeout:     timeout,
 		siteClients: siteClients,

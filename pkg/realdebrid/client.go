@@ -50,7 +50,7 @@ type Client struct {
 	logger            *zap.Logger
 }
 
-func NewClient(ctx context.Context, opts ClientOptions, tokenCache, availabilityCache Cache, logger *zap.Logger) (*Client, error) {
+func NewClient(opts ClientOptions, tokenCache, availabilityCache Cache, logger *zap.Logger) (*Client, error) {
 	// Precondition check
 	if opts.BaseURL == "" {
 		return nil, errors.New("opts.BaseURL must not be empty")

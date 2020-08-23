@@ -22,7 +22,7 @@ const (
 	bigBuckBunnyMagnet = `magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c&dn=Big+Buck+Bunny&tr=udp%3A%2F%2Fexplodie.org%3A6969&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969&tr=udp%3A%2F%2Ftracker.empire-js.us%3A1337&tr=udp%3A%2F%2Ftracker.leechers-paradise.org%3A6969&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337&tr=wss%3A%2F%2Ftracker.btorrent.xyz&tr=wss%3A%2F%2Ftracker.fastcast.nz&tr=wss%3A%2F%2Ftracker.openwebtorrent.com&ws=https%3A%2F%2Fwebtorrent.io%2Ftorrents%2F&xs=https%3A%2F%2Fwebtorrent.io%2Ftorrents%2Fbig-buck-bunny.torrent`
 )
 
-func createStreamHandler(ctx context.Context, config config, searchClient *imdb2torrent.Client, conversionClient *realdebrid.Client, redirectCache *gocache.Cache, logger *zap.Logger) stremio.StreamHandler {
+func createStreamHandler(config config, searchClient *imdb2torrent.Client, conversionClient *realdebrid.Client, redirectCache *gocache.Cache, logger *zap.Logger) stremio.StreamHandler {
 	return func(ctx context.Context, id string, userData interface{}) ([]stremio.StreamItem, error) {
 		torrents, err := searchClient.FindMagnets(ctx, id)
 		if err != nil {
@@ -154,7 +154,7 @@ func createStreamItem(ctx context.Context, config config, redirectID, quality st
 	return stream
 }
 
-func createRedirectHandler(ctx context.Context, redirectCache *gocache.Cache, conversionClient *realdebrid.Client, logger *zap.Logger) func(*fiber.Ctx) {
+func createRedirectHandler(redirectCache *gocache.Cache, conversionClient *realdebrid.Client, logger *zap.Logger) func(*fiber.Ctx) {
 	return func(c *fiber.Ctx) {
 		logger.Debug("redirectHandler called", zap.String("request", fmt.Sprintf("%+v", &c.Fasthttp.Request)))
 
@@ -255,7 +255,7 @@ func createRedirectHandler(ctx context.Context, redirectCache *gocache.Cache, co
 	}
 }
 
-func createStatusHandler(mainCtx context.Context, magnetSearchers map[string]imdb2torrent.MagnetSearcher, conversionClient *realdebrid.Client, fastCaches map[string]*fastcache.Cache, goCaches map[string]*gocache.Cache, logger *zap.Logger) func(*fiber.Ctx) {
+func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher, conversionClient *realdebrid.Client, fastCaches map[string]*fastcache.Cache, goCaches map[string]*gocache.Cache, logger *zap.Logger) func(*fiber.Ctx) {
 	return func(c *fiber.Ctx) {
 		logger.Debug("statusHandler called", zap.String("request", fmt.Sprintf("%+v", &c.Fasthttp.Request)))
 

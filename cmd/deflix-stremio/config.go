@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"os"
 	"strconv"
@@ -31,7 +30,7 @@ type config struct {
 	EnvPrefix         string        `json:"envPrefix"`
 }
 
-func parseConfig(ctx context.Context, logger *zap.Logger) config {
+func parseConfig(logger *zap.Logger) config {
 	result := config{}
 
 	// Flags
@@ -64,14 +63,14 @@ func parseConfig(ctx context.Context, logger *zap.Logger) config {
 
 	// Only overwrite the values by their env var counterparts that have not been set (and that *are* set via env var).
 	var err error
-	if !isArgSet(ctx, "bindAddr") {
+	if !isArgSet("bindAddr") {
 		if val, ok := os.LookupEnv(*envPrefix + "BIND_ADDR"); ok {
 			*bindAddr = val
 		}
 	}
 	result.BindAddr = *bindAddr
 
-	if !isArgSet(ctx, "port") {
+	if !isArgSet("port") {
 		if val, ok := os.LookupEnv(*envPrefix + "PORT"); ok {
 			if *port, err = strconv.Atoi(val); err != nil {
 				logger.Fatal("Couldn't convert environment variable from string to int", zap.Error(err), zap.String("envVar", "PORT"))
@@ -80,21 +79,21 @@ func parseConfig(ctx context.Context, logger *zap.Logger) config {
 	}
 	result.Port = *port
 
-	if !isArgSet(ctx, "streamURLaddr") {
+	if !isArgSet("streamURLaddr") {
 		if val, ok := os.LookupEnv(*envPrefix + "STREAM_URL_ADDR"); ok {
 			*streamURLaddr = val
 		}
 	}
 	result.StreamURLaddr = *streamURLaddr
 
-	if !isArgSet(ctx, "cachePath") {
+	if !isArgSet("cachePath") {
 		if val, ok := os.LookupEnv(*envPrefix + "CACHE_PATH"); ok {
 			*cachePath = val
 		}
 	}
 	result.CachePath = *cachePath
 
-	if !isArgSet(ctx, "cacheMaxMB") {
+	if !isArgSet("cacheMaxMB") {
 		if val, ok := os.LookupEnv(*envPrefix + "CACHE_MAX_MB"); ok {
 			if *cacheMaxMB, err = strconv.Atoi(val); err != nil {
 				logger.Fatal("Couldn't convert environment variable from string to int", zap.Error(err), zap.String("envVar", "CACHE_MAX_MB"))
@@ -104,7 +103,7 @@ func parseConfig(ctx context.Context, logger *zap.Logger) config {
 	}
 	result.CacheMaxMB = *cacheMaxMB
 
-	if !isArgSet(ctx, "cacheAgeRD") {
+	if !isArgSet("cacheAgeRD") {
 		if val, ok := os.LookupEnv(*envPrefix + "CACHE_AGE_RD"); ok {
 			if *cacheAgeRD, err = time.ParseDuration(val); err != nil {
 				logger.Fatal("Couldn't convert environment variable from string to time.Duration", zap.Error(err), zap.String("envVar", "CACHE_AGE_RD"))
@@ -113,7 +112,7 @@ func parseConfig(ctx context.Context, logger *zap.Logger) config {
 	}
 	result.CacheAgeRD = *cacheAgeRD
 
-	if !isArgSet(ctx, "cacheAgeTorrents") {
+	if !isArgSet("cacheAgeTorrents") {
 		if val, ok := os.LookupEnv(*envPrefix + "CACHE_AGE_TORRENTS"); ok {
 			if *cacheAgeTorrents, err = time.ParseDuration(val); err != nil {
 				logger.Fatal("Couldn't convert environment variable from string to time.Duration", zap.Error(err), zap.String("envVar", "CACHE_AGE_TORRENTS"))
@@ -122,56 +121,56 @@ func parseConfig(ctx context.Context, logger *zap.Logger) config {
 	}
 	result.CacheAgeTorrents = *cacheAgeTorrents
 
-	if !isArgSet(ctx, "baseURLyts") {
+	if !isArgSet("baseURLyts") {
 		if val, ok := os.LookupEnv(*envPrefix + "BASE_URL_YTS"); ok {
 			*baseURLyts = val
 		}
 	}
 	result.BaseURLyts = *baseURLyts
 
-	if !isArgSet(ctx, "baseURLtpb") {
+	if !isArgSet("baseURLtpb") {
 		if val, ok := os.LookupEnv(*envPrefix + "BASE_URL_TPB"); ok {
 			*baseURLtpb = val
 		}
 	}
 	result.BaseURLtpb = *baseURLtpb
 
-	if !isArgSet(ctx, "baseURL1337x") {
+	if !isArgSet("baseURL1337x") {
 		if val, ok := os.LookupEnv(*envPrefix + "BASE_URL_1337X"); ok {
 			*baseURL1337x = val
 		}
 	}
 	result.BaseURL1337x = *baseURL1337x
 
-	if !isArgSet(ctx, "baseURLibit") {
+	if !isArgSet("baseURLibit") {
 		if val, ok := os.LookupEnv(*envPrefix + "BASE_URL_IBIT"); ok {
 			*baseURLibit = val
 		}
 	}
 	result.BaseURLibit = *baseURLibit
 
-	if !isArgSet(ctx, "baseURLrd") {
+	if !isArgSet("baseURLrd") {
 		if val, ok := os.LookupEnv(*envPrefix + "BASE_URL_RD"); ok {
 			*baseURLrd = val
 		}
 	}
 	result.BaseURLrd = *baseURLrd
 
-	if !isArgSet(ctx, "logLevel") {
+	if !isArgSet("logLevel") {
 		if val, ok := os.LookupEnv(*envPrefix + "LOG_LEVEL"); ok {
 			*logLevel = val
 		}
 	}
 	result.LogLevel = *logLevel
 
-	if !isArgSet(ctx, "rootURL") {
+	if !isArgSet("rootURL") {
 		if val, ok := os.LookupEnv(*envPrefix + "ROOT_URL"); ok {
 			*rootURL = val
 		}
 	}
 	result.RootURL = *rootURL
 
-	if !isArgSet(ctx, "extraHeadersRD") {
+	if !isArgSet("extraHeadersRD") {
 		if val, ok := os.LookupEnv(*envPrefix + "EXTRA_HEADERS_RD"); ok {
 			*extraHeadersRD = val
 		}
@@ -186,7 +185,7 @@ func parseConfig(ctx context.Context, logger *zap.Logger) config {
 		}
 	}
 
-	if !isArgSet(ctx, "socksProxyAddrTPB") {
+	if !isArgSet("socksProxyAddrTPB") {
 		if val, ok := os.LookupEnv(*envPrefix + "SOCKS_PROXY_ADDR_TPB"); ok {
 			*socksProxyAddrTPB = val
 		}
@@ -198,7 +197,7 @@ func parseConfig(ctx context.Context, logger *zap.Logger) config {
 
 // isArgSet returns true if the argument you're looking for is actually set as command line argument.
 // Pass without "-" prefix.
-func isArgSet(ctx context.Context, arg string) bool {
+func isArgSet(arg string) bool {
 	found := false
 	flag.Visit(func(f *flag.Flag) {
 		if f.Name == arg {

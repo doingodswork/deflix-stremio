@@ -189,7 +189,7 @@ func persistCaches(ctx context.Context, cacheFilePath string, stoppingPtr *bool,
 	logger.Info("Persisted caches", zap.String("duration", durationString))
 }
 
-func logCacheStats(ctx context.Context, fastCaches map[string]*fastcache.Cache, goCaches map[string]*gocache.Cache, logger *zap.Logger) {
+func logCacheStats(fastCaches map[string]*fastcache.Cache, goCaches map[string]*gocache.Cache, logger *zap.Logger) {
 	stats := fastcache.Stats{}
 	for name, fastCache := range fastCaches {
 		fastCache.UpdateStats(&stats)

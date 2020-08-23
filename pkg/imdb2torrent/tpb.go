@@ -61,7 +61,7 @@ type tpbClient struct {
 	logger         *zap.Logger
 }
 
-func NewTPBclient(ctx context.Context, opts TPBclientOptions, cache Cache, cinemetaClient *cinemeta.Client, logger *zap.Logger) (*tpbClient, error) {
+func NewTPBclient(opts TPBclientOptions, cache Cache, cinemetaClient *cinemeta.Client, logger *zap.Logger) (*tpbClient, error) {
 	// Using a SOCKS5 proxy allows us to make requests to TPB via the TOR network
 	var httpClient *http.Client
 	if opts.SocksProxyAddr != "" {

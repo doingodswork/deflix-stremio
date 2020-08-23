@@ -107,7 +107,7 @@ func init() {
 }
 
 func main() {
-	mainCtx := context.Background()
+	ctx := context.Background()
 
 	// Create an "info" logger at first, replace later in case the logging level is configured to be something else
 	logger, err := stremio.NewLogger("info")
@@ -118,7 +118,7 @@ func main() {
 	// Parse config
 
 	logger.Info("Parsing config...")
-	config := parseConfig(mainCtx, logger)
+	config := parseConfig(logger)
 	configJSON, err := json.Marshal(config)
 	if err != nil {
 		logger.Fatal("Couldn't marshal config to JSON", zap.Error(err))
@@ -146,11 +146,11 @@ func main() {
 
 	// Load or create caches
 
-	initCaches(mainCtx, config, logger)
+	initCaches(config, logger)
 
 	// Create clients
 
-	initClients(mainCtx, config, logger)
+	initClients(config, logger)
 
 	// Init cache maps
 
@@ -169,14 +169,14 @@ func main() {
 		// Don't run at the same time as the persistence
 		time.Sleep(time.Minute)
 		for {
-			logCacheStats(mainCtx, fastCaches, goCaches, logger)
+			logCacheStats(fastCaches, goCaches, logger)
 			time.Sleep(time.Hour)
 		}
 	}()
 
 	// Prepare addon creation
 
-	streamHandler := createStreamHandler(mainCtx, config, searchClient, conversionClient, redirectCache, logger)
+	streamHandler := createStreamHandler(config, searchClient, conversionClient, redirectCache, logger)
 	streamHandlers := map[string]stremio.StreamHandler{"movie": streamHandler}
 
 	options := stremio.Options{
@@ -200,7 +200,7 @@ func main() {
 
 	// Customize addon
 
-	tokenMiddleware := createTokenMiddleware(mainCtx, conversionClient, logger)
+	tokenMiddleware := createTokenMiddleware(conversionClient, logger)
 	addon.AddMiddleware("/:userData/manifest.json", tokenMiddleware)
 	addon.AddMiddleware("/:userData/stream/:type/:id.json", tokenMiddleware)
 	// Also set the middleware for the endpoints without userData, so that in the handlers we don't have to deal with the possibility that the token isn't set.
@@ -208,11 +208,11 @@ func main() {
 	addon.AddMiddleware("/stream/:type/:id.json", tokenMiddleware)
 
 	// Requires URL query: "?imdbid=123&apitoken=foo"
-	statusEndpoint := createStatusHandler(mainCtx, searchClient.GetMagnetSearchers(), conversionClient, fastCaches, goCaches, logger)
+	statusEndpoint := createStatusHandler(searchClient.GetMagnetSearchers(), conversionClient, fastCaches, goCaches, logger)
 	addon.AddEndpoint("GET", "/status", statusEndpoint)
 
 	// Redirects stream URLs (previously sent to Stremio) to the actual RealDebrid stream URLs
-	addon.AddEndpoint("GET", "/redirect/:id", createRedirectHandler(mainCtx, redirectCache, conversionClient, logger))
+	addon.AddEndpoint("GET", "/redirect/:id", createRedirectHandler(redirectCache, conversionClient, logger))
 
 	stoppingChan := make(chan bool, 1)
 	stopping := false
@@ -226,7 +226,7 @@ func main() {
 	go func() {
 		for {
 			time.Sleep(time.Hour)
-			persistCaches(mainCtx, config.CachePath, stoppingPtr, fastCaches, goCaches, logger)
+			persistCaches(ctx, config.CachePath, stoppingPtr, fastCaches, goCaches, logger)
 		}
 	}()
 
@@ -235,7 +235,7 @@ func main() {
 		// Don't run at the same time as the persistence
 		time.Sleep(time.Minute)
 		for {
-			logCacheStats(mainCtx, fastCaches, goCaches, logger)
+			logCacheStats(fastCaches, goCaches, logger)
 			time.Sleep(time.Hour)
 		}
 	}()
@@ -245,7 +245,7 @@ func main() {
 	addon.Run(stoppingChan)
 }
 
-func initCaches(ctx context.Context, config config, logger *zap.Logger) {
+func initCaches(config config, logger *zap.Logger) {
 	logger.Info("Initiating caches...")
 	start := time.Now()
 
@@ -303,7 +303,7 @@ func initCaches(ctx context.Context, config config, logger *zap.Logger) {
 	logger.Info("Initiated caches", zap.String("duration", durationString))
 }
 
-func initClients(ctx context.Context, config config, logger *zap.Logger) {
+func initClients(config config, logger *zap.Logger) {
 	logger.Info("Initiating clients...")
 	start := time.Now()
 
@@ -314,18 +314,18 @@ func initClients(ctx context.Context, config config, logger *zap.Logger) {
 	rdClientOpts := realdebrid.NewClientOpts(config.BaseURLrd, timeout, config.CacheAgeRD, config.ExtraHeadersRD)
 
 	cinemetaClient = cinemeta.NewClient(cinemeta.DefaultClientOpts, cinemetaCache, logger)
-	tpbClient, err := imdb2torrent.NewTPBclient(ctx, tpbClientOpts, torrentCache, cinemetaClient, logger)
+	tpbClient, err := imdb2torrent.NewTPBclient(tpbClientOpts, torrentCache, cinemetaClient, logger)
 	if err != nil {
 		logger.Fatal("Couldn't create TPB client", zap.Error(err))
 	}
 	siteClients := map[string]imdb2torrent.MagnetSearcher{
-		"YTS":   imdb2torrent.NewYTSclient(ctx, ytsClientOpts, torrentCache, logger),
+		"YTS":   imdb2torrent.NewYTSclient(ytsClientOpts, torrentCache, logger),
 		"TPB":   tpbClient,
-		"1337X": imdb2torrent.NewLeetxClient(ctx, leetxClientOpts, torrentCache, cinemetaClient, logger),
-		"ibit":  imdb2torrent.NewIbitClient(ctx, ibitClientOpts, torrentCache, logger),
+		"1337X": imdb2torrent.NewLeetxClient(leetxClientOpts, torrentCache, cinemetaClient, logger),
+		"ibit":  imdb2torrent.NewIbitClient(ibitClientOpts, torrentCache, logger),
 	}
-	searchClient = imdb2torrent.NewClient(ctx, siteClients, timeout, logger)
-	conversionClient, err = realdebrid.NewClient(ctx, rdClientOpts, tokenCache, availabilityCache, logger)
+	searchClient = imdb2torrent.NewClient(siteClients, timeout, logger)
+	conversionClient, err = realdebrid.NewClient(rdClientOpts, tokenCache, availabilityCache, logger)
 	if err != nil {
 		logger.Fatal("Couldn't create RealDebrid client", zap.Error(err))
 	}

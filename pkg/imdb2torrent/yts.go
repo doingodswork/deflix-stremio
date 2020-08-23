@@ -53,7 +53,7 @@ type ytsClient struct {
 	logger     *zap.Logger
 }
 
-func NewYTSclient(ctx context.Context, opts YTSclientOptions, cache Cache, logger *zap.Logger) *ytsClient {
+func NewYTSclient(opts YTSclientOptions, cache Cache, logger *zap.Logger) *ytsClient {
 	return &ytsClient{
 		baseURL: opts.BaseURL,
 		httpClient: &http.Client{

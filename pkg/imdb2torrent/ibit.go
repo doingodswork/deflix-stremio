@@ -49,7 +49,7 @@ type ibitClient struct {
 	logger     *zap.Logger
 }
 
-func NewIbitClient(ctx context.Context, opts IbitClientOptions, cache Cache, logger *zap.Logger) *ibitClient {
+func NewIbitClient(opts IbitClientOptions, cache Cache, logger *zap.Logger) *ibitClient {
 	return &ibitClient{
 		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
