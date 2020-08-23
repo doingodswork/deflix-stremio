@@ -84,7 +84,7 @@ var (
 // Clients
 var (
 	cinemetaClient   *cinemeta.Client
-	searchClient     imdb2torrent.Client
+	searchClient     *imdb2torrent.Client
 	conversionClient realdebrid.Client
 )
 

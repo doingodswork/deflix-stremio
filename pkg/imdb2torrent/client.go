@@ -28,8 +28,8 @@ type Client struct {
 	logger      *zap.Logger
 }
 
-func NewClient(ctx context.Context, siteClients map[string]MagnetSearcher, timeout time.Duration, logger *zap.Logger) Client {
-	return Client{
+func NewClient(ctx context.Context, siteClients map[string]MagnetSearcher, timeout time.Duration, logger *zap.Logger) *Client {
+	return &Client{
 		timeout:     timeout,
 		siteClients: siteClients,
 		logger:      logger,
@@ -40,7 +40,7 @@ func NewClient(ctx context.Context, siteClients map[string]MagnetSearcher, timeo
 // It only returns 720p, 1080p, 1080p 10bit, 2160p and 2160p 10bit videos.
 // It caches results once they're found.
 // It can return an empty slice and no error if no actual error occurred (for example if torrents where found but no >=720p videos).
-func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error) {
+func (c *Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error) {
 	zapFieldID := zap.String("imdbID", imdbID)
 
 	clientCount := len(c.siteClients)
@@ -143,7 +143,7 @@ func (c Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error
 	return noDupResults, nil
 }
 
-func (c Client) GetMagnetSearchers() map[string]MagnetSearcher {
+func (c *Client) GetMagnetSearchers() map[string]MagnetSearcher {
 	return c.siteClients
 }
 
