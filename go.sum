@@ -16,8 +16,8 @@ github.com/davecgh/go-spew v1.1.0 h1:ZDRjVQ15GmhC3fiQ8ni8+OwkZQO4DARzQgrnXU1Liz8
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/deflix-tv/go-stremio v0.4.0 h1:+uwLh1E9Pk3ZqdKsfPqtq2Gc5o2ZhHV1eBr0RjQ6i7w=
-github.com/deflix-tv/go-stremio v0.4.0/go.mod h1:vvZM/UghyWzBUqDciGGWRJIDByfa+qaiXCRzaTcm760=
+github.com/deflix-tv/go-stremio v0.4.1 h1:ij1SmEWnvTSDrv27+wkP5DOcWaIUFLoXqAnjpN8zbyc=
+github.com/deflix-tv/go-stremio v0.4.1/go.mod h1:vvZM/UghyWzBUqDciGGWRJIDByfa+qaiXCRzaTcm760=
 github.com/gofiber/adaptor v0.2.0 h1:OJtST958Zc6WTXHTJA/9d464VgakAWKBjzM3lmkKjsc=
 github.com/gofiber/adaptor v0.2.0/go.mod h1:0M9Agxi+L3uS5oKd6pN317h35JQhfvrfD4H+c4a5qck=
 github.com/gofiber/cors v0.2.2 h1:NQgLeNq8SWCKsdGotodyFCqLdSnxGLISsp9OU01k/cs=
