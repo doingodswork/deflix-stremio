@@ -24,7 +24,7 @@ type config struct {
 	BaseURLibit       string        `json:"baseURLibit"`
 	BaseURLrd         string        `json:"baseURLrd"`
 	LogLevel          string        `json:"logLevel"`
-	LogFoundTorrents  bool          `json:logFoundTorrents`
+	LogFoundTorrents  bool          `json:"logFoundTorrents"`
 	RootURL           string        `json:"rootURL"`
 	ExtraHeadersRD    []string      `json:"extraHeadersRD"`
 	SocksProxyAddrTPB string        `json:"socksProxyAddrTPB"`
