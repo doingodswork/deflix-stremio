@@ -299,6 +299,7 @@ func initClients(config config, logger *zap.Logger) {
 	tpbClientOpts := imdb2torrent.NewTPBclientOpts(config.BaseURLtpb, config.SocksProxyAddrTPB, timeout, config.CacheAgeTorrents)
 	leetxClientOpts := imdb2torrent.NewLeetxClientOpts(config.BaseURL1337x, timeout, config.CacheAgeTorrents)
 	ibitClientOpts := imdb2torrent.NewIbitClientOpts(config.BaseURLibit, timeout, config.CacheAgeTorrents)
+	rarbgClientOpts := imdb2torrent.NewRARBGclientOpts(config.BaseURLrarbg, timeout, config.CacheAgeTorrents)
 	rdClientOpts := realdebrid.NewClientOpts(config.BaseURLrd, timeout, config.CacheAgeRD, config.ExtraHeadersRD)
 
 	cinemetaClient = cinemeta.NewClient(cinemeta.DefaultClientOpts, cinemetaCache, logger)
@@ -311,6 +312,7 @@ func initClients(config config, logger *zap.Logger) {
 		"TPB":   tpbClient,
 		"1337X": imdb2torrent.NewLeetxClient(leetxClientOpts, torrentCache, cinemetaClient, logger, config.LogFoundTorrents),
 		"ibit":  imdb2torrent.NewIbitClient(ibitClientOpts, torrentCache, logger, config.LogFoundTorrents),
+		"RARBG": imdb2torrent.NewRARBGclient(rarbgClientOpts, torrentCache, logger, config.LogFoundTorrents),
 	}
 	searchClient = imdb2torrent.NewClient(siteClients, timeout, logger)
 	conversionClient, err = realdebrid.NewClient(rdClientOpts, tokenCache, availabilityCache, logger)

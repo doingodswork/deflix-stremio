@@ -3,7 +3,7 @@ Deflix Stremio addon
 
 [Deflix](https://www.deflix.tv) addon for [Stremio](https://stremio.com)
 
-Finds movies on YTS, The Pirate Bay, 1337x and ibit and automatically turns your selected torrent into a cached HTTP stream from a debrid provider like RealDebrid, for high speed 4k streaming and **no P2P uploading**.
+Finds movies on YTS, The Pirate Bay, 1337x, RARBG and ibit and automatically turns your selected torrent into a cached HTTP stream from a debrid provider like RealDebrid, for high speed 4k streaming and **no P2P uploading**.
 
 Currently supported providers:
 
@@ -69,6 +69,8 @@ Usage of deflix-stremio:
         Base URL for 1337x (default "https://1337x.to")
   -baseURLibit string
         Base URL for ibit (default "https://ibit.am")
+  -baseURLrarbg string
+        Base URL for RARBG (default "https://torrentapi.org")
   -baseURLrd string
         Base URL for RealDebrid (default "https://api.real-debrid.com")
   -baseURLtpb string
@@ -109,7 +111,7 @@ If you want to configure deflix-stremio via environment variables, you can use t
 
 If you *run* this web service on your local laptop or server, i.e. if you *self-host* this, you should know the following:
 
-Deflix doesn't download or upload any torrents, but it *does* send HTTP requests to YTS, The Pirate Bay, 1337x and ibit, which *might* be illegal in some countries. Streaming movies from RealDebrid *might* also be illegal in some countries.
+Deflix doesn't download or upload any torrents, but it *does* send HTTP requests to YTS, The Pirate Bay, 1337x, RARBG and ibit, which *might* be illegal in some countries. Streaming movies from RealDebrid *might* also be illegal in some countries.
 
 > To encrypt your traffic so that your ISP can't see where those HTTP requests are sent and to not expose your real IP address to RealDebrid you can use a VPN.
 

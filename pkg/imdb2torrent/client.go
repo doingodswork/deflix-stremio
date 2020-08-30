@@ -51,6 +51,7 @@ func (c *Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, erro
 
 	// Use a single timer that we can stop later, because with `case time.After()` ther will be lots of timers that won't be GCed.
 	timer := time.NewTimer(c.timeout)
+	// Note that the RARBG rate limit is 2s so when no request arrived for 15m the token has to be renewed, leading to the client having to wait 2s for the actual torrent request. So we only get RARBG results when 1. the token is fresh and 2. no concurrent requests are coming in.
 	quickSkipTimer := time.NewTimer(2 * time.Second)
 	for k, v := range c.siteClients {
 		// Note: Let's not close the channels in the senders, as it would make the receiver's code more complex. The GC takes care of that.
