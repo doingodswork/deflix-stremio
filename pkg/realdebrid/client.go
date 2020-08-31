@@ -134,6 +134,9 @@ func (c *Client) CheckInstantAvailability(ctx context.Context, apiToken string, 
 	// Only check the ones of which we don't know that they're valid (or which our knowledge that they're valid is more than 24 hours old).
 	// We don't cache unavailable ones, because that might change often!
 	var result []string
+	infoHashesNotFound := false
+	infoHashesExpired := false
+	infoHashesValid := false
 	requestRequired := false
 	for _, infoHash := range infoHashes {
 		zapFieldInfoHash := zap.String("infoHash", infoHash)
@@ -143,17 +146,37 @@ func (c *Client) CheckInstantAvailability(ctx context.Context, apiToken string, 
 			requestRequired = true
 			url += "/" + infoHash
 		} else if !found {
-			c.logger.Debug("info_hash not found in availability cache", zapFieldInfoHash, zapFieldAPItoken)
+			infoHashesNotFound = true
 			requestRequired = true
 			url += "/" + infoHash
 		} else if time.Since(created) > (c.cacheAge) {
-			expiredSince := time.Since(created.Add(c.cacheAge))
-			c.logger.Debug("Availability cached as valid, but item is expired", zap.Duration("expiredSince", expiredSince), zapFieldInfoHash, zapFieldAPItoken)
+			infoHashesExpired = true
 			requestRequired = true
 			url += "/" + infoHash
 		} else {
-			c.logger.Debug("Availability cached as valid", zapFieldInfoHash, zapFieldAPItoken)
+			infoHashesValid = true
 			result = append(result, infoHash)
+		}
+	}
+	if infoHashesNotFound {
+		if !infoHashesExpired && !infoHashesValid {
+			c.logger.Debug("No info_hash found in availability cache", zapFieldAPItoken)
+		} else {
+			c.logger.Debug("Some info_hash not found in availability cache", zapFieldAPItoken)
+		}
+	}
+	if infoHashesExpired {
+		if !infoHashesNotFound && !infoHashesValid {
+			c.logger.Debug("Availability for all info_hash cached as valid, but they're expired", zapFieldAPItoken)
+		} else {
+			c.logger.Debug("Availability for some info_hash cached as valid, but items are expired", zapFieldAPItoken)
+		}
+	}
+	if infoHashesValid {
+		if !infoHashesNotFound && !infoHashesExpired {
+			c.logger.Debug("Availability for all info_hash cached as valid", zapFieldAPItoken)
+		} else {
+			c.logger.Debug("Availability for some info_hash cached as valid", zapFieldAPItoken)
 		}
 	}
 
