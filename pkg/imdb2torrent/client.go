@@ -49,14 +49,21 @@ func (c *Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, erro
 
 	// Start all clients' searches in parallel.
 
-	// Use a single timer that we can stop later, because with `case time.After()` ther will be lots of timers that won't be GCed.
-	timer := time.NewTimer(c.timeout)
-	// Note that the RARBG rate limit is 2s so when no request arrived for 15m the token has to be renewed, leading to the client having to wait 2s for the actual torrent request. So we only get RARBG results when 1. the token is fresh and 2. no concurrent requests are coming in.
-	quickSkipTimer := time.NewTimer(2 * time.Second)
-	for k, v := range c.siteClients {
+	for siteName, siteClient := range c.siteClients {
+		// We need to create a new timer for each site client because a timer's channel is drained once used, so for example if these timers were created outside the loop and there are two slow (IsSlow()==true) clients, the timeout would only work for one of them!
+		var timer *time.Timer
+		if siteClient.IsSlow() {
+			// Note that the RARBG rate limit is 2s so when no request arrived for 15m the token has to be renewed, leading to the client having to wait 2s for the actual torrent request. So we only get RARBG results when 1. the token is fresh and 2. no concurrent requests are coming in.
+			timer = time.NewTimer(2 * time.Second)
+		} else {
+			timer = time.NewTimer(c.timeout)
+		}
+
 		// Note: Let's not close the channels in the senders, as it would make the receiver's code more complex. The GC takes care of that.
-		go func(clientName string, siteClient MagnetSearcher) {
-			zapFieldTorrentSite := zap.String("torrentSite", clientName)
+		go func(siteName string, siteClient MagnetSearcher, timer *time.Timer) {
+			defer timer.Stop()
+
+			zapFieldTorrentSite := zap.String("torrentSite", siteName)
 			c.logger.Debug("Finding torrents...", zapFieldID, zapFieldTorrentSite)
 			siteResChan := make(chan []Result)
 			siteErrChan := make(chan error)
@@ -73,20 +80,16 @@ func (c *Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, erro
 					siteResChan <- results
 				}
 			}()
-			timeoutChan := timer.C
-			if siteClient.IsSlow() {
-				timeoutChan = quickSkipTimer.C
-			}
 			select {
 			case res := <-siteResChan:
 				resChan <- res
 			case err := <-siteErrChan:
 				errChan <- err
-			case <-timeoutChan:
+			case <-timer.C:
 				c.logger.Warn("Finding torrents timed out. It will continue to run in the background.", zapFieldID, zapFieldTorrentSite)
 				resChan <- nil
 			}
-		}(k, v)
+		}(siteName, siteClient, timer)
 	}
 
 	// Collect results from all clients.
@@ -107,8 +110,6 @@ func (c *Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, erro
 			errs = append(errs, err)
 		}
 	}
-	timer.Stop()
-	quickSkipTimer.Stop()
 
 	returnErrors := len(errs) == clientCount
 
