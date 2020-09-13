@@ -161,6 +161,9 @@ func (c *tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 		if infoHash == "" {
 			c.logger.Warn("Couldn't get info_hash from torrent JSON", zap.String("torrentJSON", torrent.String()), zapFieldID, zapFieldTorrentSite)
 			continue
+		} else if len(infoHash) != 40 {
+			c.logger.Error("InfoHash isn't 40 characters long", zapFieldID, zapFieldTorrentSite)
+			continue
 		}
 		magnetURL := createMagnetURL(ctx, infoHash, meta.Name, trackersTPB)
 		if c.logFoundTorrents {

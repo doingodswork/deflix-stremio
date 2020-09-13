@@ -143,6 +143,11 @@ func (c *rarbgClient) Find(ctx context.Context, imdbID string) ([]Result, error)
 		infoHash = strings.TrimSuffix(infoHash, "&")
 		infoHash = strings.ToUpper(infoHash)
 
+		if len(infoHash) != 40 {
+			c.logger.Error("InfoHash isn't 40 characters long", zap.String("magnet", magnet), zapFieldID, zapFieldTorrentSite)
+			continue
+		}
+
 		if c.logFoundTorrents {
 			c.logger.Debug("Found torrent", zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnet), zapFieldID, zapFieldTorrentSite)
 		}

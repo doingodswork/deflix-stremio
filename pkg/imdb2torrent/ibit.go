@@ -213,6 +213,12 @@ func (c *ibitClient) Find(ctx context.Context, imdbID string) ([]Result, error) 
 		if infoHash == "" {
 			c.logger.Warn("Couldn't extract info_hash. Did the HTML change?", zap.String("magnet", magnet), zapFieldID, zapFieldTorrentSite)
 			continue
+		} else if len(infoHash) != 40 {
+			infoHash = strings.ReplaceAll(infoHash, "XX", "")
+			if len(infoHash) != 40 {
+				c.logger.Warn("InfoHash isn't 40 characters long", zap.String("magnet", magnet), zapFieldID, zapFieldTorrentSite)
+				continue
+			}
 		}
 
 		result := Result{

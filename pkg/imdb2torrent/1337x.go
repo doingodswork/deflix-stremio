@@ -209,6 +209,10 @@ func (c *leetxClient) Find(ctx context.Context, imdbID string) ([]Result, error)
 				c.logger.Warn("Couldn't extract info_hash. Did the HTML change?", zap.String("magnet", magnet), zapFieldID, zapFieldTorrentSite)
 				resultChan <- Result{}
 				return
+			} else if len(infoHash) != 40 {
+				c.logger.Warn("InfoHash isn't 40 characters long", zap.String("magnet", magnet), zapFieldID, zapFieldTorrentSite)
+				resultChan <- Result{}
+				return
 			}
 
 			result := Result{
