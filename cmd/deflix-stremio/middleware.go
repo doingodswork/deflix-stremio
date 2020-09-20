@@ -1,8 +1,6 @@
 package main
 
 import (
-	"strings"
-
 	"github.com/gofiber/fiber"
 	"go.uber.org/zap"
 
@@ -13,15 +11,25 @@ import (
 func createTokenMiddleware(conversionClient *realdebrid.Client, logger *zap.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) {
 		rCtx := c.Context()
-		apiToken := c.Params("userData", "")
-		if apiToken == "" {
+		udString := c.Params("userData", "")
+		if udString == "" {
 			c.SendStatus(fiber.StatusUnauthorized)
 			return
 		}
-		if strings.HasSuffix(apiToken, "-remote") {
-			apiToken = strings.TrimSuffix(apiToken, "-remote")
+		userData, err := decodeUserData(udString, logger)
+		if err != nil {
+			// It's most likely a client-side encoding error
+			c.SendStatus(fiber.StatusBadRequest)
+			// The error is already logged by decodeUserData
+			return
 		}
-		if err := conversionClient.TestToken(rCtx, apiToken); err != nil {
+
+		if userData.RDtoken == "" {
+			c.SendStatus(fiber.StatusUnauthorized)
+			return
+		}
+
+		if err := conversionClient.TestToken(rCtx, userData.RDtoken); err != nil {
 			c.SendStatus(fiber.StatusForbidden)
 			return
 		}

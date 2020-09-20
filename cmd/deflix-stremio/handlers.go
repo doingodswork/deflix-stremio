@@ -23,7 +23,7 @@ const (
 )
 
 func createStreamHandler(config config, searchClient *imdb2torrent.Client, conversionClient *realdebrid.Client, redirectCache *gocache.Cache, logger *zap.Logger) stremio.StreamHandler {
-	return func(ctx context.Context, id string, userData interface{}) ([]stremio.StreamItem, error) {
+	return func(ctx context.Context, id string, userDataIface interface{}) ([]stremio.StreamItem, error) {
 		torrents, err := searchClient.FindMagnets(ctx, id)
 		if err != nil {
 			logger.Warn("Couldn't find magnets", zap.Error(err))
@@ -34,20 +34,16 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, conve
 		}
 
 		// Parse userData.
-		// No need to check if the interface is a string, because the token middleware makes sure a proper token is set.
-		apiToken := userData.(string)
-		var remote bool
-		if strings.HasSuffix(apiToken, "-remote") {
-			remote = true
-			apiToken = strings.TrimSuffix(apiToken, "-remote")
-		}
+		// No need to check if the interface is a string or if the decoding worked, because the token middleware does that already.
+		udString := userDataIface.(string)
+		userData, _ := decodeUserData(udString, logger)
 
 		// Filter out the ones that are not available
 		var infoHashes []string
 		for _, torrent := range torrents {
 			infoHashes = append(infoHashes, torrent.InfoHash)
 		}
-		availableInfoHashes := conversionClient.CheckInstantAvailability(ctx, apiToken, infoHashes...)
+		availableInfoHashes := conversionClient.CheckInstantAvailability(ctx, userData.RDtoken, infoHashes...)
 		if len(availableInfoHashes) == 0 {
 			// TODO: queue for download on real-debrid, or log somewhere for an asynchronous process to go through them and queue them?
 			logger.Info("None of the found torrents are instantly available on real-debrid.com")
@@ -68,7 +64,7 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, conve
 
 		// Note: The torrents slice is guaranteed to not be empty at this point, because it already contained non-duplicate info hashes and then only unavailable ones were filtered and then a `len(availableInfoHashes) == 0` was done.
 
-		// Separate all torrent results into a 720p, 1080p, 1080p 10bit, 2160p and 2160p 10bit list, so we can offer the user one stream for each quality now (or maybe just for one quality if there's no torrent for the other), cache the torrents for each apiToken-imdbID-quality combination and later (at the redirect endpoint) go through the respective torrent list to turn in into a streamable video URL via RealDebrid.
+		// Separate all torrent results into a 720p, 1080p, 1080p 10bit, 2160p and 2160p 10bit list, so we can offer the user one stream for each quality now (or maybe just for one quality if there's no torrent for the other), cache the torrents for each apiToken-imdbID-quality combination and later (at the redirect endpoint) go through the respective torrent list to turn it into a streamable video URL via RealDebrid.
 		var torrents720p []imdb2torrent.Result
 		var torrents1080p []imdb2torrent.Result
 		var torrents1080p10bit []imdb2torrent.Result
@@ -103,8 +99,8 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, conve
 		// Only when the user clicks on a stream and arrives at our redirect endpoint, we go through the list of torrents for the selected quality and try to convert them into a streamable video URL via RealDebrid.
 		// There it should usually work for the first torrent we try, because we already checked the "instant availability" on RealDebrid here. If the "instant availability" info is stale (because we cached it), the next torrent will be used.
 		var streams []stremio.StreamItem
-		remoteString := strconv.FormatBool(remote)
-		requestIDPrefix := apiToken + "-" + remoteString + "-" + id
+		remoteString := strconv.FormatBool(userData.RDremote)
+		requestIDPrefix := userData.RDtoken + "-" + remoteString + "-" + id
 		if len(torrents720p) > 0 {
 			stream := createStreamItem(ctx, config, requestIDPrefix+"-"+"720p", "720p", torrents720p)
 			streams = append(streams, stream)
