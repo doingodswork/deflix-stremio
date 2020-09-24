@@ -313,8 +313,8 @@ func initClients(config config, logger *zap.Logger) {
 	leetxClientOpts := imdb2torrent.NewLeetxClientOpts(config.BaseURL1337x, timeout, config.CacheAgeTorrents)
 	ibitClientOpts := imdb2torrent.NewIbitClientOpts(config.BaseURLibit, timeout, config.CacheAgeTorrents)
 	rarbgClientOpts := imdb2torrent.NewRARBGclientOpts(config.BaseURLrarbg, timeout, config.CacheAgeTorrents)
-	rdClientOpts := realdebrid.NewClientOpts(config.BaseURLrd, timeout, config.CacheAgeXD, config.ExtraHeadersRD)
-	adClientOpts := alldebrid.NewClientOpts(config.BaseURLad, timeout, config.CacheAgeXD)
+	rdClientOpts := realdebrid.NewClientOpts(config.BaseURLrd, timeout, config.CacheAgeXD, config.ExtraHeadersXD)
+	adClientOpts := alldebrid.NewClientOpts(config.BaseURLad, timeout, config.CacheAgeXD, config.ExtraHeadersXD)
 
 	cinemetaClient = cinemeta.NewClient(cinemeta.DefaultClientOpts, cinemetaCache, logger)
 	tpbClient, err := imdb2torrent.NewTPBclient(tpbClientOpts, torrentCache, cinemetaClient, logger, config.LogFoundTorrents)

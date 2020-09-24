@@ -28,7 +28,7 @@ type config struct {
 	LogLevel          string        `json:"logLevel"`
 	LogFoundTorrents  bool          `json:"logFoundTorrents"`
 	RootURL           string        `json:"rootURL"`
-	ExtraHeadersRD    []string      `json:"extraHeadersRD"`
+	ExtraHeadersXD    []string      `json:"extraHeadersXD"`
 	SocksProxyAddrTPB string        `json:"socksProxyAddrTPB"`
 	EnvPrefix         string        `json:"envPrefix"`
 }
@@ -55,7 +55,7 @@ func parseConfig(logger *zap.Logger) config {
 		logLevel          = flag.String("logLevel", "debug", `Log level to show only logs with the given and more severe levels. Can be "debug", "info", "warn", "error".`)
 		logFoundTorrents  = flag.Bool("logFoundTorrents", false, "Set to true to log each single torrent that was found by one of the torrent site clients (with DEBUG level)")
 		rootURL           = flag.String("rootURL", "https://www.deflix.tv", "Redirect target for the root")
-		extraHeadersRD    = flag.String("extraHeadersRD", "", "Additional HTTP request headers to set for requests to RealDebrid, in a format like \"X-Foo: bar\", separated by newline characters (\"\\n\")")
+		extraHeadersXD    = flag.String("extraHeadersXD", "", "Additional HTTP request headers to set for requests to RealDebrid and AllDebrid, in a format like \"X-Foo: bar\", separated by newline characters (\"\\n\")")
 		socksProxyAddrTPB = flag.String("socksProxyAddrTPB", "", "SOCKS5 proxy address for accessing TPB, required for accessing TPB via the TOR network (where \"127.0.0.1:9050\" would be typical value)")
 		envPrefix         = flag.String("envPrefix", "", "Prefix for environment variables")
 	)
@@ -201,15 +201,15 @@ func parseConfig(logger *zap.Logger) config {
 
 	if !isArgSet("extraHeadersRD") {
 		if val, ok := os.LookupEnv(*envPrefix + "EXTRA_HEADERS_RD"); ok {
-			*extraHeadersRD = val
+			*extraHeadersXD = val
 		}
 	}
-	if *extraHeadersRD != "" {
-		headers := strings.Split(*extraHeadersRD, "\n")
+	if *extraHeadersXD != "" {
+		headers := strings.Split(*extraHeadersXD, "\n")
 		for _, header := range headers {
 			header = strings.TrimSpace(header)
 			if header != "" {
-				result.ExtraHeadersRD = append(result.ExtraHeadersRD, header)
+				result.ExtraHeadersXD = append(result.ExtraHeadersXD, header)
 			}
 		}
 	}

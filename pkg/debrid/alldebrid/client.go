@@ -19,16 +19,18 @@ import (
 )
 
 type ClientOptions struct {
-	BaseURL  string
-	Timeout  time.Duration
-	CacheAge time.Duration
+	BaseURL      string
+	Timeout      time.Duration
+	CacheAge     time.Duration
+	ExtraHeaders []string
 }
 
-func NewClientOpts(baseURL string, timeout, cacheAge time.Duration) ClientOptions {
+func NewClientOpts(baseURL string, timeout, cacheAge time.Duration, extraHeaders []string) ClientOptions {
 	return ClientOptions{
-		BaseURL:  baseURL,
-		Timeout:  timeout,
-		CacheAge: cacheAge,
+		BaseURL:      baseURL,
+		Timeout:      timeout,
+		CacheAge:     cacheAge,
+		ExtraHeaders: extraHeaders,
 	}
 }
 
@@ -46,6 +48,7 @@ type Client struct {
 	// For info_hash instant availability
 	availabilityCache debrid.Cache
 	cacheAge          time.Duration
+	extraHeaders      map[string]string
 	logger            *zap.Logger
 }
 
@@ -53,6 +56,22 @@ func NewClient(opts ClientOptions, apiKeyCache, availabilityCache debrid.Cache, 
 	// Precondition check
 	if opts.BaseURL == "" {
 		return nil, errors.New("opts.BaseURL must not be empty")
+	}
+	for _, extraHeader := range opts.ExtraHeaders {
+		if extraHeader != "" {
+			colonIndex := strings.Index(extraHeader, ":")
+			if colonIndex <= 0 || colonIndex == len(extraHeader)-1 {
+				return nil, errors.New("opts.ExtraHeaders elements must have a format like \"X-Foo: bar\"")
+			}
+		}
+	}
+
+	extraHeaderMap := make(map[string]string, len(opts.ExtraHeaders))
+	for _, extraHeader := range opts.ExtraHeaders {
+		if extraHeader != "" {
+			extraHeaderParts := strings.SplitN(extraHeader, ":", 2)
+			extraHeaderMap[extraHeaderParts[0]] = extraHeaderParts[1]
+		}
 	}
 
 	return &Client{
@@ -63,6 +82,7 @@ func NewClient(opts ClientOptions, apiKeyCache, availabilityCache debrid.Cache, 
 		apiKeyCache:       apiKeyCache,
 		availabilityCache: availabilityCache,
 		cacheAge:          opts.CacheAge,
+		extraHeaders:      extraHeaderMap,
 		logger:            logger,
 	}, nil
 }
@@ -274,6 +294,9 @@ func (c *Client) get(ctx context.Context, url, apiKey string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't create GET request: %v", err)
 	}
+	for headerKey, headerVal := range c.extraHeaders {
+		req.Header.Add(headerKey, headerVal)
+	}
 	// In case AD blocks requests based on User-Agent
 	fakeVersion := strconv.Itoa(rand.Intn(10000))
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0."+fakeVersion+".149 Safari/537.36")
@@ -303,6 +326,9 @@ func (c *Client) post(ctx context.Context, url, apiKey string, data url.Values) 
 		return nil, fmt.Errorf("Couldn't create POST request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	for headerKey, headerVal := range c.extraHeaders {
+		req.Header.Add(headerKey, headerVal)
+	}
 	// In case AD blocks requests based on User-Agent
 	fakeVersion := strconv.Itoa(rand.Intn(10000))
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0."+fakeVersion+".149 Safari/537.36")
