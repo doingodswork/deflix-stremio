@@ -14,15 +14,16 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/deflix-tv/go-stremio"
+	"github.com/doingodswork/deflix-stremio/pkg/debrid/alldebrid"
+	"github.com/doingodswork/deflix-stremio/pkg/debrid/realdebrid"
 	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
-	"github.com/doingodswork/deflix-stremio/pkg/realdebrid"
 )
 
 const (
 	bigBuckBunnyMagnet = `magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c&dn=Big+Buck+Bunny&tr=udp%3A%2F%2Fexplodie.org%3A6969&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969&tr=udp%3A%2F%2Ftracker.empire-js.us%3A1337&tr=udp%3A%2F%2Ftracker.leechers-paradise.org%3A6969&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337&tr=wss%3A%2F%2Ftracker.btorrent.xyz&tr=wss%3A%2F%2Ftracker.fastcast.nz&tr=wss%3A%2F%2Ftracker.openwebtorrent.com&ws=https%3A%2F%2Fwebtorrent.io%2Ftorrents%2F&xs=https%3A%2F%2Fwebtorrent.io%2Ftorrents%2Fbig-buck-bunny.torrent`
 )
 
-func createStreamHandler(config config, searchClient *imdb2torrent.Client, conversionClient *realdebrid.Client, redirectCache *gocache.Cache, logger *zap.Logger) stremio.StreamHandler {
+func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdClient *realdebrid.Client, adClient *alldebrid.Client, redirectCache *gocache.Cache, logger *zap.Logger) stremio.StreamHandler {
 	return func(ctx context.Context, id string, userDataIface interface{}) ([]stremio.StreamItem, error) {
 		torrents, err := searchClient.FindMagnets(ctx, id)
 		if err != nil {
@@ -43,10 +44,15 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, conve
 		for _, torrent := range torrents {
 			infoHashes = append(infoHashes, torrent.InfoHash)
 		}
-		availableInfoHashes := conversionClient.CheckInstantAvailability(ctx, userData.RDtoken, infoHashes...)
+		var availableInfoHashes []string
+		if userData.RDtoken != "" {
+			availableInfoHashes = rdClient.CheckInstantAvailability(ctx, userData.RDtoken, infoHashes...)
+		} else {
+			availableInfoHashes = adClient.CheckInstantAvailability(ctx, userData.ADkey, infoHashes...)
+		}
 		if len(availableInfoHashes) == 0 {
-			// TODO: queue for download on real-debrid, or log somewhere for an asynchronous process to go through them and queue them?
-			logger.Info("None of the found torrents are instantly available on real-debrid.com")
+			// TODO: queue for download on the debrid service, or log somewhere for an asynchronous process to go through them and queue them?
+			logger.Info("None of the found torrents are instantly available on the debrid service")
 			return nil, stremio.NotFound
 		}
 		// https://github.com/golang/go/wiki/SliceTricks#filter-in-place
@@ -99,8 +105,12 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, conve
 		// Only when the user clicks on a stream and arrives at our redirect endpoint, we go through the list of torrents for the selected quality and try to convert them into a streamable video URL via RealDebrid.
 		// There it should usually work for the first torrent we try, because we already checked the "instant availability" on RealDebrid here. If the "instant availability" info is stale (because we cached it), the next torrent will be used.
 		var streams []stremio.StreamItem
-		remoteString := strconv.FormatBool(userData.RDremote)
-		requestIDPrefix := userData.RDtoken + "-" + remoteString + "-" + id
+		var requestIDPrefix string
+		if userData.RDtoken != "" {
+			requestIDPrefix = "rd-" + userData.RDtoken + "-" + strconv.FormatBool(userData.RDremote) + "-" + id
+		} else {
+			requestIDPrefix = "ad-" + userData.ADkey + "-" + id
+		}
 		if len(torrents720p) > 0 {
 			stream := createStreamItem(ctx, config, requestIDPrefix+"-"+"720p", "720p", torrents720p)
 			streams = append(streams, stream)
@@ -150,7 +160,7 @@ func createStreamItem(ctx context.Context, config config, redirectID, quality st
 	return stream
 }
 
-func createRedirectHandler(redirectCache *gocache.Cache, conversionClient *realdebrid.Client, logger *zap.Logger) func(*fiber.Ctx) {
+func createRedirectHandler(redirectCache *gocache.Cache, rdClient *realdebrid.Client, adClient *alldebrid.Client, logger *zap.Logger) func(*fiber.Ctx) {
 	return func(c *fiber.Ctx) {
 		logger.Debug("redirectHandler called", zap.String("request", fmt.Sprintf("%+v", &c.Fasthttp.Request)))
 
@@ -162,20 +172,31 @@ func createRedirectHandler(redirectCache *gocache.Cache, conversionClient *reald
 		zapFieldRedirectID := zap.String("redirectID", redirectID)
 
 		idParts := strings.Split(redirectID, "-")
-		// "<apiToken>-<remote>-<imdbID>-<quality>"
-		if len(idParts) != 4 {
+		// "<debridService>-<apiToken>-[<remote>]-<imdbID>-<quality>"
+		if len(idParts) < 4 ||
+			(idParts[0] == "rd" && len(idParts) != 5) ||
+			(idParts[0] == "ad" && len(idParts) != 4) {
 			c.SendStatus(fiber.StatusBadRequest)
 			return
 		}
-		apiToken := idParts[0]
-		remote, err := strconv.ParseBool(idParts[1])
-		if err != nil {
-			logger.Error("Couldn't parse remote value", zap.Error(err), zapFieldRedirectID)
-			c.SendStatus(fiber.StatusBadRequest)
-			return
+		apiToken := idParts[1]
+		var remote bool
+		var imdbID string
+		var quality string
+		var err error
+		if idParts[0] == "rd" {
+			remote, err = strconv.ParseBool(idParts[2])
+			if err != nil {
+				logger.Error("Couldn't parse remote value", zap.Error(err), zapFieldRedirectID)
+				c.SendStatus(fiber.StatusBadRequest)
+				return
+			}
+			imdbID = idParts[3]
+			quality = idParts[4]
+		} else {
+			imdbID = idParts[2]
+			quality = idParts[3]
 		}
-		imdbID := idParts[2]
-		quality := idParts[3]
 
 		// Before we look into the cache, we need to set a lock so that concurrent calls to this endpoint (including the redirectID) don't unnecessarily lead to the full sharade of RD requests again, only because the first handling of the request wasn't fast enough to fill the cache.
 		// The lock objects are created in the stream handler. But if the service was restarted the map is empty. So we need to create lock objects in that case for the users arriving at the redirect handler without having been at the stream handler after a service restart.
@@ -226,7 +247,12 @@ func createRedirectHandler(redirectCache *gocache.Cache, conversionClient *reald
 		}
 		var streamURL string
 		for _, torrent := range torrents {
-			if streamURL, err = conversionClient.GetStreamURL(c.Context(), torrent.MagnetURL, apiToken, remote); err != nil {
+			if idParts[0] == "rd" {
+				streamURL, err = rdClient.GetStreamURL(c.Context(), torrent.MagnetURL, apiToken, remote)
+			} else {
+				streamURL, err = adClient.GetStreamURL(c.Context(), torrent.MagnetURL, apiToken)
+			}
+			if err != nil {
 				logger.Warn("Couldn't get stream URL", zap.Error(err), zapFieldRedirectID)
 			} else {
 				break
@@ -251,7 +277,7 @@ func createRedirectHandler(redirectCache *gocache.Cache, conversionClient *reald
 	}
 }
 
-func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher, conversionClient *realdebrid.Client, fastCaches map[string]*fastcache.Cache, goCaches map[string]*gocache.Cache, logger *zap.Logger) func(*fiber.Ctx) {
+func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher, rdClient *realdebrid.Client, adClient *alldebrid.Client, fastCaches map[string]*fastcache.Cache, goCaches map[string]*gocache.Cache, logger *zap.Logger) func(*fiber.Ctx) {
 	return func(c *fiber.Ctx) {
 		logger.Debug("statusHandler called", zap.String("request", fmt.Sprintf("%+v", &c.Fasthttp.Request)))
 
@@ -308,7 +334,7 @@ func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher,
 
 		res += "\t" + `"RD": {` + "\n"
 		startRD := time.Now()
-		streamURL, err := conversionClient.GetStreamURL(c.Context(), bigBuckBunnyMagnet, apiToken, false)
+		streamURL, err := rdClient.GetStreamURL(c.Context(), bigBuckBunnyMagnet, apiToken, false)
 		if err != nil {
 			res += "\t\t" + `"err":"` + err.Error() + `",` + "\n"
 		} else {
@@ -316,6 +342,20 @@ func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher,
 		}
 		durationRDmillis := time.Since(startRD).Milliseconds()
 		res += "\t\t" + `"duration": "` + strconv.FormatInt(durationRDmillis, 10) + `ms"` + "\n"
+		res += "\t" + `},` + "\n"
+
+		// Check AD client
+
+		res += "\t" + `"AD": {` + "\n"
+		startAD := time.Now()
+		streamURL, err = adClient.GetStreamURL(c.Context(), bigBuckBunnyMagnet, apiToken)
+		if err != nil {
+			res += "\t\t" + `"err":"` + err.Error() + `",` + "\n"
+		} else {
+			res += "\t\t" + `"res":"` + streamURL + `",` + "\n"
+		}
+		durationADmillis := time.Since(startAD).Milliseconds()
+		res += "\t\t" + `"duration": "` + strconv.FormatInt(durationADmillis, 10) + `ms"` + "\n"
 		res += "\t" + `},` + "\n"
 
 		// Check caches

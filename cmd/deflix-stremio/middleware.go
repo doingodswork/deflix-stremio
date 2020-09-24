@@ -4,11 +4,12 @@ import (
 	"github.com/gofiber/fiber"
 	"go.uber.org/zap"
 
-	"github.com/doingodswork/deflix-stremio/pkg/realdebrid"
+	"github.com/doingodswork/deflix-stremio/pkg/debrid/alldebrid"
+	"github.com/doingodswork/deflix-stremio/pkg/debrid/realdebrid"
 )
 
-// createTokenMiddleware creates a middleware that checks the validity of RealDebrid API tokens.
-func createTokenMiddleware(conversionClient *realdebrid.Client, logger *zap.Logger) fiber.Handler {
+// createTokenMiddleware creates a middleware that checks the validity of RealDebrid and AllDebrid API tokens/keys.
+func createTokenMiddleware(rdClient *realdebrid.Client, adClient *alldebrid.Client, logger *zap.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) {
 		rCtx := c.Context()
 		udString := c.Params("userData", "")
@@ -24,14 +25,21 @@ func createTokenMiddleware(conversionClient *realdebrid.Client, logger *zap.Logg
 			return
 		}
 
-		if userData.RDtoken == "" {
+		if userData.RDtoken == "" && userData.ADkey == "" {
 			c.SendStatus(fiber.StatusUnauthorized)
 			return
 		}
-
-		if err := conversionClient.TestToken(rCtx, userData.RDtoken); err != nil {
-			c.SendStatus(fiber.StatusForbidden)
-			return
+		// We expect a user to have *either* an RD token *or* an AD key, not both
+		if userData.RDtoken != "" {
+			if err := rdClient.TestToken(rCtx, userData.RDtoken); err != nil {
+				c.SendStatus(fiber.StatusForbidden)
+				return
+			}
+		} else if userData.ADkey != "" {
+			if err := adClient.TestAPIkey(rCtx, userData.ADkey); err != nil {
+				c.SendStatus(fiber.StatusForbidden)
+				return
+			}
 		}
 
 		// Note: We don't put the API token nor the remote info into the context,
