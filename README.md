@@ -3,25 +3,40 @@ Deflix Stremio addon
 
 [Deflix](https://www.deflix.tv) addon for [Stremio](https://stremio.com)
 
-Finds movies on YTS, The Pirate Bay, 1337x, RARBG and ibit and automatically turns your selected torrent into a cached HTTP stream from a debrid service like RealDebrid or AllDebrid, for high speed 4k streaming and **no P2P uploading**.
-
-Currently supported providers:
-
-- [x] <https://real-debrid.com>
-- [x] <https://alldebrid.com>
-
-> More providers will be supported in the future!
-
-Other upcoming features: Support for TV shows, more custom options (e.g. show *all single torrents* instead of grouped by quality) and more
+Finds movies from many different sources and automatically turns them into cached HTTP streams with a debrid service like [RealDebrid](https://real-debrid.com) or [AllDebrid](https://alldebrid.com), for high speed 4k streaming and **no P2P uploading**.
 
 Contents
 --------
 
-1. [Install](#install)
-2. [Run locally](#run-locally)
+1. [Features](#features)
+2. [Install](#install)
+3. [Run locally](#run-locally)
    1. [Configuration](#configuration)
    2. [Warning](#warning)
-3. [Disclaimer](#disclaimer)
+4. [Disclaimer](#disclaimer)
+
+Features
+--------
+
+- Supports several debrid services
+  - [x] [RealDebrid](https://real-debrid.com)
+  - [x] [AllDebrid](https://alldebrid.com)
+  - [ ] Others like [Premiumize](https://www.premiumize.me) and [put.io](https://put.io) are planned
+- Finds movies from many different sources
+  - [x] YTS
+  - [x] The Pirate Bay
+  - [x] 1337x
+  - [x] RARBG
+  - [x] ibit
+  - [ ] Others like RapidMoviez and Scene-RLS are planned
+- Groups streams by quality so you don't have to choose between dozens of results
+  - 720p
+  - 1080p
+  - 1080p 10bit
+  - 2160p
+  - 2160p 10bit
+
+Other *upcoming* features: Support for TV shows, more custom options (filter by language, show *all single torrents* instead of grouped by quality) and more
 
 Install
 -------
@@ -40,7 +55,7 @@ But it's just a few simple steps, so you can do it without the website as well:
    - For AllDebrid: `{"adKey":"YOUR-API-KEY"}`
 3. Encode the JSON as Base64URL, for example on <https://base64.guru/standards/base64url/encode> or <https://simplycalc.com/base64url-encode.php>
    - This becomes something like `eyJyZFRva2VuIjoiWU9VUi1BUEktVE9LRU4ifQ` or with a padding suffix (`==` in this case)  
-     > Note: It has to be Base64URL, not Base64. For more info you can check [RFC 4648](https://tools.ietf.org/html/rfc4648#section-5).
+     > Note: It has to be Base64URL, not Base64. For more info you can read [RFC 4648](https://tools.ietf.org/html/rfc4648#section-5).
 4. Enter the addon URL in the search box of the addons section of Stremio, like this:
    - `https://stremio.deflix.tv/eyJyZFRva2VuIjoiWU9VUi1BUEktVE9LRU4ifQ/manifest.json`  
      > ⚠️ Replace `eyJyZFRva2VuIjoiWU9VUi1BUEktVE9LRU4ifQ` by your own encoded user data!
