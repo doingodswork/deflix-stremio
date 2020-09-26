@@ -15,8 +15,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/deflix-tv/go-stremio/pkg/cinemeta"
+	"github.com/doingodswork/deflix-stremio/pkg/debrid"
 	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
-	"github.com/doingodswork/deflix-stremio/pkg/realdebrid"
 )
 
 func registerTypes() {
@@ -88,7 +88,7 @@ func (c *metaCache) Get(key string) (cinemeta.Meta, time.Time, bool, error) {
 	return item.Meta, item.Created, found, nil
 }
 
-var _ realdebrid.Cache = (*creationCache)(nil)
+var _ debrid.Cache = (*creationCache)(nil)
 
 // creationCache caches if a key exists and the time this was cached.
 type creationCache struct {

@@ -11,8 +11,11 @@ import (
 )
 
 type userData struct {
+	// RealDebrid
 	RDtoken  string `json:"rdToken"`
 	RDremote bool   `json:"rdRemote"`
+	// AllDebrid
+	ADkey string `json:"adKey"`
 }
 
 func decodeUserData(data string, logger *zap.Logger) (userData, error) {

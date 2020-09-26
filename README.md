@@ -3,11 +3,12 @@ Deflix Stremio addon
 
 [Deflix](https://www.deflix.tv) addon for [Stremio](https://stremio.com)
 
-Finds movies on YTS, The Pirate Bay, 1337x, RARBG and ibit and automatically turns your selected torrent into a cached HTTP stream from a debrid provider like RealDebrid, for high speed 4k streaming and **no P2P uploading**.
+Finds movies on YTS, The Pirate Bay, 1337x, RARBG and ibit and automatically turns your selected torrent into a cached HTTP stream from a debrid service like RealDebrid or AllDebrid, for high speed 4k streaming and **no P2P uploading**.
 
 Currently supported providers:
 
 - [x] <https://real-debrid.com>
+- [x] <https://alldebrid.com>
 
 > More providers will be supported in the future!
 
@@ -31,14 +32,22 @@ Here's the official Deflix website, that guides you through the installation: <h
 
 But it's just a few simple steps, so you can do it without the website as well:
 
-1. Get your RealDebrid API token from <https://real-debrid.com/apitoken>
-2. Enter the addon URL in the search box of the addons section of Stremio, like this:
-   - `https://stremio.deflix.tv/YOUR-API-TOKEN/manifest.json`  
-     > (replace `YOUR-API-TOKEN` by your actual API token!)
+1. Get your debrid service API key
+   - For RealDebrid: <https://real-debrid.com/apitoken>
+   - For AllDebrid: <https://alldebrid.com/apikeys/>
+2. Create a JSON object with the data, like this:
+   - For RealDebrid: `{"rdToken":"YOUR-API-TOKEN"}` or with an additional `"remote":true` (see below)
+   - For AllDebrid: `{"adKey":"YOUR-API-KEY"}`
+3. Encode the JSON as Base64URL, for example on <https://base64.guru/standards/base64url/encode> or <https://simplycalc.com/base64url-encode.php>
+   - This becomes something like `eyJyZFRva2VuIjoiWU9VUi1BUEktVE9LRU4ifQ` or with a padding suffix (`==` in this case)  
+     > Note: It has to be Base64URL, not Base64. For more info you can check [RFC 4648](https://tools.ietf.org/html/rfc4648#section-5).
+4. Enter the addon URL in the search box of the addons section of Stremio, like this:
+   - `https://stremio.deflix.tv/eyJyZFRva2VuIjoiWU9VUi1BUEktVE9LRU4ifQ/manifest.json`  
+     > ⚠️ Replace `eyJyZFRva2VuIjoiWU9VUi1BUEktVE9LRU4ifQ` by your actual API token!
 
 That's it!
 
-Optionally you can also add `-remote` to your token, which will lead to your "remote traffic" being used, which allows you to share your RealDebrid account (and API token) with friends. (⚠️When sharing your account and *not* using remote traffic, you might get suspended - see RealDebrid's [terms](https://real-debrid.com/terms) and [faq](https://real-debrid.com/faq)!)
+Regarding `"remote":true` for RealDebrid: This will lead to your "remote traffic" being used, which allows you to share your RealDebrid account (and API token) with friends. (⚠️ When sharing your account and *not* using remote traffic, you might get suspended - see RealDebrid's [terms](https://real-debrid.com/terms) and [faq](https://real-debrid.com/faq)!)
 
 Run locally
 -----------
@@ -70,6 +79,8 @@ The following options can be configured via either command line argument or envi
 Usage of deflix-stremio:
   -baseURL1337x string
         Base URL for 1337x (default "https://1337x.to")
+  -baseURLad string
+        Base URL for AllDebrid (default "https://api.alldebrid.com")
   -baseURLibit string
         Base URL for ibit (default "https://ibit.am")
   -baseURLrarbg string
@@ -82,18 +93,18 @@ Usage of deflix-stremio:
         Base URL for YTS (default "https://yts.mx")
   -bindAddr string
         Local interface address to bind to. "localhost" only allows access from the local host. "0.0.0.0" binds to all network interfaces. (default "localhost")
-  -cacheAgeRD duration
-        Max age of cache entries for instant availability responses from RealDebrid. The format must be acceptable by Go's 'time.ParseDuration()', for example "24h". (default 24h0m0s)
   -cacheAgeTorrents duration
         Max age of cache entries for torrents found per IMDb ID. The format must be acceptable by Go's 'time.ParseDuration()', for example "24h". (default 24h0m0s)
+  -cacheAgeXD duration
+        Max age of cache entries for instant availability responses from RealDebrid and AllDebrid. The format must be acceptable by Go's 'time.ParseDuration()', for example "24h". (default 24h0m0s)
   -cacheMaxMB int
         Max number of megabytes to be used for the in-memory torrent cache. Default (and minimum!) is 32 MB. (default 32)
   -cachePath string
         Path for loading a persisted cache on startup and persisting the current cache in regular intervals. An empty value will lead to 'os.UserCacheDir()+"/deflix-stremio/"'.
   -envPrefix string
         Prefix for environment variables
-  -extraHeadersRD string
-        Additional HTTP request headers to set for requests to RealDebrid, in a format like "X-Foo: bar", separated by newline characters ("\n")
+  -extraHeadersXD string
+        Additional HTTP request headers to set for requests to RealDebrid and AllDebrid, in a format like "X-Foo: bar", separated by newline characters ("\n")
   -logFoundTorrents
         Set to true to log each single torrent that was found by one of the torrent site clients (with DEBUG level)
   -logLevel string

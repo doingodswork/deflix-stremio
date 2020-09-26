@@ -17,8 +17,9 @@ import (
 
 	"github.com/deflix-tv/go-stremio"
 	"github.com/deflix-tv/go-stremio/pkg/cinemeta"
+	"github.com/doingodswork/deflix-stremio/pkg/debrid/alldebrid"
+	"github.com/doingodswork/deflix-stremio/pkg/debrid/realdebrid"
 	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
-	"github.com/doingodswork/deflix-stremio/pkg/realdebrid"
 )
 
 const (
@@ -74,18 +75,20 @@ var (
 	// fastcache
 	torrentCache *resultCache
 	// go-cache
-	availabilityCache *creationCache
-	cinemetaCache     *metaCache
-	redirectCache     *gocache.Cache
-	streamCache       *gocache.Cache
-	tokenCache        *creationCache
+	rdAvailabilityCache *creationCache
+	adAvailabilityCache *creationCache
+	cinemetaCache       *metaCache
+	redirectCache       *gocache.Cache
+	streamCache         *gocache.Cache
+	tokenCache          *creationCache
 )
 
 // Clients
 var (
-	cinemetaClient   *cinemeta.Client
-	searchClient     *imdb2torrent.Client
-	conversionClient *realdebrid.Client
+	cinemetaClient *cinemeta.Client
+	searchClient   *imdb2torrent.Client
+	rdClient       *realdebrid.Client
+	adClient       *alldebrid.Client
 )
 
 var (
@@ -158,11 +161,12 @@ func main() {
 		"torrent": torrentCache.cache,
 	}
 	goCaches := map[string]*gocache.Cache{
-		"availability": availabilityCache.cache,
-		"cinemeta":     cinemetaCache.cache,
-		"redirect":     redirectCache,
-		"stream":       streamCache,
-		"token":        tokenCache.cache,
+		"rdAvailability": rdAvailabilityCache.cache,
+		"adAvailability": adAvailabilityCache.cache,
+		"cinemeta":       cinemetaCache.cache,
+		"redirect":       redirectCache,
+		"stream":         streamCache,
+		"token":          tokenCache.cache,
 	}
 	// Log cache stats every hour
 	go func() {
@@ -176,7 +180,7 @@ func main() {
 
 	// Prepare addon creation
 
-	streamHandler := createStreamHandler(config, searchClient, conversionClient, redirectCache, logger)
+	streamHandler := createStreamHandler(config, searchClient, rdClient, adClient, redirectCache, logger)
 	streamHandlers := map[string]stremio.StreamHandler{"movie": streamHandler}
 
 	options := stremio.Options{
@@ -200,7 +204,7 @@ func main() {
 
 	// Customize addon
 
-	tokenMiddleware := createTokenMiddleware(conversionClient, logger)
+	tokenMiddleware := createTokenMiddleware(rdClient, adClient, logger)
 	addon.AddMiddleware("/:userData/manifest.json", tokenMiddleware)
 	addon.AddMiddleware("/:userData/stream/:type/:id.json", tokenMiddleware)
 	// Also set the middleware for the endpoints without userData, so that in the handlers we don't have to deal with the possibility that the token isn't set.
@@ -208,11 +212,11 @@ func main() {
 	addon.AddMiddleware("/stream/:type/:id.json", tokenMiddleware)
 
 	// Requires URL query: "?imdbid=123&apitoken=foo"
-	statusEndpoint := createStatusHandler(searchClient.GetMagnetSearchers(), conversionClient, fastCaches, goCaches, logger)
+	statusEndpoint := createStatusHandler(searchClient.GetMagnetSearchers(), rdClient, adClient, fastCaches, goCaches, logger)
 	addon.AddEndpoint("GET", "/status", statusEndpoint)
 
 	// Redirects stream URLs (previously sent to Stremio) to the actual RealDebrid stream URLs
-	addon.AddEndpoint("GET", "/redirect/:id", createRedirectHandler(redirectCache, conversionClient, logger))
+	addon.AddEndpoint("GET", "/redirect/:id", createRedirectHandler(redirectCache, rdClient, adClient, logger))
 
 	// Save cache to file every hour
 	go func() {
@@ -245,13 +249,22 @@ func initCaches(config config, logger *zap.Logger) {
 
 	// go-caches
 
-	availabilityCacheItems, err := loadGoCache(config.CachePath + "/availability.gob")
+	rdAvailabilityCacheItems, err := loadGoCache(config.CachePath + "/rd-availability.gob")
 	if err != nil {
-		logger.Error("Couldn't load availability cache from file - continuing with an empty cache", zap.Error(err))
-		availabilityCacheItems = map[string]gocache.Item{}
+		logger.Error("Couldn't load RD availability cache from file - continuing with an empty cache", zap.Error(err))
+		rdAvailabilityCacheItems = map[string]gocache.Item{}
 	}
-	availabilityCache = &creationCache{
-		cache: gocache.NewFrom(config.CacheAgeRD, 24*time.Hour, availabilityCacheItems),
+	rdAvailabilityCache = &creationCache{
+		cache: gocache.NewFrom(config.CacheAgeXD, 24*time.Hour, rdAvailabilityCacheItems),
+	}
+
+	adAvailabilityCacheItems, err := loadGoCache(config.CachePath + "/ad-availability.gob")
+	if err != nil {
+		logger.Error("Couldn't load AD availability cache from file - continuing with an empty cache", zap.Error(err))
+		adAvailabilityCacheItems = map[string]gocache.Item{}
+	}
+	adAvailabilityCache = &creationCache{
+		cache: gocache.NewFrom(config.CacheAgeXD, 24*time.Hour, adAvailabilityCacheItems),
 	}
 
 	cinemetaCacheItems, err := loadGoCache(config.CachePath + "/cinemeta.gob")
@@ -300,7 +313,8 @@ func initClients(config config, logger *zap.Logger) {
 	leetxClientOpts := imdb2torrent.NewLeetxClientOpts(config.BaseURL1337x, timeout, config.CacheAgeTorrents)
 	ibitClientOpts := imdb2torrent.NewIbitClientOpts(config.BaseURLibit, timeout, config.CacheAgeTorrents)
 	rarbgClientOpts := imdb2torrent.NewRARBGclientOpts(config.BaseURLrarbg, timeout, config.CacheAgeTorrents)
-	rdClientOpts := realdebrid.NewClientOpts(config.BaseURLrd, timeout, config.CacheAgeRD, config.ExtraHeadersRD)
+	rdClientOpts := realdebrid.NewClientOpts(config.BaseURLrd, timeout, config.CacheAgeXD, config.ExtraHeadersXD)
+	adClientOpts := alldebrid.NewClientOpts(config.BaseURLad, timeout, config.CacheAgeXD, config.ExtraHeadersXD)
 
 	cinemetaClient = cinemeta.NewClient(cinemeta.DefaultClientOpts, cinemetaCache, logger)
 	tpbClient, err := imdb2torrent.NewTPBclient(tpbClientOpts, torrentCache, cinemetaClient, logger, config.LogFoundTorrents)
@@ -315,9 +329,13 @@ func initClients(config config, logger *zap.Logger) {
 		"RARBG": imdb2torrent.NewRARBGclient(rarbgClientOpts, torrentCache, logger, config.LogFoundTorrents),
 	}
 	searchClient = imdb2torrent.NewClient(siteClients, timeout, logger)
-	conversionClient, err = realdebrid.NewClient(rdClientOpts, tokenCache, availabilityCache, logger)
+	rdClient, err = realdebrid.NewClient(rdClientOpts, tokenCache, rdAvailabilityCache, logger)
 	if err != nil {
 		logger.Fatal("Couldn't create RealDebrid client", zap.Error(err))
+	}
+	adClient, err = alldebrid.NewClient(adClientOpts, tokenCache, adAvailabilityCache, logger)
+	if err != nil {
+		logger.Fatal("Couldn't create AllDebrid client", zap.Error(err))
 	}
 
 	duration := time.Since(start).Milliseconds()

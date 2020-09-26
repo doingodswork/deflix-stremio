@@ -1,11 +1,11 @@
-package realdebrid
+package debrid
 
 import (
 	"sync"
 	"time"
 )
 
-// Cache is the interface that the RealDebrid client uses for caching a user's API token validity and the "instant availability" of a torrent (via info_hash).
+// Cache is the interface that the debrid clients uses for caching a user's API token validity and the "instant availability" of a torrent (via info_hash).
 // A package user must pass an implementation of this interface.
 // Usually you create a simple wrapper around an existing cache package.
 // An example implementation is the InMemoryCache in this package.
@@ -17,7 +17,7 @@ type Cache interface {
 var _ Cache = (*InMemoryCache)(nil)
 
 // InMemoryCache is an example implementation of the Cache interface.
-// It doesn't persist its data, so it's not suited for production use of the realdebrid package.
+// It doesn't persist its data, so it's not suited for production use of the debrid packages.
 type InMemoryCache struct {
 	cache map[string]time.Time
 	lock  *sync.RWMutex

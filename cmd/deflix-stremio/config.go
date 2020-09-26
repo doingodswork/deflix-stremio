@@ -16,7 +16,7 @@ type config struct {
 	StreamURLaddr     string        `json:"streamURLaddr"`
 	CachePath         string        `json:"cachePath"`
 	CacheMaxMB        int           `json:"cacheMaxMB"`
-	CacheAgeRD        time.Duration `json:"cacheAgeRD"`
+	CacheAgeXD        time.Duration `json:"cacheAgeXD"`
 	CacheAgeTorrents  time.Duration `json:"cacheAgeTorrents"`
 	BaseURLyts        string        `json:"baseURLyts"`
 	BaseURLtpb        string        `json:"baseURLtpb"`
@@ -24,10 +24,11 @@ type config struct {
 	BaseURLibit       string        `json:"baseURLibit"`
 	BaseURLrarbg      string        `json:"baseURLrarbg"`
 	BaseURLrd         string        `json:"baseURLrd"`
+	BaseURLad         string        `json:"baseURLad"`
 	LogLevel          string        `json:"logLevel"`
 	LogFoundTorrents  bool          `json:"logFoundTorrents"`
 	RootURL           string        `json:"rootURL"`
-	ExtraHeadersRD    []string      `json:"extraHeadersRD"`
+	ExtraHeadersXD    []string      `json:"extraHeadersXD"`
 	SocksProxyAddrTPB string        `json:"socksProxyAddrTPB"`
 	EnvPrefix         string        `json:"envPrefix"`
 }
@@ -42,7 +43,7 @@ func parseConfig(logger *zap.Logger) config {
 		streamURLaddr     = flag.String("streamURLaddr", "http://localhost:8080", "Address to be used in a stream URL that's delivered to Stremio and later used to redirect to RealDebrid")
 		cachePath         = flag.String("cachePath", "", "Path for loading a persisted cache on startup and persisting the current cache in regular intervals. An empty value will lead to 'os.UserCacheDir()+\"/deflix-stremio/\"'.")
 		cacheMaxMB        = flag.Int("cacheMaxMB", 32, "Max number of megabytes to be used for the in-memory torrent cache. Default (and minimum!) is 32 MB.")
-		cacheAgeRD        = flag.Duration("cacheAgeRD", 24*time.Hour, "Max age of cache entries for instant availability responses from RealDebrid. The format must be acceptable by Go's 'time.ParseDuration()', for example \"24h\".")
+		cacheAgeXD        = flag.Duration("cacheAgeXD", 24*time.Hour, "Max age of cache entries for instant availability responses from RealDebrid and AllDebrid. The format must be acceptable by Go's 'time.ParseDuration()', for example \"24h\".")
 		cacheAgeTorrents  = flag.Duration("cacheAgeTorrents", 24*time.Hour, "Max age of cache entries for torrents found per IMDb ID. The format must be acceptable by Go's 'time.ParseDuration()', for example \"24h\".")
 		baseURLyts        = flag.String("baseURLyts", "https://yts.mx", "Base URL for YTS")
 		baseURLtpb        = flag.String("baseURLtpb", "https://apibay.org", "Base URL for the TPB API")
@@ -50,10 +51,11 @@ func parseConfig(logger *zap.Logger) config {
 		baseURLibit       = flag.String("baseURLibit", "https://ibit.am", "Base URL for ibit")
 		baseURLrarbg      = flag.String("baseURLrarbg", "https://torrentapi.org", "Base URL for RARBG")
 		baseURLrd         = flag.String("baseURLrd", "https://api.real-debrid.com", "Base URL for RealDebrid")
+		baseURLad         = flag.String("baseURLad", "https://api.alldebrid.com", "Base URL for AllDebrid")
 		logLevel          = flag.String("logLevel", "debug", `Log level to show only logs with the given and more severe levels. Can be "debug", "info", "warn", "error".`)
 		logFoundTorrents  = flag.Bool("logFoundTorrents", false, "Set to true to log each single torrent that was found by one of the torrent site clients (with DEBUG level)")
 		rootURL           = flag.String("rootURL", "https://www.deflix.tv", "Redirect target for the root")
-		extraHeadersRD    = flag.String("extraHeadersRD", "", "Additional HTTP request headers to set for requests to RealDebrid, in a format like \"X-Foo: bar\", separated by newline characters (\"\\n\")")
+		extraHeadersXD    = flag.String("extraHeadersXD", "", "Additional HTTP request headers to set for requests to RealDebrid and AllDebrid, in a format like \"X-Foo: bar\", separated by newline characters (\"\\n\")")
 		socksProxyAddrTPB = flag.String("socksProxyAddrTPB", "", "SOCKS5 proxy address for accessing TPB, required for accessing TPB via the TOR network (where \"127.0.0.1:9050\" would be typical value)")
 		envPrefix         = flag.String("envPrefix", "", "Prefix for environment variables")
 	)
@@ -107,14 +109,14 @@ func parseConfig(logger *zap.Logger) config {
 	}
 	result.CacheMaxMB = *cacheMaxMB
 
-	if !isArgSet("cacheAgeRD") {
-		if val, ok := os.LookupEnv(*envPrefix + "CACHE_AGE_RD"); ok {
-			if *cacheAgeRD, err = time.ParseDuration(val); err != nil {
-				logger.Fatal("Couldn't convert environment variable from string to time.Duration", zap.Error(err), zap.String("envVar", "CACHE_AGE_RD"))
+	if !isArgSet("cacheAgeXD") {
+		if val, ok := os.LookupEnv(*envPrefix + "CACHE_AGE_XD"); ok {
+			if *cacheAgeXD, err = time.ParseDuration(val); err != nil {
+				logger.Fatal("Couldn't convert environment variable from string to time.Duration", zap.Error(err), zap.String("envVar", "CACHE_AGE_XD"))
 			}
 		}
 	}
-	result.CacheAgeRD = *cacheAgeRD
+	result.CacheAgeXD = *cacheAgeXD
 
 	if !isArgSet("cacheAgeTorrents") {
 		if val, ok := os.LookupEnv(*envPrefix + "CACHE_AGE_TORRENTS"); ok {
@@ -167,6 +169,13 @@ func parseConfig(logger *zap.Logger) config {
 	}
 	result.BaseURLrd = *baseURLrd
 
+	if !isArgSet("baseURLad") {
+		if val, ok := os.LookupEnv(*envPrefix + "BASE_URL_AD"); ok {
+			*baseURLrd = val
+		}
+	}
+	result.BaseURLad = *baseURLad
+
 	if !isArgSet("logLevel") {
 		if val, ok := os.LookupEnv(*envPrefix + "LOG_LEVEL"); ok {
 			*logLevel = val
@@ -192,15 +201,15 @@ func parseConfig(logger *zap.Logger) config {
 
 	if !isArgSet("extraHeadersRD") {
 		if val, ok := os.LookupEnv(*envPrefix + "EXTRA_HEADERS_RD"); ok {
-			*extraHeadersRD = val
+			*extraHeadersXD = val
 		}
 	}
-	if *extraHeadersRD != "" {
-		headers := strings.Split(*extraHeadersRD, "\n")
+	if *extraHeadersXD != "" {
+		headers := strings.Split(*extraHeadersXD, "\n")
 		for _, header := range headers {
 			header = strings.TrimSpace(header)
 			if header != "" {
-				result.ExtraHeadersRD = append(result.ExtraHeadersRD, header)
+				result.ExtraHeadersXD = append(result.ExtraHeadersXD, header)
 			}
 		}
 	}
