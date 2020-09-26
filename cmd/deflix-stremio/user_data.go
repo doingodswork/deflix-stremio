@@ -39,8 +39,10 @@ func decodeUserData(data string, logger *zap.Logger) (userData, error) {
 		}, nil
 	}
 
+	// If there's padding, we remove it, so that the decoding works with both:
+	data = strings.TrimSuffix(data, "=")
 	var userDataDecoded []byte
-	userDataDecoded, err := base64.URLEncoding.DecodeString(data)
+	userDataDecoded, err := base64.URLEncoding.WithPadding(base64.NoPadding).DecodeString(data)
 	if err != nil {
 		// We use WARN instead of ERROR because it's most likely an *encoding* error on the client side
 		logger.Warn("Couldn't decode user data", zap.Error(err))
