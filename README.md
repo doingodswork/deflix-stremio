@@ -53,9 +53,12 @@ You can use one of the precompiled binaries from GitHub:
 
 Or use Docker:
 
-1. `docker pull doingodswork/deflix-stremio`
-2. `docker run --name deflix-stremio -p 8080:8080 doingodswork/deflix-stremio`
+1. Update the image: `docker pull doingodswork/deflix-stremio`
+2. Start the container: `docker run --name deflix-stremio -p 8080:8080 doingodswork/deflix-stremio`
+   - > Note: `Ctrl-C` only detaches from the container. It doesn't stop it.
+   - When detached, you can attach again with `docker attach deflix-stremio`
 3. To stop the container: `docker stop deflix-stremio`
+4. To start the (still existing) container again: `docker start deflix-stremio`
 
 Then similar to installing the publicly hosted addon you enter the URL in the search box of the addon section of Stremio. But as URL you use `http://localhost:8080/YOUR-API-TOKEN/manifest.json`.
 
