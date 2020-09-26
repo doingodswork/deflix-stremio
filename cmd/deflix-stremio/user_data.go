@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	"go.uber.org/zap"
@@ -54,5 +55,6 @@ func decodeUserData(data string, logger *zap.Logger) (userData, error) {
 		logger.Warn("Couldn't unmarshal user data", zap.Error(err))
 		return userData{}, err
 	}
+	logger.Debug("Decoded user data", zap.String("userData", fmt.Sprintf("%+v", ud)))
 	return ud, nil
 }
