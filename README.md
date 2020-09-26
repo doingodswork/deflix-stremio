@@ -43,7 +43,7 @@ But it's just a few simple steps, so you can do it without the website as well:
      > Note: It has to be Base64URL, not Base64. For more info you can check [RFC 4648](https://tools.ietf.org/html/rfc4648#section-5).
 4. Enter the addon URL in the search box of the addons section of Stremio, like this:
    - `https://stremio.deflix.tv/eyJyZFRva2VuIjoiWU9VUi1BUEktVE9LRU4ifQ/manifest.json`  
-     > ⚠️ Replace `eyJyZFRva2VuIjoiWU9VUi1BUEktVE9LRU4ifQ` by your actual API token!
+     > ⚠️ Replace `eyJyZFRva2VuIjoiWU9VUi1BUEktVE9LRU4ifQ` by your own encoded user data!
 
 That's it!
 
@@ -125,9 +125,9 @@ If you want to configure deflix-stremio via environment variables, you can use t
 
 If you *run* this web service on your local laptop or server, i.e. if you *self-host* this, you should know the following:
 
-Deflix doesn't download or upload any torrents, but it *does* send HTTP requests to YTS, The Pirate Bay, 1337x, RARBG and ibit, which *might* be illegal in some countries. Streaming movies from RealDebrid *might* also be illegal in some countries.
+Deflix doesn't download or upload any torrents, but it *does* send HTTP requests to YTS, The Pirate Bay, 1337x, RARBG and ibit, which *might* be illegal in some countries. Streaming movies from RealDebrid or AllDebrid *might* also be illegal in some countries.
 
-> To encrypt your traffic so that your ISP can't see where those HTTP requests are sent and to not expose your real IP address to RealDebrid you can use a VPN.
+> To encrypt your traffic so that your ISP can't see where those HTTP requests are sent and to not expose your real IP address to RealDebrid or AllDebrid you can use a VPN.
 
 Disclaimer
 ----------
