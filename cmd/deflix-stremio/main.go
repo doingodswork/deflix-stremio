@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -189,7 +190,9 @@ func main() {
 	streamHandler := createStreamHandler(config, searchClient, rdClient, adClient, redirectCache, logger)
 	streamHandlers := map[string]stremio.StreamHandler{"movie": streamHandler}
 
-	httpFS := http.Dir("/web/configure")
+	configurePath := filepath.Join(config.WebPath, "configure")
+	logger.Info("Joined paths to configure endpoint", zap.String("path", configurePath))
+	httpFS := http.Dir(configurePath)
 	options := stremio.Options{
 		BindAddr: config.BindAddr,
 		Port:     config.Port,
