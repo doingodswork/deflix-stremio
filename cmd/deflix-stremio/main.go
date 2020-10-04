@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
+	"github.com/markbates/pkger"
 	gocache "github.com/patrickmn/go-cache"
 	"go.uber.org/zap"
 
@@ -190,9 +191,14 @@ func main() {
 	streamHandler := createStreamHandler(config, searchClient, rdClient, adClient, redirectCache, logger)
 	streamHandlers := map[string]stremio.StreamHandler{"movie": streamHandler}
 
-	configurePath := filepath.Join(config.WebPath, "configure")
-	logger.Info("Joined paths to configure endpoint", zap.String("path", configurePath))
-	httpFS := http.Dir(configurePath)
+	var httpFS http.FileSystem
+	if config.WebConfigurePath == "" {
+		httpFS = pkger.Dir("/web/configure")
+	} else {
+		configurePath := filepath.Clean(config.WebConfigurePath)
+		logger.Info("Cleaned web configure path", zap.String("path", configurePath))
+		httpFS = http.Dir(configurePath)
+	}
 	options := stremio.Options{
 		BindAddr: config.BindAddr,
 		Port:     config.Port,

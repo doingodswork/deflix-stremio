@@ -8,6 +8,7 @@ require (
 	github.com/deflix-tv/go-stremio v0.5.0
 	github.com/gofiber/fiber v1.14.6
 	github.com/google/go-cmp v0.5.2
+	github.com/markbates/pkger v0.17.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/stretchr/testify v1.6.1
 	github.com/tidwall/gjson v1.6.1

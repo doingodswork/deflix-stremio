@@ -30,7 +30,7 @@ type config struct {
 	RootURL           string        `json:"rootURL"`
 	ExtraHeadersXD    []string      `json:"extraHeadersXD"`
 	SocksProxyAddrTPB string        `json:"socksProxyAddrTPB"`
-	WebPath           string        `json:"webPath"`
+	WebConfigurePath  string        `json:"webConfigurePath"`
 	EnvPrefix         string        `json:"envPrefix"`
 }
 
@@ -58,7 +58,7 @@ func parseConfig(logger *zap.Logger) config {
 		rootURL           = flag.String("rootURL", "https://www.deflix.tv", "Redirect target for the root")
 		extraHeadersXD    = flag.String("extraHeadersXD", "", "Additional HTTP request headers to set for requests to RealDebrid and AllDebrid, in a format like \"X-Foo: bar\", separated by newline characters (\"\\n\")")
 		socksProxyAddrTPB = flag.String("socksProxyAddrTPB", "", "SOCKS5 proxy address for accessing TPB, required for accessing TPB via the TOR network (where \"127.0.0.1:9050\" would be typical value)")
-		webPath           = flag.String("webPath", "./web/", "Path to the web directory which contains the 'configure' directory with web files for the '/configure' endpoint")
+		webConfigurePath  = flag.String("webConfigurePath", "", "Path to the directory with web files for the '/configure' endpoint. If empty, files compiled into the binary will be used")
 		envPrefix         = flag.String("envPrefix", "", "Prefix for environment variables")
 	)
 
@@ -223,12 +223,12 @@ func parseConfig(logger *zap.Logger) config {
 	}
 	result.SocksProxyAddrTPB = *socksProxyAddrTPB
 
-	if !isArgSet("webPath") {
-		if val, ok := os.LookupEnv(*envPrefix + "WEB_PATH"); ok {
-			*webPath = val
+	if !isArgSet("webConfigurePath") {
+		if val, ok := os.LookupEnv(*envPrefix + "WEB_CONFIGURE_PATH"); ok {
+			*webConfigurePath = val
 		}
 	}
-	result.WebPath = *webPath
+	result.WebConfigurePath = *webConfigurePath
 
 	return result
 }
