@@ -35,8 +35,9 @@ Features
   - 1080p 10bit
   - 2160p
   - 2160p 10bit
+- Configurable via the ⚙ button in Stremio
 
-Other *upcoming* features: Support for TV shows, more custom options (filter by language, show *all single torrents* instead of grouped by quality) and more
+Other *upcoming* features: Support for TV shows, more sources, grouping by bitrate, more custom options (language filter, show *all single torrents* instead of grouped by quality) and more
 
 Install
 -------
@@ -84,7 +85,8 @@ Or use Docker:
 3. To stop the container: `docker stop deflix-stremio`
 4. To start the (still existing) container again: `docker start deflix-stremio`
 
-Then similar to installing the publicly hosted addon you enter the URL in the search box of the addon section of Stremio. But as URL you use `http://localhost:8080/YOUR-API-TOKEN/manifest.json`.
+And then you can visit the addon configuration page in your browser to install the locally running addon in Stremio: <http://localhost:8080/configure>  
+Or like mentioned in the [Install section](#install) you can generate the encoded user data manually and paste the URL into the search box of the addons section of Stremio.
 
 ### Configuration
 
@@ -132,6 +134,8 @@ Usage of deflix-stremio:
         SOCKS5 proxy address for accessing TPB, required for accessing TPB via the TOR network (where "127.0.0.1:9050" would be typical value)
   -streamURLaddr string
         Address to be used in a stream URL that's delivered to Stremio and later used to redirect to RealDebrid (default "http://localhost:8080")
+  -webConfigurePath string
+        Path to the directory with web files for the '/configure' endpoint. If empty, files compiled into the binary will be used
 ```
 
 If you want to configure deflix-stremio via environment variables, you can use the according environment variable keys, like this: `baseURL1337x` -> `BASE_URL_1337X`. If you want to use an environment variable prefix you have to set it with the command line argument (for example `-envPrefix DEFLIX` and then the environment variable for the previous example would be `DEFLIX_BASE_URL_1337X`.

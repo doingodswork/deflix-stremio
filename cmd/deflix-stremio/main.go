@@ -6,12 +6,14 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
+	"github.com/markbates/pkger"
 	gocache "github.com/patrickmn/go-cache"
 	"go.uber.org/zap"
 
@@ -48,6 +50,12 @@ var manifest = stremio.Manifest{
 	// Must use www.deflix.tv instead of just deflix.tv because GitHub takes care of redirecting non-www to www and this leads to HTTPS certificate issues.
 	Background: "https://www.deflix.tv/images/Logo-1024px.png",
 	Logo:       "https://www.deflix.tv/images/Logo-250px.png",
+
+	BehaviorHints: stremio.BehaviorHints{
+		P2P:                   false,
+		Configurable:          true,
+		ConfigurationRequired: true,
+	},
 }
 
 var (
@@ -183,6 +191,14 @@ func main() {
 	streamHandler := createStreamHandler(config, searchClient, rdClient, adClient, redirectCache, logger)
 	streamHandlers := map[string]stremio.StreamHandler{"movie": streamHandler}
 
+	var httpFS http.FileSystem
+	if config.WebConfigurePath == "" {
+		httpFS = pkger.Dir("/web/configure")
+	} else {
+		configurePath := filepath.Clean(config.WebConfigurePath)
+		logger.Info("Cleaned web configure path", zap.String("path", configurePath))
+		httpFS = http.Dir(configurePath)
+	}
 	options := stremio.Options{
 		BindAddr: config.BindAddr,
 		Port:     config.Port,
@@ -192,7 +208,8 @@ func main() {
 		RedirectURL:  config.RootURL,
 		LogMediaName: true,
 		// We already have a Cinemeta Client
-		CinemetaClient: cinemetaClient,
+		CinemetaClient:  cinemetaClient,
+		ConfigureHTMLfs: httpFS,
 	}
 
 	// Create addon

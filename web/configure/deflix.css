@@ -1,0 +1,23 @@
+:root {
+    --color: #0f0;
+    --color-accent: #00ff004f;
+    --color-bg: #222;
+    --color-bg-secondary: #555;
+    --color-secondary: #009f00;
+    --color-secondary-accent: #009f004f;
+    --color-shadow: #bbbbbb20;
+    --color-text: #f7f7f7;
+    --color-text-secondary: #aaa;
+}
+
+nav{
+    --color-secondary: #0f0;
+}
+
+#addons div {
+    text-align: left;
+}
+
+#comparison table td {
+    text-align: var(--justify-normal);
+}
