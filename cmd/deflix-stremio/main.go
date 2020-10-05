@@ -8,13 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/VictoriaMetrics/fastcache"
+	"github.com/dgraph-io/badger"
 	"github.com/markbates/pkger"
 	gocache "github.com/patrickmn/go-cache"
+	"go.uber.org/multierr"
 	"go.uber.org/zap"
 
 	"github.com/deflix-tv/go-stremio"
@@ -76,12 +76,16 @@ var (
 	tokenExpiration = 24 * time.Hour
 )
 
+// Persistent stores
+var (
+	// BadgerDB
+	torrentCache *resultStore
+)
+
 // In-memory caches, filled from a file on startup and persisted to a file in regular intervals.
 // Use different cache instances so that for example a high churn (new entries pushing out old ones) in the torrent cache doesn't lead to entries in other caches being lost.
 // Also use different cache types - fastcache seems to be inefficient for small values (600 items with a short string and time leads to 32 MB) for example, while go-cache can't be limited in size. So we use fastcache for caches that could grow really big, and go-cache for caches where we know it'll stay small, or were we purge old entries regularly.
 var (
-	// fastcache
-	torrentCache *resultCache
 	// go-cache
 	rdAvailabilityCache *creationCache
 	adAvailabilityCache *creationCache
@@ -144,18 +148,36 @@ func main() {
 
 	logger.Info("Parsed config", zap.ByteString("config", configJSON))
 
+	if config.StoragePath == "" {
+		userCacheDir, err := os.UserCacheDir()
+		if err != nil {
+			logger.Fatal("Couldn't determine user cache directory via `os.UserCacheDir()`", zap.Error(err))
+		}
+		// Add two levels, because even if we're in `os.UserCacheDir()`, on Windows that's for example `C:\Users\John\AppData\Local`
+		config.StoragePath = filepath.Join(userCacheDir, "deflix-stremio/badger")
+	} else {
+		config.StoragePath = filepath.Clean(config.StoragePath)
+	}
+
 	if config.CachePath == "" {
 		userCacheDir, err := os.UserCacheDir()
 		if err != nil {
 			logger.Fatal("Couldn't determine user cache directory via `os.UserCacheDir()`", zap.Error(err))
 		}
 		// Add two levels, because even if we're in `os.UserCacheDir()`, on Windows that's for example `C:\Users\John\AppData\Local`
-		config.CachePath = userCacheDir + "/deflix-stremio/cache"
+		config.CachePath = filepath.Join(userCacheDir, "deflix-stremio/cache")
 	} else {
-		config.CachePath = strings.TrimSuffix(config.CachePath, "/")
+		config.CachePath = filepath.Clean(config.CachePath)
 	}
 
-	// Load or create caches
+	// Load or create stores and caches
+
+	closer := initStores(config, logger)
+	defer func() {
+		if err := closer(); err != nil {
+			logger.Error("Couldn't close all stores", zap.Error(err))
+		}
+	}()
 
 	initCaches(config, logger)
 
@@ -165,9 +187,6 @@ func main() {
 
 	// Init cache maps
 
-	fastCaches := map[string]*fastcache.Cache{
-		"torrent": torrentCache.cache,
-	}
 	goCaches := map[string]*gocache.Cache{
 		"rdAvailability": rdAvailabilityCache.cache,
 		"adAvailability": adAvailabilityCache.cache,
@@ -181,7 +200,7 @@ func main() {
 		// Don't run at the same time as the persistence
 		time.Sleep(time.Minute)
 		for {
-			logCacheStats(fastCaches, goCaches, logger)
+			logCacheStats(goCaches, logger)
 			time.Sleep(time.Hour)
 		}
 	}()
@@ -229,7 +248,7 @@ func main() {
 	addon.AddMiddleware("/stream/:type/:id.json", tokenMiddleware)
 
 	// Requires URL query: "?imdbid=123&apitoken=foo"
-	statusEndpoint := createStatusHandler(searchClient.GetMagnetSearchers(), rdClient, adClient, fastCaches, goCaches, logger)
+	statusEndpoint := createStatusHandler(searchClient.GetMagnetSearchers(), rdClient, adClient, goCaches, logger)
 	addon.AddEndpoint("GET", "/status", statusEndpoint)
 
 	// Redirects stream URLs (previously sent to Stremio) to the actual RealDebrid stream URLs
@@ -239,7 +258,7 @@ func main() {
 	go func() {
 		for {
 			time.Sleep(time.Hour)
-			persistCaches(ctx, config.CachePath, fastCaches, goCaches, logger)
+			persistCaches(ctx, config.CachePath, goCaches, logger)
 		}
 	}()
 
@@ -254,15 +273,52 @@ func main() {
 	addon.Run(stoppingChan)
 }
 
-func initCaches(config config, logger *zap.Logger) {
-	logger.Info("Initiating caches...")
+func initStores(config config, logger *zap.Logger) (closer func() error) {
+	logger.Info("Initializing stores...")
 	start := time.Now()
 
-	// fastcache
-	cacheMaxBytes := config.CacheMaxMB * 1000 * 1000
-	torrentCache = &resultCache{
-		cache: fastcache.LoadFromFileOrNew(config.CachePath+"/torrent", cacheMaxBytes),
+	var closers []func() error
+	multiCloser := func() error {
+		var result error
+		for _, closer := range closers {
+			if err := closer(); err != nil {
+				multierr.Append(result, err)
+			}
+		}
+		return result
 	}
+
+	// BadgerDB
+	options := badger.DefaultOptions(config.StoragePath)
+	options.SyncWrites = false
+	db, err := badger.Open(options)
+	if err != nil {
+		logger.Fatal("Couldn't open BadgerDB", zap.Error(err))
+	}
+	closers = append(closers, db.Close)
+	torrentCache = &resultStore{
+		db: db,
+	}
+
+	// Periodically call RunValueLogGC()
+	go func() {
+		time.Sleep(time.Hour)
+		for {
+			db.RunValueLogGC(0.5)
+			time.Sleep(time.Hour)
+		}
+	}()
+
+	duration := time.Since(start).Milliseconds()
+	durationString := strconv.FormatInt(duration, 10) + "ms"
+	logger.Info("Initialized stores", zap.String("duration", durationString))
+
+	return multiCloser
+}
+
+func initCaches(config config, logger *zap.Logger) {
+	logger.Info("Initializing caches...")
+	start := time.Now()
 
 	// go-caches
 
@@ -318,18 +374,18 @@ func initCaches(config config, logger *zap.Logger) {
 
 	duration := time.Since(start).Milliseconds()
 	durationString := strconv.FormatInt(duration, 10) + "ms"
-	logger.Info("Initiated caches", zap.String("duration", durationString))
+	logger.Info("Initialized caches", zap.String("duration", durationString))
 }
 
 func initClients(config config, logger *zap.Logger) {
-	logger.Info("Initiating clients...")
+	logger.Info("Initializing clients...")
 	start := time.Now()
 
-	ytsClientOpts := imdb2torrent.NewYTSclientOpts(config.BaseURLyts, timeout, config.CacheAgeTorrents)
-	tpbClientOpts := imdb2torrent.NewTPBclientOpts(config.BaseURLtpb, config.SocksProxyAddrTPB, timeout, config.CacheAgeTorrents)
-	leetxClientOpts := imdb2torrent.NewLeetxClientOpts(config.BaseURL1337x, timeout, config.CacheAgeTorrents)
-	ibitClientOpts := imdb2torrent.NewIbitClientOpts(config.BaseURLibit, timeout, config.CacheAgeTorrents)
-	rarbgClientOpts := imdb2torrent.NewRARBGclientOpts(config.BaseURLrarbg, timeout, config.CacheAgeTorrents)
+	ytsClientOpts := imdb2torrent.NewYTSclientOpts(config.BaseURLyts, timeout, config.MaxAgeTorrents)
+	tpbClientOpts := imdb2torrent.NewTPBclientOpts(config.BaseURLtpb, config.SocksProxyAddrTPB, timeout, config.MaxAgeTorrents)
+	leetxClientOpts := imdb2torrent.NewLeetxClientOpts(config.BaseURL1337x, timeout, config.MaxAgeTorrents)
+	ibitClientOpts := imdb2torrent.NewIbitClientOpts(config.BaseURLibit, timeout, config.MaxAgeTorrents)
+	rarbgClientOpts := imdb2torrent.NewRARBGclientOpts(config.BaseURLrarbg, timeout, config.MaxAgeTorrents)
 	rdClientOpts := realdebrid.NewClientOpts(config.BaseURLrd, timeout, config.CacheAgeXD, config.ExtraHeadersXD)
 	adClientOpts := alldebrid.NewClientOpts(config.BaseURLad, timeout, config.CacheAgeXD, config.ExtraHeadersXD)
 
@@ -357,5 +413,5 @@ func initClients(config config, logger *zap.Logger) {
 
 	duration := time.Since(start).Milliseconds()
 	durationString := strconv.FormatInt(duration, 10) + "ms"
-	logger.Info("Initiated clients", zap.String("duration", durationString))
+	logger.Info("Initialized clients", zap.String("duration", durationString))
 }

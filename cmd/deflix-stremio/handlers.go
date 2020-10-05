@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/gofiber/fiber"
 	gocache "github.com/patrickmn/go-cache"
 	"go.uber.org/zap"
@@ -277,7 +276,7 @@ func createRedirectHandler(redirectCache *gocache.Cache, rdClient *realdebrid.Cl
 	}
 }
 
-func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher, rdClient *realdebrid.Client, adClient *alldebrid.Client, fastCaches map[string]*fastcache.Cache, goCaches map[string]*gocache.Cache, logger *zap.Logger) func(*fiber.Ctx) {
+func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher, rdClient *realdebrid.Client, adClient *alldebrid.Client, goCaches map[string]*gocache.Cache, logger *zap.Logger) func(*fiber.Ctx) {
 	return func(c *fiber.Ctx) {
 		logger.Debug("statusHandler called", zap.String("request", fmt.Sprintf("%+v", &c.Fasthttp.Request)))
 
@@ -361,20 +360,6 @@ func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher,
 		// Check caches
 
 		res += "\t" + `"caches": {` + "\n"
-		stats := fastcache.Stats{}
-		for name, cache := range fastCaches {
-			res += "\t\t" + `"` + name + `": {` + "\n"
-			cache.UpdateStats(&stats)
-			res += "\t\t\t" + `"GetCalls": "` + strconv.FormatUint(stats.GetCalls, 10) + `"` + ",\n"
-			res += "\t\t\t" + `"SetCalls": "` + strconv.FormatUint(stats.SetCalls, 10) + `"` + ",\n"
-			res += "\t\t\t" + `"Misses": "` + strconv.FormatUint(stats.Misses, 10) + `"` + ",\n"
-			res += "\t\t\t" + `"Collisions": "` + strconv.FormatUint(stats.Collisions, 10) + `"` + ",\n"
-			res += "\t\t\t" + `"Corruptions": "` + strconv.FormatUint(stats.Corruptions, 10) + `"` + ",\n"
-			res += "\t\t\t" + `"EntriesCount": "` + strconv.FormatUint(stats.EntriesCount, 10) + `"` + ",\n"
-			res += "\t\t\t" + `"Size": "` + strconv.FormatUint(stats.BytesSize/uint64(1024)/uint64(1024), 10) + "MB" + `"` + "\n"
-			res += "\t\t" + `},` + "\n"
-			stats.Reset()
-		}
 		for name, cache := range goCaches {
 			res += "\t\t" + `"` + name + `": {` + "\n"
 			res += "\t\t\t" + `"Items": "` + strconv.Itoa(cache.ItemCount()) + `"` + ",\n"

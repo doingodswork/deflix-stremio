@@ -14,10 +14,10 @@ type config struct {
 	BindAddr          string        `json:"bindAddr"`
 	Port              int           `json:"port"`
 	StreamURLaddr     string        `json:"streamURLaddr"`
+	StoragePath       string        `json:"storagePath"`
+	MaxAgeTorrents    time.Duration `json:"maxAgeTorrents"`
 	CachePath         string        `json:"cachePath"`
-	CacheMaxMB        int           `json:"cacheMaxMB"`
 	CacheAgeXD        time.Duration `json:"cacheAgeXD"`
-	CacheAgeTorrents  time.Duration `json:"cacheAgeTorrents"`
 	BaseURLyts        string        `json:"baseURLyts"`
 	BaseURLtpb        string        `json:"baseURLtpb"`
 	BaseURL1337x      string        `json:"baseURL1337x"`
@@ -42,10 +42,10 @@ func parseConfig(logger *zap.Logger) config {
 		bindAddr          = flag.String("bindAddr", "localhost", `Local interface address to bind to. "localhost" only allows access from the local host. "0.0.0.0" binds to all network interfaces.`)
 		port              = flag.Int("port", 8080, "Port to listen on")
 		streamURLaddr     = flag.String("streamURLaddr", "http://localhost:8080", "Address to be used in a stream URL that's delivered to Stremio and later used to redirect to RealDebrid")
-		cachePath         = flag.String("cachePath", "", "Path for loading a persisted cache on startup and persisting the current cache in regular intervals. An empty value will lead to 'os.UserCacheDir()+\"/deflix-stremio/\"'.")
-		cacheMaxMB        = flag.Int("cacheMaxMB", 32, "Max number of megabytes to be used for the in-memory torrent cache. Default (and minimum!) is 32 MB.")
+		storagePath       = flag.String("storagePath", "", `Path for storing the data of the persistent DB which stores torrent results. An empty value will lead to 'os.UserCacheDir()+"/deflix-stremio/badger"'.`)
+		maxAgeTorrents    = flag.Duration("maxAgeTorrents", 7*24*time.Hour, "Max age of cache entries for torrents found per IMDb ID. The format must be acceptable by Go's 'time.ParseDuration()', for example \"24h\". Default is 7 days.")
+		cachePath         = flag.String("cachePath", "", `Path for loading persisted caches on startup and persisting the current cache in regular intervals. An empty value will lead to 'os.UserCacheDir()+"/deflix-stremio/cache"'.`)
 		cacheAgeXD        = flag.Duration("cacheAgeXD", 24*time.Hour, "Max age of cache entries for instant availability responses from RealDebrid and AllDebrid. The format must be acceptable by Go's 'time.ParseDuration()', for example \"24h\".")
-		cacheAgeTorrents  = flag.Duration("cacheAgeTorrents", 24*time.Hour, "Max age of cache entries for torrents found per IMDb ID. The format must be acceptable by Go's 'time.ParseDuration()', for example \"24h\".")
 		baseURLyts        = flag.String("baseURLyts", "https://yts.mx", "Base URL for YTS")
 		baseURLtpb        = flag.String("baseURLtpb", "https://apibay.org", "Base URL for the TPB API")
 		baseURL1337x      = flag.String("baseURL1337x", "https://1337x.to", "Base URL for 1337x")
@@ -56,7 +56,7 @@ func parseConfig(logger *zap.Logger) config {
 		logLevel          = flag.String("logLevel", "debug", `Log level to show only logs with the given and more severe levels. Can be "debug", "info", "warn", "error".`)
 		logFoundTorrents  = flag.Bool("logFoundTorrents", false, "Set to true to log each single torrent that was found by one of the torrent site clients (with DEBUG level)")
 		rootURL           = flag.String("rootURL", "https://www.deflix.tv", "Redirect target for the root")
-		extraHeadersXD    = flag.String("extraHeadersXD", "", "Additional HTTP request headers to set for requests to RealDebrid and AllDebrid, in a format like \"X-Foo: bar\", separated by newline characters (\"\\n\")")
+		extraHeadersXD    = flag.String("extraHeadersXD", "", `Additional HTTP request headers to set for requests to RealDebrid and AllDebrid, in a format like "X-Foo: bar", separated by newline characters ("\n")`)
 		socksProxyAddrTPB = flag.String("socksProxyAddrTPB", "", "SOCKS5 proxy address for accessing TPB, required for accessing TPB via the TOR network (where \"127.0.0.1:9050\" would be typical value)")
 		webConfigurePath  = flag.String("webConfigurePath", "", "Path to the directory with web files for the '/configure' endpoint. If empty, files compiled into the binary will be used")
 		envPrefix         = flag.String("envPrefix", "", "Prefix for environment variables")
@@ -94,22 +94,28 @@ func parseConfig(logger *zap.Logger) config {
 	}
 	result.StreamURLaddr = *streamURLaddr
 
+	if !isArgSet("storagePath") {
+		if val, ok := os.LookupEnv(*envPrefix + "STORAGE_PATH"); ok {
+			*storagePath = val
+		}
+	}
+	result.StoragePath = *storagePath
+
+	if !isArgSet("maxAgeTorrents") {
+		if val, ok := os.LookupEnv(*envPrefix + "MAX_AGE_TORRENTS"); ok {
+			if *maxAgeTorrents, err = time.ParseDuration(val); err != nil {
+				logger.Fatal("Couldn't convert environment variable from string to time.Duration", zap.Error(err), zap.String("envVar", "CACHE_AGE_TORRENTS"))
+			}
+		}
+	}
+	result.MaxAgeTorrents = *maxAgeTorrents
+
 	if !isArgSet("cachePath") {
 		if val, ok := os.LookupEnv(*envPrefix + "CACHE_PATH"); ok {
 			*cachePath = val
 		}
 	}
 	result.CachePath = *cachePath
-
-	if !isArgSet("cacheMaxMB") {
-		if val, ok := os.LookupEnv(*envPrefix + "CACHE_MAX_MB"); ok {
-			if *cacheMaxMB, err = strconv.Atoi(val); err != nil {
-				logger.Fatal("Couldn't convert environment variable from string to int", zap.Error(err), zap.String("envVar", "CACHE_MAX_MB"))
-
-			}
-		}
-	}
-	result.CacheMaxMB = *cacheMaxMB
 
 	if !isArgSet("cacheAgeXD") {
 		if val, ok := os.LookupEnv(*envPrefix + "CACHE_AGE_XD"); ok {
@@ -119,15 +125,6 @@ func parseConfig(logger *zap.Logger) config {
 		}
 	}
 	result.CacheAgeXD = *cacheAgeXD
-
-	if !isArgSet("cacheAgeTorrents") {
-		if val, ok := os.LookupEnv(*envPrefix + "CACHE_AGE_TORRENTS"); ok {
-			if *cacheAgeTorrents, err = time.ParseDuration(val); err != nil {
-				logger.Fatal("Couldn't convert environment variable from string to time.Duration", zap.Error(err), zap.String("envVar", "CACHE_AGE_TORRENTS"))
-			}
-		}
-	}
-	result.CacheAgeTorrents = *cacheAgeTorrents
 
 	if !isArgSet("baseURLyts") {
 		if val, ok := os.LookupEnv(*envPrefix + "BASE_URL_YTS"); ok {
