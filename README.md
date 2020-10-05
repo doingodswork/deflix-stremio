@@ -110,14 +110,10 @@ Usage of deflix-stremio:
         Base URL for YTS (default "https://yts.mx")
   -bindAddr string
         Local interface address to bind to. "localhost" only allows access from the local host. "0.0.0.0" binds to all network interfaces. (default "localhost")
-  -cacheAgeTorrents duration
-        Max age of cache entries for torrents found per IMDb ID. The format must be acceptable by Go's 'time.ParseDuration()', for example "24h". (default 24h0m0s)
   -cacheAgeXD duration
         Max age of cache entries for instant availability responses from RealDebrid and AllDebrid. The format must be acceptable by Go's 'time.ParseDuration()', for example "24h". (default 24h0m0s)
-  -cacheMaxMB int
-        Max number of megabytes to be used for the in-memory torrent cache. Default (and minimum!) is 32 MB. (default 32)
   -cachePath string
-        Path for loading a persisted cache on startup and persisting the current cache in regular intervals. An empty value will lead to 'os.UserCacheDir()+"/deflix-stremio/"'.
+        Path for loading persisted caches on startup and persisting the current cache in regular intervals. An empty value will lead to 'os.UserCacheDir()+"/deflix-stremio/cache"'.
   -envPrefix string
         Prefix for environment variables
   -extraHeadersXD string
@@ -126,12 +122,16 @@ Usage of deflix-stremio:
         Set to true to log each single torrent that was found by one of the torrent site clients (with DEBUG level)
   -logLevel string
         Log level to show only logs with the given and more severe levels. Can be "debug", "info", "warn", "error". (default "debug")
+  -maxAgeTorrents duration
+        Max age of cache entries for torrents found per IMDb ID. The format must be acceptable by Go's 'time.ParseDuration()', for example "24h". Default is 7 days. (default 168h0m0s)
   -port int
         Port to listen on (default 8080)
   -rootURL string
         Redirect target for the root (default "https://www.deflix.tv")
   -socksProxyAddrTPB string
         SOCKS5 proxy address for accessing TPB, required for accessing TPB via the TOR network (where "127.0.0.1:9050" would be typical value)
+  -storagePath string
+        Path for storing the data of the persistent DB which stores torrent results. An empty value will lead to 'os.UserCacheDir()+"/deflix-stremio/badger"'.
   -streamURLaddr string
         Address to be used in a stream URL that's delivered to Stremio and later used to redirect to RealDebrid (default "http://localhost:8080")
   -webConfigurePath string
