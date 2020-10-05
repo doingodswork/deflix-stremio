@@ -22,6 +22,7 @@ import (
 	"github.com/doingodswork/deflix-stremio/pkg/debrid/alldebrid"
 	"github.com/doingodswork/deflix-stremio/pkg/debrid/realdebrid"
 	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
+	"github.com/doingodswork/deflix-stremio/pkg/logadapter"
 )
 
 const (
@@ -291,6 +292,7 @@ func initStores(config config, logger *zap.Logger) (closer func() error) {
 	// BadgerDB
 	options := badger.DefaultOptions(config.StoragePath)
 	options.SyncWrites = false
+	options.Logger = logadapter.NewBadger2Zap(logger)
 	db, err := badger.Open(options)
 	if err != nil {
 		logger.Fatal("Couldn't open BadgerDB", zap.Error(err))
