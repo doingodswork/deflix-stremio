@@ -80,7 +80,8 @@ var (
 // Persistent stores
 var (
 	// BadgerDB
-	torrentCache *resultStore
+	torrentCache  *resultStore
+	cinemetaCache *metaStore
 )
 
 // In-memory caches, filled from a file on startup and persisted to a file in regular intervals.
@@ -90,7 +91,6 @@ var (
 	// go-cache
 	rdAvailabilityCache *creationCache
 	adAvailabilityCache *creationCache
-	cinemetaCache       *metaCache
 	redirectCache       *gocache.Cache
 	streamCache         *gocache.Cache
 	tokenCache          *creationCache
@@ -191,7 +191,6 @@ func main() {
 	goCaches := map[string]*gocache.Cache{
 		"rdAvailability": rdAvailabilityCache.cache,
 		"adAvailability": adAvailabilityCache.cache,
-		"cinemeta":       cinemetaCache.cache,
 		"redirect":       redirectCache,
 		"stream":         streamCache,
 		"token":          tokenCache.cache,
@@ -298,8 +297,14 @@ func initStores(config config, logger *zap.Logger) (closer func() error) {
 		logger.Fatal("Couldn't open BadgerDB", zap.Error(err))
 	}
 	closers = append(closers, db.Close)
+
 	torrentCache = &resultStore{
-		db: db,
+		db:        db,
+		keyPrefix: "torrent_",
+	}
+	cinemetaCache = &metaStore{
+		db:        db,
+		keyPrefix: "meta_",
 	}
 
 	// Periodically call RunValueLogGC()
@@ -340,15 +345,6 @@ func initCaches(config config, logger *zap.Logger) {
 	}
 	adAvailabilityCache = &creationCache{
 		cache: gocache.NewFrom(config.CacheAgeXD, 24*time.Hour, adAvailabilityCacheItems),
-	}
-
-	cinemetaCacheItems, err := loadGoCache(config.CachePath + "/cinemeta.gob")
-	if err != nil {
-		logger.Error("Couldn't load cinemeta cache from file - continuing with an empty cache", zap.Error(err))
-		cinemetaCacheItems = map[string]gocache.Item{}
-	}
-	cinemetaCache = &metaCache{
-		cache: gocache.NewFrom(cinemetaExpiration, 24*time.Hour, cinemetaCacheItems),
 	}
 
 	if redirectCacheItems, err := loadGoCache(config.CachePath + "/redirect.gob"); err != nil {

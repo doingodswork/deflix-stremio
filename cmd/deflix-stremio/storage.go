@@ -36,9 +36,10 @@ type cacheItem struct {
 
 var _ imdb2torrent.Cache = (*resultStore)(nil)
 
-// resultStore is the store for imdb2torrent.Result objects, backed by github.com/VictoriaMetrics/fastcache.
+// resultStore is the store for imdb2torrent.Result objects, backed by BadgerDB.
 type resultStore struct {
-	db *badger.DB
+	db        *badger.DB
+	keyPrefix string
 }
 
 // Set implements the imdb2torrent.Cache interface.
@@ -47,42 +48,41 @@ func (c *resultStore) Set(key string, results []imdb2torrent.Result) error {
 		Results: results,
 		Created: time.Now(),
 	}
-	return gobSet(c.db, key, item)
+	return gobSet(c.db, c.keyPrefix+key, item)
 }
 
 // Get implements the imdb2torrent.Cache interface.
 func (c *resultStore) Get(key string) ([]imdb2torrent.Result, time.Time, bool, error) {
 	var item imdb2torrent.CacheItem
-	found, err := gobGet(c.db, key, &item)
+	found, err := gobGet(c.db, c.keyPrefix+key, &item)
 	return item.Results, item.Created, found, err
 }
 
-var _ cinemeta.Cache = (*metaCache)(nil)
+var _ cinemeta.Cache = (*metaStore)(nil)
 
-// metaCache is the cache for cinemeta.Meta objects.
-type metaCache struct {
-	cache *gocache.Cache
+// metaStore is the store for cinemeta.Meta objects, backed by BadgerDB.
+type metaStore struct {
+	db        *badger.DB
+	keyPrefix string
 }
 
 // Set implements the cinemeta.Cache interface.
-func (c *metaCache) Set(key string, meta cinemeta.Meta) error {
+func (c *metaStore) Set(key string, meta cinemeta.Meta) error {
 	item := cinemeta.CacheItem{
 		Meta:    meta,
 		Created: time.Now(),
 	}
-	c.cache.Set(key, item, 0)
-	return nil
+	return gobSet(c.db, c.keyPrefix+key, item)
 }
 
 // Get implements the cinemeta.Cache interface.
-func (c *metaCache) Get(key string) (cinemeta.Meta, time.Time, bool, error) {
-	itemIface, found := c.cache.Get(key)
-	if !found {
+func (c *metaStore) Get(key string) (cinemeta.Meta, time.Time, bool, error) {
+	var item cinemeta.CacheItem
+	found, err := gobGet(c.db, c.keyPrefix+key, &item)
+	if err != nil {
+		return cinemeta.Meta{}, time.Time{}, found, err
+	} else if !found {
 		return cinemeta.Meta{}, time.Time{}, found, nil
-	}
-	item, ok := itemIface.(cinemeta.CacheItem)
-	if !ok {
-		return cinemeta.Meta{}, time.Time{}, found, fmt.Errorf("Couldn't cast cached value to cinemeta.CacheItem: type was: %T", itemIface)
 	}
 	return item.Meta, item.Created, found, nil
 }
