@@ -23,8 +23,8 @@ github.com/davecgh/go-spew v1.1.0 h1:ZDRjVQ15GmhC3fiQ8ni8+OwkZQO4DARzQgrnXU1Liz8
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/deflix-tv/go-stremio v0.5.0 h1:hBsdFbHg+MoMcSBkjGKjrXs1QyILAozRSDUMiXr9Qb8=
-github.com/deflix-tv/go-stremio v0.5.0/go.mod h1:MQ8VB24D/R/mT8LJ2kLyV9mZXDqcQZCrX7s4kHfgqg4=
+github.com/deflix-tv/go-stremio v0.5.1 h1:M3BI1LHzJJgbBdEpviTmJq9vxd6YhTq6g1I8FOQ7JFo=
+github.com/deflix-tv/go-stremio v0.5.1/go.mod h1:MQ8VB24D/R/mT8LJ2kLyV9mZXDqcQZCrX7s4kHfgqg4=
 github.com/dgraph-io/badger v1.6.2 h1:mNw0qs90GVgGGWylh0umH5iag1j6n/PeJtNvL6KY/x8=
 github.com/dgraph-io/badger v1.6.2/go.mod h1:JW2yswe3V058sS0kZ2h/AXeDSqFjxnZcRrVH//y2UQE=
 github.com/dgraph-io/ristretto v0.0.2 h1:a5WaUrDa0qm0YrAAS1tUykT5El3kt62KNZZeMxQn3po=
