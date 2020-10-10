@@ -159,6 +159,7 @@ func main() {
 	} else {
 		config.StoragePath = filepath.Clean(config.StoragePath)
 	}
+	// If the dir doesn't exist, BadgerDB creates it when writing its DB files.
 
 	if config.CachePath == "" {
 		userCacheDir, err := os.UserCacheDir()
@@ -170,6 +171,7 @@ func main() {
 	} else {
 		config.CachePath = filepath.Clean(config.CachePath)
 	}
+	// If the dir doesn't exist, it's created when the files are written.
 
 	// Load or create stores and caches
 

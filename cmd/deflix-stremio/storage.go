@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -182,6 +183,21 @@ func persistCaches(ctx context.Context, cacheFilePath string, goCaches map[strin
 
 	logger.Info("Persisting caches...", zap.String("cacheFilePath", cacheFilePath))
 	start := time.Now()
+
+	// If the dir doesn't exist yet, we'll create it
+	_, err := os.Stat(cacheFilePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			if err = os.Mkdir(cacheFilePath, os.ModeDir); err != nil {
+				logger.Error("Couldn't create cache directory", zap.Error(err), zap.String("dir", cacheFilePath))
+				return
+			}
+			logger.Info("Created cache directory", zap.String("dir", cacheFilePath))
+		} else {
+			logger.Error("Couldn't get cache directory info", zap.Error(err), zap.String("dir", cacheFilePath))
+			return
+		}
+	}
 
 	for name, goCache := range goCaches {
 		if err := saveGoCache(goCache.Items(), cacheFilePath+"/"+name+".gob"); err != nil {
