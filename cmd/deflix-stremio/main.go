@@ -244,7 +244,7 @@ func main() {
 	addon.AddMiddleware("/:userData/manifest.json", tokenMiddleware)
 	addon.AddMiddleware("/:userData/stream/:type/:id.json", tokenMiddleware)
 	// Also set the middleware for the endpoints without userData, so that in the handlers we don't have to deal with the possibility that the token isn't set.
-	addon.AddMiddleware("/manifest.json", tokenMiddleware)
+	// Don't set it for the manifest endpoint *without* user data though, because Stremio requires that for fetching the addon info (for example for displaying it in the community addons list).
 	addon.AddMiddleware("/stream/:type/:id.json", tokenMiddleware)
 
 	// Requires URL query: "?imdbid=123&apitoken=foo"
