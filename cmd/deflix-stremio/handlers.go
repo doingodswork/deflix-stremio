@@ -281,9 +281,10 @@ func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher,
 		logger.Debug("statusHandler called", zap.String("request", fmt.Sprintf("%+v", &c.Fasthttp.Request)))
 
 		imdbID := c.Query("imdbid", "")
-		apiToken := c.Query("apitoken", "")
-		if imdbID == "" || apiToken == "" {
-			logger.Warn("\"/status\" was called without IMDb ID or API token")
+		rdToken := c.Query("rdtoken", "")
+		adKey := c.Query("adkey", "")
+		if imdbID == "" || rdToken == "" || adKey == "" {
+			logger.Warn("\"/status\" was called without IMDb ID or RD API token or AD API key")
 			c.SendStatus(fiber.StatusBadRequest)
 		}
 
@@ -333,7 +334,7 @@ func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher,
 
 		res += "\t" + `"RD": {` + "\n"
 		startRD := time.Now()
-		streamURL, err := rdClient.GetStreamURL(c.Context(), bigBuckBunnyMagnet, apiToken, false)
+		streamURL, err := rdClient.GetStreamURL(c.Context(), bigBuckBunnyMagnet, rdToken, false)
 		if err != nil {
 			res += "\t\t" + `"err":"` + err.Error() + `",` + "\n"
 		} else {
@@ -347,7 +348,7 @@ func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher,
 
 		res += "\t" + `"AD": {` + "\n"
 		startAD := time.Now()
-		streamURL, err = adClient.GetStreamURL(c.Context(), bigBuckBunnyMagnet, apiToken)
+		streamURL, err = adClient.GetStreamURL(c.Context(), bigBuckBunnyMagnet, adKey)
 		if err != nil {
 			res += "\t\t" + `"err":"` + err.Error() + `",` + "\n"
 		} else {
