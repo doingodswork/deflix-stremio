@@ -191,11 +191,11 @@ func main() {
 	// Init cache maps
 
 	goCaches := map[string]*gocache.Cache{
-		"rdAvailability": rdAvailabilityCache.cache,
-		"adAvailability": adAvailabilityCache.cache,
-		"redirect":       redirectCache,
-		"stream":         streamCache,
-		"token":          tokenCache.cache,
+		"availability-ad": rdAvailabilityCache.cache,
+		"availability-rd": adAvailabilityCache.cache,
+		"redirect":        redirectCache,
+		"stream":          streamCache,
+		"token":           tokenCache.cache,
 	}
 	// Log cache stats every hour
 	go func() {
@@ -331,7 +331,7 @@ func initCaches(config config, logger *zap.Logger) {
 
 	// go-caches
 
-	rdAvailabilityCacheItems, err := loadGoCache(config.CachePath + "/rd-availability.gob")
+	rdAvailabilityCacheItems, err := loadGoCache(config.CachePath + "/availability-rd.gob")
 	if err != nil {
 		logger.Error("Couldn't load RD availability cache from file - continuing with an empty cache", zap.Error(err))
 		rdAvailabilityCacheItems = map[string]gocache.Item{}
@@ -340,7 +340,7 @@ func initCaches(config config, logger *zap.Logger) {
 		cache: gocache.NewFrom(config.CacheAgeXD, 24*time.Hour, rdAvailabilityCacheItems),
 	}
 
-	adAvailabilityCacheItems, err := loadGoCache(config.CachePath + "/ad-availability.gob")
+	adAvailabilityCacheItems, err := loadGoCache(config.CachePath + "/availability-ad.gob")
 	if err != nil {
 		logger.Error("Couldn't load AD availability cache from file - continuing with an empty cache", zap.Error(err))
 		adAvailabilityCacheItems = map[string]gocache.Item{}
