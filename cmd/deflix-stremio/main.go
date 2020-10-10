@@ -62,8 +62,6 @@ var manifest = stremio.Manifest{
 var (
 	// Timeout used for HTTP requests in the cinemeta, imdb2torrent and realdebrid clients.
 	timeout = 5 * time.Second
-	// Expiration for cached cinemeta.Meta objects. They rarely (if ever) change, so make it 1 month.
-	cinemetaExpiration = 30 * 24 * time.Hour
 	// Expiration for the data that's passed from the stream handler to the redirect handler.
 	// 24h so that a user who selects a movie and sees the list of streams can click on a stream within this time.
 	// If a user stops/exits a stream and later resumes it, Stremio sends him to the redirect handler. If the stream cache doesn't hold the cache anymore, we just get fresh torrents - no need to cache this for so long.
