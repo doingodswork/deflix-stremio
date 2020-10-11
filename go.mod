@@ -3,7 +3,7 @@ module github.com/doingodswork/deflix-stremio
 go 1.15
 
 require (
-	github.com/PuerkitoBio/goquery v1.5.1
+	github.com/PuerkitoBio/goquery v1.6.0
 	github.com/deflix-tv/go-stremio v0.5.1
 	github.com/dgraph-io/badger v1.6.2
 	github.com/gofiber/fiber v1.14.6
@@ -14,5 +14,5 @@ require (
 	github.com/tidwall/gjson v1.6.1
 	go.uber.org/multierr v1.6.0
 	go.uber.org/zap v1.16.0
-	golang.org/x/net v0.0.0-20201002202402-0a1ea396d57c
+	golang.org/x/net v0.0.0-20201016165138-7b1cca2348c0
 )
