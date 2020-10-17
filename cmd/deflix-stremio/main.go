@@ -243,9 +243,7 @@ func main() {
 	tokenMiddleware := createTokenMiddleware(rdClient, adClient, logger)
 	addon.AddMiddleware("/:userData/manifest.json", tokenMiddleware)
 	addon.AddMiddleware("/:userData/stream/:type/:id.json", tokenMiddleware)
-	// Also set the middleware for the endpoints without userData, so that in the handlers we don't have to deal with the possibility that the token isn't set.
-	// Don't set it for the manifest endpoint *without* user data though, because Stremio requires that for fetching the addon info (for example for displaying it in the community addons list).
-	addon.AddMiddleware("/stream/:type/:id.json", tokenMiddleware)
+	// No need to set the middleware to the stream route without user data because go-stremio blocks it (with a 400 Bad Request response) if BehaviorHints.ConfigurationRequired is true.
 
 	// Requires URL query: "?imdbid=123&apitoken=foo"
 	statusEndpoint := createStatusHandler(searchClient.GetMagnetSearchers(), rdClient, adClient, goCaches, logger)
