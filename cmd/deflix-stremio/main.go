@@ -229,6 +229,7 @@ func main() {
 		// We already have a Cinemeta Client
 		CinemetaClient:  cinemetaClient,
 		ConfigureHTMLfs: httpFS,
+		StreamIDregex:   "tt\\d{7,8}",
 	}
 
 	// Create addon
