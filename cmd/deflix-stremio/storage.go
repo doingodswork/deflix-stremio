@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
 	gocache "github.com/patrickmn/go-cache"
 	"go.uber.org/zap"
 

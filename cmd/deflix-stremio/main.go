@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
 	"github.com/markbates/pkger"
 	gocache "github.com/patrickmn/go-cache"
 	"go.uber.org/multierr"
