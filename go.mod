@@ -11,8 +11,8 @@ require (
 	github.com/markbates/pkger v0.17.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/stretchr/testify v1.6.1
-	github.com/tidwall/gjson v1.6.1
+	github.com/tidwall/gjson v1.6.3
 	go.uber.org/multierr v1.6.0
 	go.uber.org/zap v1.16.0
-	golang.org/x/net v0.0.0-20201016165138-7b1cca2348c0
+	golang.org/x/net v0.0.0-20201031054903-ff519b6c9102
 )
