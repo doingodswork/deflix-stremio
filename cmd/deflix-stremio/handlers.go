@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gofiber/fiber"
+	"github.com/gofiber/fiber/v2"
 	gocache "github.com/patrickmn/go-cache"
 	"go.uber.org/zap"
 
@@ -159,14 +159,13 @@ func createStreamItem(ctx context.Context, config config, redirectID, quality st
 	return stream
 }
 
-func createRedirectHandler(redirectCache *gocache.Cache, rdClient *realdebrid.Client, adClient *alldebrid.Client, logger *zap.Logger) func(*fiber.Ctx) {
-	return func(c *fiber.Ctx) {
-		logger.Debug("redirectHandler called", zap.String("request", fmt.Sprintf("%+v", &c.Fasthttp.Request)))
+func createRedirectHandler(redirectCache *gocache.Cache, rdClient *realdebrid.Client, adClient *alldebrid.Client, logger *zap.Logger) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		logger.Debug("redirectHandler called", zap.String("request", fmt.Sprintf("%+v", c.Request())))
 
 		redirectID := c.Params("id", "")
 		if redirectID == "" {
-			c.SendStatus(fiber.StatusNotFound)
-			return
+			return c.SendStatus(fiber.StatusNotFound)
 		}
 		zapFieldRedirectID := zap.String("redirectID", redirectID)
 
@@ -175,8 +174,7 @@ func createRedirectHandler(redirectCache *gocache.Cache, rdClient *realdebrid.Cl
 		if len(idParts) < 4 ||
 			(idParts[0] == "rd" && len(idParts) != 5) ||
 			(idParts[0] == "ad" && len(idParts) != 4) {
-			c.SendStatus(fiber.StatusBadRequest)
-			return
+			return c.SendStatus(fiber.StatusBadRequest)
 		}
 		apiToken := idParts[1]
 		var remote bool
@@ -187,8 +185,7 @@ func createRedirectHandler(redirectCache *gocache.Cache, rdClient *realdebrid.Cl
 			remote, err = strconv.ParseBool(idParts[2])
 			if err != nil {
 				logger.Error("Couldn't parse remote value", zap.Error(err), zapFieldRedirectID)
-				c.SendStatus(fiber.StatusBadRequest)
-				return
+				return c.SendStatus(fiber.StatusBadRequest)
 			}
 			imdbID = idParts[3]
 			quality = idParts[4]
@@ -220,13 +217,11 @@ func createRedirectHandler(redirectCache *gocache.Cache, rdClient *realdebrid.Cl
 				logger.Warn("The torrents for this stream where previously tried to be converted into a stream but it didn't work. This was more than one minute ago though, so we'll try again.", zapFieldRedirectID)
 			} else if len(streamURLitem.Value) == 0 {
 				logger.Warn("The torrents for this stream where previously tried to be converted into a stream but it didn't work", zapFieldRedirectID)
-				c.SendStatus(fiber.StatusNotFound)
-				return
+				return c.SendStatus(fiber.StatusNotFound)
 			} else {
 				logger.Debug("Responding with redirect to stream", zap.String("redirectLocation", streamURLitem.Value), zapFieldRedirectID)
 				c.Set("Location", streamURLitem.Value)
-				c.SendStatus(fiber.StatusMovedPermanently)
-				return
+				return c.SendStatus(fiber.StatusMovedPermanently)
 			}
 		}
 
@@ -235,14 +230,12 @@ func createRedirectHandler(redirectCache *gocache.Cache, rdClient *realdebrid.Cl
 		if !found {
 			logger.Warn(fmt.Sprintf("No torrents cache item found for %v, did 24h pass?", imdbID+"-"+quality), zapFieldRedirectID)
 			// TODO: Just run the same stuff the stream handler does! This way we can drastically reduce the required cache time for the redirect cache, and the scraping doesn't really take long! Take care of concurrent requests - maybe lock!
-			c.SendStatus(fiber.StatusNotFound)
-			return
+			return c.SendStatus(fiber.StatusNotFound)
 		}
 		torrents, ok := torrentsIface.([]imdb2torrent.Result)
 		if !ok {
 			logger.Error("Torrents cache item couldn't be cast into []imdb2torrent.Result", zap.String("cacheItemType", fmt.Sprintf("%T", torrentsIface)), zapFieldRedirectID)
-			c.SendStatus(fiber.StatusInternalServerError)
-			return
+			return c.SendStatus(fiber.StatusInternalServerError)
 		}
 		var streamURL string
 		for _, torrent := range torrents {
@@ -266,19 +259,18 @@ func createRedirectHandler(redirectCache *gocache.Cache, rdClient *realdebrid.Cl
 		streamCache.Set(redirectID, streamURLitem, 0)
 
 		if streamURL == "" {
-			c.SendStatus(fiber.StatusNotFound)
-			return
+			return c.SendStatus(fiber.StatusNotFound)
 		}
 
 		logger.Debug("Responding with redirect to stream", zap.String("redirectLocation", streamURL), zapFieldRedirectID)
 		c.Set("Location", streamURL)
-		c.SendStatus(fiber.StatusMovedPermanently)
+		return c.SendStatus(fiber.StatusMovedPermanently)
 	}
 }
 
-func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher, rdClient *realdebrid.Client, adClient *alldebrid.Client, goCaches map[string]*gocache.Cache, logger *zap.Logger) func(*fiber.Ctx) {
-	return func(c *fiber.Ctx) {
-		logger.Debug("statusHandler called", zap.String("request", fmt.Sprintf("%+v", &c.Fasthttp.Request)))
+func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher, rdClient *realdebrid.Client, adClient *alldebrid.Client, goCaches map[string]*gocache.Cache, logger *zap.Logger) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		logger.Debug("statusHandler called", zap.String("request", fmt.Sprintf("%+v", c.Request())))
 
 		imdbID := c.Query("imdbid", "")
 		rdToken := c.Query("rdtoken", "")
@@ -375,6 +367,6 @@ func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher,
 
 		logger.Debug("Responding", zap.String("response", res))
 		c.Set("Content-Type", "application/json")
-		c.SendString(res)
+		return c.SendString(res)
 	}
 }
