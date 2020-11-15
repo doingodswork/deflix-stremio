@@ -277,7 +277,7 @@ func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher,
 		adKey := c.Query("adkey", "")
 		if imdbID == "" || rdToken == "" || adKey == "" {
 			logger.Warn("\"/status\" was called without IMDb ID or RD API token or AD API key")
-			c.SendStatus(fiber.StatusBadRequest)
+			return c.SendStatus(fiber.StatusBadRequest)
 		}
 
 		start := time.Now()
