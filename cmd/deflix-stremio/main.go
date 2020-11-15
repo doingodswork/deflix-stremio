@@ -83,8 +83,6 @@ var (
 )
 
 // In-memory caches, filled from a file on startup and persisted to a file in regular intervals.
-// Use different cache instances so that for example a high churn (new entries pushing out old ones) in the torrent cache doesn't lead to entries in other caches being lost.
-// Also use different cache types - fastcache seems to be inefficient for small values (600 items with a short string and time leads to 32 MB) for example, while go-cache can't be limited in size. So we use fastcache for caches that could grow really big, and go-cache for caches where we know it'll stay small, or were we purge old entries regularly.
 var (
 	// go-cache
 	rdAvailabilityCache *creationCache
