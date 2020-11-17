@@ -114,6 +114,21 @@ func (c *creationCache) Get(key string) (time.Time, bool, error) {
 	return created, found, nil
 }
 
+var _ goCacher = (*goCache)(nil)
+
+// goCache wraps a go-cache instance and offers methods with the exact same signature as go-cache.
+type goCache struct {
+	cache *gocache.Cache
+}
+
+func (c *goCache) Set(k string, v interface{}, d time.Duration) {
+	c.cache.Set(k, v, d)
+}
+
+func (c *goCache) Get(k string) (interface{}, bool) {
+	return c.cache.Get(k)
+}
+
 func gobSet(db *badger.DB, key string, item interface{}) error {
 	writer := bytes.Buffer{}
 	encoder := gob.NewEncoder(&writer)

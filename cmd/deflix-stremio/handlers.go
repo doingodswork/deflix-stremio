@@ -22,7 +22,13 @@ const (
 	bigBuckBunnyMagnet = `magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c&dn=Big+Buck+Bunny&tr=udp%3A%2F%2Fexplodie.org%3A6969&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969&tr=udp%3A%2F%2Ftracker.empire-js.us%3A1337&tr=udp%3A%2F%2Ftracker.leechers-paradise.org%3A6969&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337&tr=wss%3A%2F%2Ftracker.btorrent.xyz&tr=wss%3A%2F%2Ftracker.fastcast.nz&tr=wss%3A%2F%2Ftracker.openwebtorrent.com&ws=https%3A%2F%2Fwebtorrent.io%2Ftorrents%2F&xs=https%3A%2F%2Fwebtorrent.io%2Ftorrents%2Fbig-buck-bunny.torrent`
 )
 
-func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdClient *realdebrid.Client, adClient *alldebrid.Client, redirectCache *gocache.Cache, logger *zap.Logger) stremio.StreamHandler {
+// goCacher is a go-cache-compatible interface.
+type goCacher interface {
+	Set(string, interface{}, time.Duration)
+	Get(string) (interface{}, bool)
+}
+
+func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdClient *realdebrid.Client, adClient *alldebrid.Client, redirectCache goCacher, logger *zap.Logger) stremio.StreamHandler {
 	return func(ctx context.Context, id string, userDataIface interface{}) ([]stremio.StreamItem, error) {
 		torrents, err := searchClient.FindMagnets(ctx, id)
 		if err != nil {
@@ -159,7 +165,7 @@ func createStreamItem(ctx context.Context, config config, redirectID, quality st
 	return stream
 }
 
-func createRedirectHandler(redirectCache *gocache.Cache, rdClient *realdebrid.Client, adClient *alldebrid.Client, logger *zap.Logger) fiber.Handler {
+func createRedirectHandler(redirectCache goCacher, rdClient *realdebrid.Client, adClient *alldebrid.Client, logger *zap.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		logger.Debug("redirectHandler called", zap.String("request", fmt.Sprintf("%+v", c.Request())))
 

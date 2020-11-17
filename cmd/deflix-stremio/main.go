@@ -87,8 +87,8 @@ var (
 	// go-cache
 	rdAvailabilityCache *creationCache
 	adAvailabilityCache *creationCache
-	redirectCache       *gocache.Cache
-	streamCache         *gocache.Cache
+	redirectCache       *goCache
+	streamCache         *goCache
 	tokenCache          *creationCache
 )
 
@@ -189,8 +189,8 @@ func main() {
 	goCaches := map[string]*gocache.Cache{
 		"availability-ad": rdAvailabilityCache.cache,
 		"availability-rd": adAvailabilityCache.cache,
-		"redirect":        redirectCache,
-		"stream":          streamCache,
+		"redirect":        redirectCache.cache,
+		"stream":          streamCache.cache,
 		"token":           tokenCache.cache,
 	}
 	// Log cache stats every hour
@@ -346,16 +346,24 @@ func initCaches(config config, logger *zap.Logger) {
 
 	if redirectCacheItems, err := loadGoCache(config.CachePath + "/redirect.gob"); err != nil {
 		logger.Error("Couldn't load redirect cache from file - continuing with an empty cache", zap.Error(err))
-		redirectCache = gocache.New(redirectExpiration, 24*time.Hour)
+		redirectCache = &goCache{
+			cache: gocache.New(redirectExpiration, 24*time.Hour),
+		}
 	} else {
-		redirectCache = gocache.NewFrom(redirectExpiration, 24*time.Hour, redirectCacheItems)
+		redirectCache = &goCache{
+			cache: gocache.NewFrom(redirectExpiration, 24*time.Hour, redirectCacheItems),
+		}
 	}
 
 	if streamCacheItems, err := loadGoCache(config.CachePath + "/stream.gob"); err != nil {
 		logger.Error("Couldn't load stream cache from file - continuing with an empty cache", zap.Error(err))
-		streamCache = gocache.New(streamExpiration, 24*time.Hour)
+		streamCache = &goCache{
+			cache: gocache.New(streamExpiration, 24*time.Hour),
+		}
 	} else {
-		streamCache = gocache.NewFrom(streamExpiration, 24*time.Hour, streamCacheItems)
+		streamCache = &goCache{
+			cache: gocache.NewFrom(streamExpiration, 24*time.Hour, streamCacheItems),
+		}
 	}
 
 	tokenCacheItems, err := loadGoCache(config.CachePath + "/token.gob")
