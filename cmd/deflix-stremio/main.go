@@ -249,7 +249,7 @@ func main() {
 	addon.AddEndpoint("GET", "/status", statusEndpoint)
 
 	// Redirects stream URLs (previously sent to Stremio) to the actual RealDebrid stream URLs
-	addon.AddEndpoint("GET", "/redirect/:id", createRedirectHandler(redirectCache, rdClient, adClient, logger))
+	addon.AddEndpoint("GET", "/redirect/:id", createRedirectHandler(redirectCache, streamCache, rdClient, adClient, logger))
 
 	// Save cache to file every hour
 	go func() {
