@@ -86,7 +86,11 @@ func (c *Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, erro
 			case err := <-siteErrChan:
 				errChan <- err
 			case <-timer.C:
-				c.logger.Warn("Finding torrents timed out. It will continue to run in the background.", zapFieldID, zapFieldTorrentSite)
+				if siteClient.IsSlow() {
+					c.logger.Info("Finding torrents timed out. It will continue to run in the background.", zapFieldID, zapFieldTorrentSite)
+				} else {
+					c.logger.Warn("Finding torrents timed out. It will continue to run in the background.", zapFieldID, zapFieldTorrentSite)
+				}
 				resChan <- nil
 			}
 		}(siteName, siteClient, timer)
