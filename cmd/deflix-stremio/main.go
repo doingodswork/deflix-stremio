@@ -349,6 +349,8 @@ func initCaches(config config, logger *zap.Logger) {
 		cache: gocache.NewFrom(config.CacheAgeXD, 24*time.Hour, adAvailabilityCacheItems),
 	}
 
+	var rdb *redis.Client
+
 	if config.RedisAddr == "" {
 		if redirectCacheItems, err := loadGoCache(config.CachePath + "/redirect.gob"); err != nil {
 			logger.Error("Couldn't load redirect cache from file - continuing with an empty cache", zap.Error(err))
@@ -361,11 +363,12 @@ func initCaches(config config, logger *zap.Logger) {
 			}
 		}
 	} else {
+		rdb := redis.NewClient(&redis.Options{
+			Addr: config.RedisAddr,
+		})
 		var t []imdb2torrent.Result
 		redirectCache = &goCache{
-			rdb: redis.NewClient(&redis.Options{
-				Addr: config.RedisAddr,
-			}),
+			rdb:    rdb,
 			t:      reflect.TypeOf(t),
 			logger: logger,
 		}
@@ -385,9 +388,7 @@ func initCaches(config config, logger *zap.Logger) {
 	} else {
 		var t cacheItem
 		streamCache = &goCache{
-			rdb: redis.NewClient(&redis.Options{
-				Addr: config.RedisAddr,
-			}),
+			rdb:    rdb,
 			t:      reflect.TypeOf(t),
 			logger: logger,
 		}
