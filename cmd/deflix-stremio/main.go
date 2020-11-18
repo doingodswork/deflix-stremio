@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -353,9 +354,19 @@ func initCaches(config config, logger *zap.Logger) {
 	// TODO: Return closer func like in the stores initialization function.
 	var rdb *redis.Client
 	if config.RedisAddr != "" {
-		rdb = redis.NewClient(&redis.Options{
+		redisOpts := redis.Options{
 			Addr: config.RedisAddr,
-		})
+		}
+		if config.RedisCreds != "" {
+			if strings.Contains(config.RedisCreds, ":") {
+				creds := strings.SplitN(config.RedisCreds, ":", 2)
+				redisOpts.Username = creds[0]
+				redisOpts.Password = creds[1]
+			} else {
+				redisOpts.Password = config.RedisCreds
+			}
+		}
+		rdb = redis.NewClient(&redisOpts)
 		logger.Info("Testing connection to Redis...")
 		if err := rdb.Ping(context.Background()).Err(); err != nil {
 			logger.Fatal("Couldn't ping Redis", zap.Error(err))
