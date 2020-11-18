@@ -172,7 +172,10 @@ func main() {
 	}
 	// If the dir doesn't exist, it's created when the files are written.
 
-	// Load or create stores and caches
+	// Load or create caches and stores
+
+	// Caches first, because some things can go wrong here, and we don't have the store closer yet, which can lead to corrupted BadgerDB files.
+	initCaches(config, logger)
 
 	closer := initStores(config, logger)
 	defer func() {
@@ -180,8 +183,6 @@ func main() {
 			logger.Error("Couldn't close all stores", zap.Error(err))
 		}
 	}()
-
-	initCaches(config, logger)
 
 	// Create clients
 
