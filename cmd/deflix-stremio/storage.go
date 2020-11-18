@@ -125,8 +125,9 @@ var _ goCacher = (*goCache)(nil)
 type goCache struct {
 	cache *gocache.Cache
 	rdb   *redis.Client
-	// Must be the actual type. So if you have a pointer, set this to the "element" of the pointer.
-	t      reflect.Type
+	// Only required when using Redis. Must be the actual type. So if you have a pointer, set this to the "element" of the pointer.
+	t reflect.Type
+	// Only required when using Redis.
 	logger *zap.Logger
 }
 

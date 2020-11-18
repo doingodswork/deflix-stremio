@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/go-redis/redis/v8"
 	"github.com/markbates/pkger"
 	gocache "github.com/patrickmn/go-cache"
 	"go.uber.org/multierr"
@@ -87,9 +89,10 @@ var (
 	// go-cache
 	rdAvailabilityCache *creationCache
 	adAvailabilityCache *creationCache
-	redirectCache       *goCache
-	streamCache         *goCache
 	tokenCache          *creationCache
+	// go-cache or Redis, depending on config
+	redirectCache *goCache
+	streamCache   *goCache
 )
 
 // Clients
@@ -189,9 +192,13 @@ func main() {
 	goCaches := map[string]*gocache.Cache{
 		"availability-ad": rdAvailabilityCache.cache,
 		"availability-rd": adAvailabilityCache.cache,
-		"redirect":        redirectCache.cache,
-		"stream":          streamCache.cache,
 		"token":           tokenCache.cache,
+	}
+	if redirectCache.cache != nil {
+		goCaches["redirect"] = redirectCache.cache
+	}
+	if streamCache.cache != nil {
+		goCaches["stream"] = streamCache.cache
 	}
 	// Log cache stats every hour
 	go func() {
@@ -324,8 +331,6 @@ func initCaches(config config, logger *zap.Logger) {
 	logger.Info("Initializing caches...")
 	start := time.Now()
 
-	// go-caches
-
 	rdAvailabilityCacheItems, err := loadGoCache(config.CachePath + "/availability-rd.gob")
 	if err != nil {
 		logger.Error("Couldn't load RD availability cache from file - continuing with an empty cache", zap.Error(err))
@@ -344,25 +349,47 @@ func initCaches(config config, logger *zap.Logger) {
 		cache: gocache.NewFrom(config.CacheAgeXD, 24*time.Hour, adAvailabilityCacheItems),
 	}
 
-	if redirectCacheItems, err := loadGoCache(config.CachePath + "/redirect.gob"); err != nil {
-		logger.Error("Couldn't load redirect cache from file - continuing with an empty cache", zap.Error(err))
-		redirectCache = &goCache{
-			cache: gocache.New(redirectExpiration, 24*time.Hour),
+	if config.RedisAddr == "" {
+		if redirectCacheItems, err := loadGoCache(config.CachePath + "/redirect.gob"); err != nil {
+			logger.Error("Couldn't load redirect cache from file - continuing with an empty cache", zap.Error(err))
+			redirectCache = &goCache{
+				cache: gocache.New(redirectExpiration, 24*time.Hour),
+			}
+		} else {
+			redirectCache = &goCache{
+				cache: gocache.NewFrom(redirectExpiration, 24*time.Hour, redirectCacheItems),
+			}
 		}
 	} else {
+		var t []imdb2torrent.Result
 		redirectCache = &goCache{
-			cache: gocache.NewFrom(redirectExpiration, 24*time.Hour, redirectCacheItems),
+			rdb: redis.NewClient(&redis.Options{
+				Addr: config.RedisAddr,
+			}),
+			t:      reflect.TypeOf(t),
+			logger: logger,
 		}
 	}
 
-	if streamCacheItems, err := loadGoCache(config.CachePath + "/stream.gob"); err != nil {
-		logger.Error("Couldn't load stream cache from file - continuing with an empty cache", zap.Error(err))
-		streamCache = &goCache{
-			cache: gocache.New(streamExpiration, 24*time.Hour),
+	if config.RedisAddr == "" {
+		if streamCacheItems, err := loadGoCache(config.CachePath + "/stream.gob"); err != nil {
+			logger.Error("Couldn't load stream cache from file - continuing with an empty cache", zap.Error(err))
+			streamCache = &goCache{
+				cache: gocache.New(streamExpiration, 24*time.Hour),
+			}
+		} else {
+			streamCache = &goCache{
+				cache: gocache.NewFrom(streamExpiration, 24*time.Hour, streamCacheItems),
+			}
 		}
 	} else {
+		var t cacheItem
 		streamCache = &goCache{
-			cache: gocache.NewFrom(streamExpiration, 24*time.Hour, streamCacheItems),
+			rdb: redis.NewClient(&redis.Options{
+				Addr: config.RedisAddr,
+			}),
+			t:      reflect.TypeOf(t),
+			logger: logger,
 		}
 	}
 

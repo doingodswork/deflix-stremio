@@ -18,6 +18,7 @@ type config struct {
 	MaxAgeTorrents    time.Duration `json:"maxAgeTorrents"`
 	CachePath         string        `json:"cachePath"`
 	CacheAgeXD        time.Duration `json:"cacheAgeXD"`
+	RedisAddr         string        `json:"redisAddr"`
 	BaseURLyts        string        `json:"baseURLyts"`
 	BaseURLtpb        string        `json:"baseURLtpb"`
 	BaseURL1337x      string        `json:"baseURL1337x"`
@@ -46,6 +47,7 @@ func parseConfig(logger *zap.Logger) config {
 		maxAgeTorrents    = flag.Duration("maxAgeTorrents", 7*24*time.Hour, "Max age of cache entries for torrents found per IMDb ID. The format must be acceptable by Go's 'time.ParseDuration()', for example \"24h\". Default is 7 days.")
 		cachePath         = flag.String("cachePath", "", `Path for loading persisted caches on startup and persisting the current cache in regular intervals. An empty value will lead to 'os.UserCacheDir()+"/deflix-stremio/cache"'.`)
 		cacheAgeXD        = flag.Duration("cacheAgeXD", 24*time.Hour, "Max age of cache entries for instant availability responses from RealDebrid and AllDebrid. The format must be acceptable by Go's 'time.ParseDuration()', for example \"24h\".")
+		redisAddr         = flag.String("redisAddr", "", `Redis host and port, for example "localhost:6379". It's used for the redirect and stream cache. Keep empty to use in-memory go-cache.`)
 		baseURLyts        = flag.String("baseURLyts", "https://yts.mx", "Base URL for YTS")
 		baseURLtpb        = flag.String("baseURLtpb", "https://apibay.org", "Base URL for the TPB API")
 		baseURL1337x      = flag.String("baseURL1337x", "https://1337x.to", "Base URL for 1337x")
@@ -125,6 +127,13 @@ func parseConfig(logger *zap.Logger) config {
 		}
 	}
 	result.CacheAgeXD = *cacheAgeXD
+
+	if !isArgSet("redisAddr") {
+		if val, ok := os.LookupEnv(*envPrefix + "REDIS_ADDR"); ok {
+			*redisAddr = val
+		}
+	}
+	result.RedisAddr = *redisAddr
 
 	if !isArgSet("baseURLyts") {
 		if val, ok := os.LookupEnv(*envPrefix + "BASE_URL_YTS"); ok {
