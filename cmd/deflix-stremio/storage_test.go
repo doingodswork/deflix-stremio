@@ -1,10 +1,16 @@
 package main
 
 import (
+	"math"
+	"math/rand"
 	"os"
+	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/deflix-tv/go-stremio"
+	"github.com/go-redis/redis/v8"
 	"github.com/google/go-cmp/cmp"
 	gocache "github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/require"
@@ -64,3 +70,97 @@ func TestGoCachePersistence(t *testing.T) {
 	equal = cmp.Equal(exp2, actual2)
 	require.True(t, equal)
 }
+
+func TestRedis(t *testing.T) {
+	// Doesn't work on Windows: https://github.com/testcontainers/testcontainers-go/issues/152
+	// ip, port, deferFunc := startRedis(t)
+	// defer deferFunc()
+	ip, port := "localhost", "6379"
+
+	logger, err := stremio.NewLogger("debug")
+	require.NoError(t, err)
+
+	// Type: torrent result slice (for redirect cache use case)
+
+	var type1 []imdb2torrent.Result
+	gc := goCache{
+		rdb: redis.NewClient(&redis.Options{
+			Addr: ip + ":" + port,
+		}),
+		t:      reflect.TypeOf(type1),
+		logger: logger,
+	}
+	k := strconv.Itoa(rand.Intn(math.MaxUint32))
+	// Empty Get
+	_, found := gc.Get(k)
+	require.False(t, found)
+	// Set
+	v1 := []imdb2torrent.Result{
+		{
+			InfoHash:  "123",
+			MagnetURL: "magnet:?xt=urn:btih:123",
+			Title:     "foo",
+			Quality:   "720p",
+		},
+		{
+			InfoHash:  "456",
+			MagnetURL: "magnet:?xt=urn:btih:456",
+			Title:     "foo",
+			Quality:   "720p",
+		},
+	}
+	gc.Set(k, v1, time.Minute)
+	// Get
+	res, found := gc.Get(k)
+	require.True(t, found)
+	require.Equal(t, v1, res)
+
+	// Type: cacheItem (for stream cache use case)
+
+	var type2 cacheItem
+	gc.t = reflect.TypeOf(type2)
+	k = strconv.Itoa(rand.Intn(math.MaxUint32))
+	// Empty Get
+	_, found = gc.Get(k)
+	require.False(t, found)
+	// Set
+	v2 := cacheItem{
+		Value:   "foo",
+		Created: time.Now().Truncate(0), // Truncate to strip monotonic clock, which doesn't get included when encoding/decoding
+	}
+	gc.Set(k, v2, time.Minute)
+	// Get
+	res, found = gc.Get(k)
+	require.True(t, found)
+	require.Equal(t, v2, res)
+}
+
+// Doesn't work on Windows in v0.9.0: https://github.com/testcontainers/testcontainers-go/issues/152
+// We need to comment out the function to not have the dependency in the go.mod, which leads to compile errors due to the linked bug.
+// func startRedis(t *testing.T) (string, string, func()) {
+// 	ctx := context.Background()
+// 	p, err := nat.NewPort("tcp", "6379")
+// 	require.NoError(t, err)
+// 	req := testcontainers.ContainerRequest{
+// 		Image:        "redis:6-alpine",
+// 		ExposedPorts: []string{"6379/tcp"},
+// 		WaitingFor:   wait.ForListeningPort(p),
+// 	}
+// 	redisC, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+// 		ContainerRequest: req,
+// 		Started:          true,
+// 	})
+// 	require.NoError(t, err)
+// 	ip, err := redisC.Host(ctx)
+// 	if err != nil {
+// 		redisC.Terminate(ctx)
+// 		require.NoError(t, err)
+// 	}
+// 	port, err := redisC.MappedPort(ctx, "6379")
+// 	if err != nil {
+// 		redisC.Terminate(ctx)
+// 		require.NoError(t, err)
+// 	}
+
+// 	return ip, port.Port(), func() { redisC.Terminate(ctx) }
+// }

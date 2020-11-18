@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"strconv"
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/go-redis/redis/v8"
 	gocache "github.com/patrickmn/go-cache"
 	"go.uber.org/zap"
 
@@ -116,27 +118,82 @@ func (c *creationCache) Get(key string) (time.Time, bool, error) {
 
 var _ goCacher = (*goCache)(nil)
 
-// goCache wraps a go-cache instance and offers methods with the exact same signature as go-cache.
+// goCache wraps both a go-cache instance and Redis and offers methods with the exact same signature as go-cache.
+// If the Redis client is not nil, it's the one that's used exclusively. Otherwise go-cache is used.
+// The data in this cache is meant to be temporary, while also important to be the same across multiple nodes.
+// This is why there's no reason to for example read data from Redis and (during the same Get call) store the fetched data in go-cache to have a local copy in case of a Redis connection error, or to store data in both at the same time during a Set call.
 type goCache struct {
 	cache *gocache.Cache
+	rdb   *redis.Client
+	// Must be the actual type. So if you have a pointer, set this to the "element" of the pointer.
+	t      reflect.Type
+	logger *zap.Logger
 }
 
 func (c *goCache) Set(k string, v interface{}, d time.Duration) {
-	c.cache.Set(k, v, d)
+	if c.rdb != nil {
+		// Note: We can only decode into a pointer. And when working with interfaces gob requires to encode a pointer.
+		if b, err := toGob(&v); err != nil {
+			c.logger.Error("Couldn't encode value as gob", zap.Error(err))
+		} else if err := c.rdb.Set(context.Background(), k, b, d).Err(); err != nil {
+			c.logger.Error("Couldn't set value in Redis", zap.Error(err))
+		}
+	} else {
+		c.cache.Set(k, v, d)
+	}
 }
 
 func (c *goCache) Get(k string) (interface{}, bool) {
-	return c.cache.Get(k)
+	if c.rdb != nil {
+		if v, err := c.rdb.Get(context.Background(), k).Result(); err != nil && err != redis.Nil {
+			// Note: We only log this when there's an error *and* it's not `redis.Nil` (which just indicates that the value was not found).
+			c.logger.Error("Couldn't get value from Redis", zap.Error(err))
+			// Note: Don't return `nil, true` here, although that would be more correct. But given that the implementation is meant to have the same behavior as go-cache, where there are never encoding errors, a `nil, true` would lead to a caller assuming they can work with the value, but it's nil.
+		} else if err != redis.Nil {
+			var vi interface{}
+			if c.t.Kind() == reflect.Slice {
+				vi = reflect.MakeSlice(c.t, 0, 0)
+			} else {
+				vi = reflect.New(c.t)
+			}
+			if err := fromGob([]byte(v), &vi); err != nil {
+				c.logger.Error("Couldn't decode gob", zap.Error(err))
+			} else {
+				return vi, true
+			}
+		}
+		// Else: err == redis.Nil, which we don't need to explicitly handle, as returning `nil, false` is perfect for that.
+		return nil, false
+	} else {
+		return c.cache.Get(k)
+	}
+}
+
+func toGob(v interface{}) ([]byte, error) {
+	writer := bytes.Buffer{}
+	encoder := gob.NewEncoder(&writer)
+	if err := encoder.Encode(v); err != nil {
+		return nil, err
+	}
+	return writer.Bytes(), nil
+}
+
+func fromGob(b []byte, v interface{}) error {
+	reader := bytes.NewReader(b)
+	decoder := gob.NewDecoder(reader)
+	if err := decoder.Decode(v); err != nil {
+		return err
+	}
+	return nil
 }
 
 func gobSet(db *badger.DB, key string, item interface{}) error {
-	writer := bytes.Buffer{}
-	encoder := gob.NewEncoder(&writer)
-	if err := encoder.Encode(item); err != nil {
+	b, err := toGob(item)
+	if err != nil {
 		return fmt.Errorf("Couldn't encode item: %v", err)
 	}
 	return db.Update(func(txn *badger.Txn) error {
-		return txn.Set([]byte(key), writer.Bytes())
+		return txn.Set([]byte(key), b)
 	})
 }
 
@@ -147,12 +204,7 @@ func gobGet(db *badger.DB, key string, target interface{}) (bool, error) {
 			return err
 		}
 		item.Value(func(val []byte) error {
-			reader := bytes.NewReader(val)
-			decoder := gob.NewDecoder(reader)
-			if err := decoder.Decode(target); err != nil {
-				return fmt.Errorf("Couldn't decode item: %v", err)
-			}
-			return nil
+			return fromGob(val, target)
 		})
 		return nil
 	})
