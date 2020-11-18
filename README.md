@@ -126,6 +126,10 @@ Usage of deflix-stremio:
         Max age of cache entries for torrents found per IMDb ID. The format must be acceptable by Go's 'time.ParseDuration()', for example "24h". Default is 7 days. (default 168h0m0s)
   -port int
         Port to listen on (default 8080)
+  -redisAddr string
+        Redis host and port, for example "localhost:6379". It's used for the redirect and stream cache. Keep empty to use in-memory go-cache.
+  -redisCreds string
+        Credentials for Redis. Password for Redis version 5 and older, username and password for Redis version 6 and newer. Use the colon character (":") for separating username and password. This implies you can't use a colon in the password when using Redis version 5 or older.
   -rootURL string
         Redirect target for the root (default "https://www.deflix.tv")
   -socksProxyAddrTPB string

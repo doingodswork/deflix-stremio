@@ -22,7 +22,13 @@ const (
 	bigBuckBunnyMagnet = `magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c&dn=Big+Buck+Bunny&tr=udp%3A%2F%2Fexplodie.org%3A6969&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969&tr=udp%3A%2F%2Ftracker.empire-js.us%3A1337&tr=udp%3A%2F%2Ftracker.leechers-paradise.org%3A6969&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337&tr=wss%3A%2F%2Ftracker.btorrent.xyz&tr=wss%3A%2F%2Ftracker.fastcast.nz&tr=wss%3A%2F%2Ftracker.openwebtorrent.com&ws=https%3A%2F%2Fwebtorrent.io%2Ftorrents%2F&xs=https%3A%2F%2Fwebtorrent.io%2Ftorrents%2Fbig-buck-bunny.torrent`
 )
 
-func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdClient *realdebrid.Client, adClient *alldebrid.Client, redirectCache *gocache.Cache, logger *zap.Logger) stremio.StreamHandler {
+// goCacher is a go-cache-compatible interface.
+type goCacher interface {
+	Set(string, interface{}, time.Duration)
+	Get(string) (interface{}, bool)
+}
+
+func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdClient *realdebrid.Client, adClient *alldebrid.Client, redirectCache goCacher, logger *zap.Logger) stremio.StreamHandler {
 	return func(ctx context.Context, id string, userDataIface interface{}) ([]stremio.StreamItem, error) {
 		torrents, err := searchClient.FindMagnets(ctx, id)
 		if err != nil {
@@ -94,11 +100,11 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdCli
 		// Cache results to make this data available in the redirect handler. It will pick the first torrent from the list and convert it via RD, or pick the next if the previous didn't work.
 		// There's no need to cache this for a specific user.
 		// This cache *must* be a cache where items aren't evicted when the cache is full, because otherwise if the cache is full and two users fetch available streams, then the second one could lead to the first cache item being evicted before the first user clicks on the stream, leading to an error inside the redirect handler after he clicks on the stream.
-		redirectCache.Set(id+"-720p", torrents720p, 0)
-		redirectCache.Set(id+"-1080p", torrents1080p, 0)
-		redirectCache.Set(id+"-1080p-10bit", torrents1080p10bit, 0)
-		redirectCache.Set(id+"-2160p", torrents2160p, 0)
-		redirectCache.Set(id+"-2160p-10bit", torrents2160p10bit, 0)
+		redirectCache.Set(id+"-720p", torrents720p, redirectExpiration)
+		redirectCache.Set(id+"-1080p", torrents1080p, redirectExpiration)
+		redirectCache.Set(id+"-1080p-10bit", torrents1080p10bit, redirectExpiration)
+		redirectCache.Set(id+"-2160p", torrents2160p, redirectExpiration)
+		redirectCache.Set(id+"-2160p-10bit", torrents2160p10bit, redirectExpiration)
 
 		// We already respond with several URLs (one for each quality, as long as we have torrents for the different qualities), but they point to our server for now.
 		// Only when the user clicks on a stream and arrives at our redirect endpoint, we go through the list of torrents for the selected quality and try to convert them into a streamable video URL via RealDebrid.
@@ -159,7 +165,7 @@ func createStreamItem(ctx context.Context, config config, redirectID, quality st
 	return stream
 }
 
-func createRedirectHandler(redirectCache *gocache.Cache, rdClient *realdebrid.Client, adClient *alldebrid.Client, logger *zap.Logger) fiber.Handler {
+func createRedirectHandler(redirectCache, streamCache goCacher, rdClient *realdebrid.Client, adClient *alldebrid.Client, logger *zap.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		logger.Debug("redirectHandler called", zap.String("request", fmt.Sprintf("%+v", c.Request())))
 
@@ -256,7 +262,7 @@ func createRedirectHandler(redirectCache *gocache.Cache, rdClient *realdebrid.Cl
 			Value:   streamURL,
 			Created: time.Now(),
 		}
-		streamCache.Set(redirectID, streamURLitem, 0)
+		streamCache.Set(redirectID, streamURLitem, streamExpiration)
 
 		if streamURL == "" {
 			return c.SendStatus(fiber.StatusNotFound)
