@@ -30,13 +30,13 @@ func decodeUserData(data string, logger *zap.Logger) (userData, error) {
 		if len(tokenParts) > 2 {
 			return userData{}, errors.New("legacy userData was not correctly formatted")
 		}
-		logger.Warn("A legacy API token is being used", zap.Bool("remote", true))
+		logger.Info("A legacy API token is being used", zap.Bool("remote", true))
 		return userData{
 			RDtoken:  tokenParts[0],
 			RDremote: true,
 		}, nil
 	} else if len(data) == 52 && !strings.HasPrefix(data, "eyJ") && !strings.HasPrefix(data, "eyI") {
-		logger.Warn("A legacy API token is being used", zap.Bool("remote", false))
+		logger.Info("A legacy API token is being used", zap.Bool("remote", false))
 		return userData{
 			RDtoken:  data,
 			RDremote: false,
