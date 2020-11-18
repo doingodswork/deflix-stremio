@@ -366,6 +366,9 @@ func initCaches(config config, logger *zap.Logger) {
 		rdb := redis.NewClient(&redis.Options{
 			Addr: config.RedisAddr,
 		})
+		if err := rdb.Ping(context.Background()).Err(); err != nil {
+			logger.Fatal("Couldn't ping Redis", zap.Error(err))
+		}
 		var t []imdb2torrent.Result
 		redirectCache = &goCache{
 			rdb:    rdb,
