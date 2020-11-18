@@ -100,11 +100,11 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdCli
 		// Cache results to make this data available in the redirect handler. It will pick the first torrent from the list and convert it via RD, or pick the next if the previous didn't work.
 		// There's no need to cache this for a specific user.
 		// This cache *must* be a cache where items aren't evicted when the cache is full, because otherwise if the cache is full and two users fetch available streams, then the second one could lead to the first cache item being evicted before the first user clicks on the stream, leading to an error inside the redirect handler after he clicks on the stream.
-		redirectCache.Set(id+"-720p", torrents720p, 0)
-		redirectCache.Set(id+"-1080p", torrents1080p, 0)
-		redirectCache.Set(id+"-1080p-10bit", torrents1080p10bit, 0)
-		redirectCache.Set(id+"-2160p", torrents2160p, 0)
-		redirectCache.Set(id+"-2160p-10bit", torrents2160p10bit, 0)
+		redirectCache.Set(id+"-720p", torrents720p, redirectExpiration)
+		redirectCache.Set(id+"-1080p", torrents1080p, redirectExpiration)
+		redirectCache.Set(id+"-1080p-10bit", torrents1080p10bit, redirectExpiration)
+		redirectCache.Set(id+"-2160p", torrents2160p, redirectExpiration)
+		redirectCache.Set(id+"-2160p-10bit", torrents2160p10bit, redirectExpiration)
 
 		// We already respond with several URLs (one for each quality, as long as we have torrents for the different qualities), but they point to our server for now.
 		// Only when the user clicks on a stream and arrives at our redirect endpoint, we go through the list of torrents for the selected quality and try to convert them into a streamable video URL via RealDebrid.
@@ -262,7 +262,7 @@ func createRedirectHandler(redirectCache, streamCache goCacher, rdClient *realde
 			Value:   streamURL,
 			Created: time.Now(),
 		}
-		streamCache.Set(redirectID, streamURLitem, 0)
+		streamCache.Set(redirectID, streamURLitem, streamExpiration)
 
 		if streamURL == "" {
 			return c.SendStatus(fiber.StatusNotFound)
