@@ -350,6 +350,16 @@ func initCaches(config config, logger *zap.Logger) {
 	}
 
 	var rdb *redis.Client
+	if config.RedisAddr != "" {
+		rdb = redis.NewClient(&redis.Options{
+			Addr: config.RedisAddr,
+		})
+		logger.Info("Testing connection to Redis...")
+		if err := rdb.Ping(context.Background()).Err(); err != nil {
+			logger.Fatal("Couldn't ping Redis", zap.Error(err))
+		}
+		logger.Info("Connection to Redis established!")
+	}
 
 	if config.RedisAddr == "" {
 		if redirectCacheItems, err := loadGoCache(config.CachePath + "/redirect.gob"); err != nil {
@@ -363,12 +373,6 @@ func initCaches(config config, logger *zap.Logger) {
 			}
 		}
 	} else {
-		rdb := redis.NewClient(&redis.Options{
-			Addr: config.RedisAddr,
-		})
-		if err := rdb.Ping(context.Background()).Err(); err != nil {
-			logger.Fatal("Couldn't ping Redis", zap.Error(err))
-		}
 		var t []imdb2torrent.Result
 		redirectCache = &goCache{
 			rdb:    rdb,
