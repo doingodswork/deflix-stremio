@@ -350,6 +350,7 @@ func initCaches(config config, logger *zap.Logger) {
 		cache: gocache.NewFrom(config.CacheAgeXD, 24*time.Hour, adAvailabilityCacheItems),
 	}
 
+	// TODO: Return closer func like in the stores initialization function.
 	var rdb *redis.Client
 	if config.RedisAddr != "" {
 		rdb = redis.NewClient(&redis.Options{
