@@ -190,7 +190,7 @@ func parseConfig(logger *zap.Logger) config {
 
 	if !isArgSet("baseURLad") {
 		if val, ok := os.LookupEnv(*envPrefix + "BASE_URL_AD"); ok {
-			*baseURLrd = val
+			*baseURLad = val
 		}
 	}
 	result.BaseURLad = *baseURLad
