@@ -102,9 +102,9 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdCli
 		// This cache *must* be a cache where items aren't evicted when the cache is full, because otherwise if the cache is full and two users fetch available streams, then the second one could lead to the first cache item being evicted before the first user clicks on the stream, leading to an error inside the redirect handler after he clicks on the stream.
 		redirectCache.Set(id+"-720p", torrents720p, redirectExpiration)
 		redirectCache.Set(id+"-1080p", torrents1080p, redirectExpiration)
-		redirectCache.Set(id+"-1080p-10bit", torrents1080p10bit, redirectExpiration)
+		redirectCache.Set(id+"-1080p.10bit", torrents1080p10bit, redirectExpiration)
 		redirectCache.Set(id+"-2160p", torrents2160p, redirectExpiration)
-		redirectCache.Set(id+"-2160p-10bit", torrents2160p10bit, redirectExpiration)
+		redirectCache.Set(id+"-2160p.10bit", torrents2160p10bit, redirectExpiration)
 
 		// We already respond with several URLs (one for each quality, as long as we have torrents for the different qualities), but they point to our server for now.
 		// Only when the user clicks on a stream and arrives at our redirect endpoint, we go through the list of torrents for the selected quality and try to convert them into a streamable video URL via RealDebrid.
@@ -125,7 +125,7 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdCli
 			streams = append(streams, stream)
 		}
 		if len(torrents1080p10bit) > 0 {
-			stream := createStreamItem(ctx, config, requestIDPrefix+"-"+"1080p-10bit", "1080p 10bit", torrents1080p10bit)
+			stream := createStreamItem(ctx, config, requestIDPrefix+"-"+"1080p.10bit", "1080p 10bit", torrents1080p10bit)
 			streams = append(streams, stream)
 		}
 		if len(torrents2160p) > 0 {
@@ -133,7 +133,7 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdCli
 			streams = append(streams, stream)
 		}
 		if len(torrents2160p10bit) > 0 {
-			stream := createStreamItem(ctx, config, requestIDPrefix+"-"+"2160p-10bit", "2160p 10bit", torrents2160p10bit)
+			stream := createStreamItem(ctx, config, requestIDPrefix+"-"+"2160p.10bit", "2160p 10bit", torrents2160p10bit)
 			streams = append(streams, stream)
 		}
 
@@ -176,7 +176,7 @@ func createRedirectHandler(redirectCache, streamCache goCacher, rdClient *realde
 		zapFieldRedirectID := zap.String("redirectID", redirectID)
 
 		idParts := strings.Split(redirectID, "-")
-		// "<debridService>-<apiToken>-[<remote>]-<imdbID>-<quality>"
+		// "<debridService>-<apiToken>-[<remote>]-<imdbID>-<quality>", where quality might contain a ".10bit" suffix
 		if len(idParts) < 4 ||
 			(idParts[0] == "rd" && len(idParts) != 5) ||
 			(idParts[0] == "ad" && len(idParts) != 4) {
