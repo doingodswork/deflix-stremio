@@ -23,6 +23,7 @@ import (
 	"github.com/deflix-tv/go-stremio"
 	"github.com/deflix-tv/go-stremio/pkg/cinemeta"
 	"github.com/doingodswork/deflix-stremio/pkg/debrid/alldebrid"
+	"github.com/doingodswork/deflix-stremio/pkg/debrid/premiumize"
 	"github.com/doingodswork/deflix-stremio/pkg/debrid/realdebrid"
 	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
 	"github.com/doingodswork/deflix-stremio/pkg/logadapter"
@@ -91,6 +92,7 @@ var (
 	// go-cache
 	rdAvailabilityCache *creationCache
 	adAvailabilityCache *creationCache
+	pmAvailabilityCache *creationCache
 	tokenCache          *creationCache
 	// go-cache or Redis, depending on config
 	redirectCache *goCache
@@ -103,6 +105,7 @@ var (
 	searchClient *imdb2torrent.Client
 	rdClient     *realdebrid.Client
 	adClient     *alldebrid.Client
+	pmClient     *premiumize.Client
 )
 
 var (
@@ -193,8 +196,9 @@ func main() {
 	// Init cache maps
 
 	goCaches := map[string]*gocache.Cache{
-		"availability-ad": rdAvailabilityCache.cache,
 		"availability-rd": adAvailabilityCache.cache,
+		"availability-ad": rdAvailabilityCache.cache,
+		"availability-pm": pmAvailabilityCache.cache,
 		"token":           tokenCache.cache,
 	}
 	if redirectCache.cache != nil {
@@ -215,7 +219,7 @@ func main() {
 
 	// Prepare addon creation
 
-	streamHandler := createStreamHandler(config, searchClient, rdClient, adClient, redirectCache, logger)
+	streamHandler := createStreamHandler(config, searchClient, rdClient, adClient, pmClient, redirectCache, logger)
 	streamHandlers := map[string]stremio.StreamHandler{"movie": streamHandler}
 
 	var httpFS http.FileSystem
@@ -249,17 +253,17 @@ func main() {
 
 	// Customize addon
 
-	tokenMiddleware := createTokenMiddleware(rdClient, adClient, logger)
+	tokenMiddleware := createTokenMiddleware(rdClient, adClient, pmClient, logger)
 	addon.AddMiddleware("/:userData/manifest.json", tokenMiddleware)
 	addon.AddMiddleware("/:userData/stream/:type/:id.json", tokenMiddleware)
 	// No need to set the middleware to the stream route without user data because go-stremio blocks it (with a 400 Bad Request response) if BehaviorHints.ConfigurationRequired is true.
 
 	// Requires URL query: "?imdbid=123&apitoken=foo"
-	statusEndpoint := createStatusHandler(searchClient.GetMagnetSearchers(), rdClient, adClient, goCaches, logger)
+	statusEndpoint := createStatusHandler(searchClient.GetMagnetSearchers(), rdClient, adClient, pmClient, goCaches, logger)
 	addon.AddEndpoint("GET", "/status", statusEndpoint)
 
 	// Redirects stream URLs (previously sent to Stremio) to the actual RealDebrid stream URLs
-	redirHandler := createRedirectHandler(redirectCache, streamCache, rdClient, adClient, logger)
+	redirHandler := createRedirectHandler(redirectCache, streamCache, rdClient, adClient, pmClient, logger)
 	addon.AddEndpoint("GET", "/redirect/:id", redirHandler)
 	// Stremio sends a HEAD request before starting a stream.
 	addon.AddEndpoint("HEAD", "/redirect/:id", redirHandler)
@@ -355,6 +359,15 @@ func initCaches(config config, logger *zap.Logger) {
 	}
 	adAvailabilityCache = &creationCache{
 		cache: gocache.NewFrom(config.CacheAgeXD, 24*time.Hour, adAvailabilityCacheItems),
+	}
+
+	pmAvailabilityCacheItems, err := loadGoCache(config.CachePath + "/availability-pm.gob")
+	if err != nil {
+		logger.Error("Couldn't load Premiumize availability cache from file - continuing with an empty cache", zap.Error(err))
+		pmAvailabilityCacheItems = map[string]gocache.Item{}
+	}
+	pmAvailabilityCache = &creationCache{
+		cache: gocache.NewFrom(config.CacheAgeXD, 24*time.Hour, pmAvailabilityCacheItems),
 	}
 
 	// TODO: Return closer func like in the stores initialization function.
@@ -454,6 +467,7 @@ func initClients(config config, logger *zap.Logger) {
 	rarbgClientOpts := imdb2torrent.NewRARBGclientOpts(config.BaseURLrarbg, timeout, config.MaxAgeTorrents)
 	rdClientOpts := realdebrid.NewClientOpts(config.BaseURLrd, timeout, config.CacheAgeXD, config.ExtraHeadersXD)
 	adClientOpts := alldebrid.NewClientOpts(config.BaseURLad, timeout, config.CacheAgeXD, config.ExtraHeadersXD)
+	pmClientOpts := premiumize.NewClientOpts(config.BaseURLpm, timeout, config.CacheAgeXD, config.ExtraHeadersXD)
 
 	tpbClient, err := imdb2torrent.NewTPBclient(tpbClientOpts, torrentCache, metaFetcher, logger, config.LogFoundTorrents)
 	if err != nil {
@@ -474,6 +488,10 @@ func initClients(config config, logger *zap.Logger) {
 	adClient, err = alldebrid.NewClient(adClientOpts, tokenCache, adAvailabilityCache, logger)
 	if err != nil {
 		logger.Fatal("Couldn't create AllDebrid client", zap.Error(err))
+	}
+	pmClient, err = premiumize.NewClient(pmClientOpts, tokenCache, pmAvailabilityCache, logger)
+	if err != nil {
+		logger.Fatal("Couldn't create Premiumize client", zap.Error(err))
 	}
 
 	duration := time.Since(start).Milliseconds()
