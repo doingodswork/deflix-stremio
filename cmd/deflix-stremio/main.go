@@ -234,7 +234,7 @@ func main() {
 		RedirectURL:  config.RootURL,
 		LogMediaName: true,
 		// We already have a Cinemeta Client
-		CinemetaClient:  cinemetaClient,
+		MetaClient:      cinemetaClient,
 		ConfigureHTMLfs: httpFS,
 		StreamIDregex:   "tt\\d{7,8}",
 	}
