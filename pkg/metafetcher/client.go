@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"time"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -39,7 +40,9 @@ func NewClient(imdb2metaAddress string, cinemetaClient *cinemeta.Client, logger 
 		// Set up a connection to the server.
 		logger.Info("Connecting to imdb2meta gRPC server...", zap.String("address", imdb2metaAddress))
 		var err error
-		conn, err = grpc.Dial(imdb2metaAddress, grpc.WithInsecure(), grpc.WithBlock())
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		conn, err = grpc.DialContext(ctx, imdb2metaAddress, grpc.WithInsecure(), grpc.WithBlock())
 		if err != nil {
 			return nil, err
 		}
