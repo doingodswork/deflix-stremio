@@ -5,6 +5,7 @@ go 1.15
 require (
 	github.com/PuerkitoBio/goquery v1.6.0
 	github.com/deflix-tv/go-stremio v0.8.0
+	github.com/deflix-tv/imdb2meta v0.2.1
 	github.com/dgraph-io/badger/v2 v2.2007.2
 	github.com/go-redis/redis/v8 v8.4.2
 	github.com/gofiber/fiber/v2 v2.2.5
@@ -16,4 +17,5 @@ require (
 	go.uber.org/multierr v1.6.0
 	go.uber.org/zap v1.16.0
 	golang.org/x/net v0.0.0-20201209123823-ac852fbbde11
+	google.golang.org/grpc v1.34.0
 )
