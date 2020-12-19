@@ -196,8 +196,8 @@ func main() {
 	// Init cache maps
 
 	goCaches := map[string]*gocache.Cache{
-		"availability-rd": adAvailabilityCache.cache,
-		"availability-ad": rdAvailabilityCache.cache,
+		"availability-rd": rdAvailabilityCache.cache,
+		"availability-ad": adAvailabilityCache.cache,
 		"availability-pm": pmAvailabilityCache.cache,
 		"token":           tokenCache.cache,
 	}
