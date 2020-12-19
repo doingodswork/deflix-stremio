@@ -298,9 +298,11 @@ func initStores(config config, logger *zap.Logger) (closer func() error) {
 	}
 
 	// BadgerDB
-	options := badger.DefaultOptions(config.StoragePath)
-	options.SyncWrites = false
-	options.Logger = logadapter.NewBadger2Zap(logger)
+	badgerLogger := logadapter.NewBadger2Zap(logger)
+	options := badger.DefaultOptions(config.StoragePath).
+		WithLogger(badgerLogger).
+		WithLoggingLevel(badger.WARNING).
+		WithSyncWrites(false)
 	db, err := badger.Open(options)
 	if err != nil {
 		logger.Fatal("Couldn't open BadgerDB", zap.Error(err))
