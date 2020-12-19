@@ -59,6 +59,9 @@ func NewClient(imdb2metaAddress string, cinemetaClient *cinemeta.Client, logger 
 }
 
 // GetMovie implements stremio.MetaFetcher.
+// Note that if the context has a timeout and it times out during the initial imdb2meta gRPC request,
+// the Cinemeta HTTP request will fail immediately.
+// TODO: Do both requests in parallel?
 func (c *Client) GetMovie(ctx context.Context, imdbID string) (cinemeta.Meta, error) {
 	if c.imdb2metaClient != nil {
 		request := &pb.MetaRequest{
