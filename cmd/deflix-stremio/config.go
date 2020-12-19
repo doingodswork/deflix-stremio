@@ -33,6 +33,7 @@ type config struct {
 	ExtraHeadersXD    []string      `json:"extraHeadersXD"`
 	SocksProxyAddrTPB string        `json:"socksProxyAddrTPB"`
 	WebConfigurePath  string        `json:"webConfigurePath"`
+	IMDB2metaAddr     string        `json:"imdb2metaAddr"`
 	EnvPrefix         string        `json:"envPrefix"`
 }
 
@@ -63,6 +64,7 @@ func parseConfig(logger *zap.Logger) config {
 		extraHeadersXD    = flag.String("extraHeadersXD", "", `Additional HTTP request headers to set for requests to RealDebrid and AllDebrid, in a format like "X-Foo: bar", separated by newline characters ("\n")`)
 		socksProxyAddrTPB = flag.String("socksProxyAddrTPB", "", "SOCKS5 proxy address for accessing TPB, required for accessing TPB via the TOR network (where \"127.0.0.1:9050\" would be typical value)")
 		webConfigurePath  = flag.String("webConfigurePath", "", "Path to the directory with web files for the '/configure' endpoint. If empty, files compiled into the binary will be used")
+		imdb2metaAddr     = flag.String("imdb2metaAddr", "", "Address of the imdb2meta gRPC server. Won't be used if empty.")
 		envPrefix         = flag.String("envPrefix", "", "Prefix for environment variables")
 	)
 
@@ -244,6 +246,13 @@ func parseConfig(logger *zap.Logger) config {
 		}
 	}
 	result.WebConfigurePath = *webConfigurePath
+
+	if !isArgSet("imdb2metaAddr") {
+		if val, ok := os.LookupEnv(*envPrefix + "IMDB_2_META_ADDR"); ok {
+			*imdb2metaAddr = val
+		}
+	}
+	result.IMDB2metaAddr = *imdb2metaAddr
 
 	return result
 }

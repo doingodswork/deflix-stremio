@@ -26,6 +26,7 @@ import (
 	"github.com/doingodswork/deflix-stremio/pkg/debrid/realdebrid"
 	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
 	"github.com/doingodswork/deflix-stremio/pkg/logadapter"
+	"github.com/doingodswork/deflix-stremio/pkg/metafetcher"
 )
 
 const (
@@ -98,10 +99,10 @@ var (
 
 // Clients
 var (
-	cinemetaClient *cinemeta.Client
-	searchClient   *imdb2torrent.Client
-	rdClient       *realdebrid.Client
-	adClient       *alldebrid.Client
+	metaFetcher  stremio.MetaFetcher
+	searchClient *imdb2torrent.Client
+	rdClient     *realdebrid.Client
+	adClient     *alldebrid.Client
 )
 
 var (
@@ -233,8 +234,8 @@ func main() {
 		LogIPs:       true,
 		RedirectURL:  config.RootURL,
 		LogMediaName: true,
-		// We already have a Cinemeta Client
-		MetaClient:      cinemetaClient,
+		// We already have a metaFetcher Client
+		MetaClient:      metaFetcher,
 		ConfigureHTMLfs: httpFS,
 		StreamIDregex:   "tt\\d{7,8}",
 	}
@@ -437,6 +438,15 @@ func initClients(config config, logger *zap.Logger) {
 	logger.Info("Initializing clients...")
 	start := time.Now()
 
+	// TODO: Return closer func like in the stores initialization function.
+	var err error
+	cinemetaClient := cinemeta.NewClient(cinemeta.DefaultClientOpts, cinemetaCache, logger)
+	metaFetcher, err = metafetcher.NewClient(config.IMDB2metaAddr, cinemetaClient, logger)
+	if err != nil {
+		logger.Error("Couldn't create metafetcher client, continuing with regular cinemetaClient", zap.Error(err))
+		metaFetcher = cinemetaClient
+	}
+
 	ytsClientOpts := imdb2torrent.NewYTSclientOpts(config.BaseURLyts, timeout, config.MaxAgeTorrents)
 	tpbClientOpts := imdb2torrent.NewTPBclientOpts(config.BaseURLtpb, config.SocksProxyAddrTPB, timeout, config.MaxAgeTorrents)
 	leetxClientOpts := imdb2torrent.NewLeetxClientOpts(config.BaseURL1337x, timeout, config.MaxAgeTorrents)
@@ -445,15 +455,14 @@ func initClients(config config, logger *zap.Logger) {
 	rdClientOpts := realdebrid.NewClientOpts(config.BaseURLrd, timeout, config.CacheAgeXD, config.ExtraHeadersXD)
 	adClientOpts := alldebrid.NewClientOpts(config.BaseURLad, timeout, config.CacheAgeXD, config.ExtraHeadersXD)
 
-	cinemetaClient = cinemeta.NewClient(cinemeta.DefaultClientOpts, cinemetaCache, logger)
-	tpbClient, err := imdb2torrent.NewTPBclient(tpbClientOpts, torrentCache, cinemetaClient, logger, config.LogFoundTorrents)
+	tpbClient, err := imdb2torrent.NewTPBclient(tpbClientOpts, torrentCache, metaFetcher, logger, config.LogFoundTorrents)
 	if err != nil {
 		logger.Fatal("Couldn't create TPB client", zap.Error(err))
 	}
 	siteClients := map[string]imdb2torrent.MagnetSearcher{
 		"YTS":   imdb2torrent.NewYTSclient(ytsClientOpts, torrentCache, logger, config.LogFoundTorrents),
 		"TPB":   tpbClient,
-		"1337X": imdb2torrent.NewLeetxClient(leetxClientOpts, torrentCache, cinemetaClient, logger, config.LogFoundTorrents),
+		"1337X": imdb2torrent.NewLeetxClient(leetxClientOpts, torrentCache, metaFetcher, logger, config.LogFoundTorrents),
 		"ibit":  imdb2torrent.NewIbitClient(ibitClientOpts, torrentCache, logger, config.LogFoundTorrents),
 		"RARBG": imdb2torrent.NewRARBGclient(rarbgClientOpts, torrentCache, logger, config.LogFoundTorrents),
 	}
