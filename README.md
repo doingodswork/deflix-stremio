@@ -3,7 +3,7 @@ Deflix Stremio addon
 
 [Deflix](https://www.deflix.tv) addon for [Stremio](https://stremio.com)
 
-Finds movies from many different sources and automatically turns them into cached HTTP streams with a debrid service like [RealDebrid](https://real-debrid.com) or [AllDebrid](https://alldebrid.com), for high speed 4k streaming and **no P2P uploading**.
+Finds movies from many different sources and automatically turns them into cached HTTP streams with a debrid service like [RealDebrid](https://real-debrid.com), [AllDebrid](https://alldebrid.com) or [Premiumize](https://www.premiumize.me), for high speed 4k streaming and **no P2P uploading**.
 
 Contents
 --------
@@ -21,7 +21,8 @@ Features
 - Supports several debrid services
   - [x] [RealDebrid](https://real-debrid.com)
   - [x] [AllDebrid](https://alldebrid.com)
-  - [ ] Others like [Premiumize](https://www.premiumize.me) and [put.io](https://put.io) are planned
+  - [x] [Premiumize](https://www.premiumize.me)
+  - [ ] Others can be added, please let me know which one you want to see next
 - Finds movies from many different sources
   - [x] YTS
   - [x] The Pirate Bay
@@ -51,9 +52,11 @@ But it's just a few simple steps, so you can do it without the website as well:
 1. Get your debrid service API key
    - For RealDebrid: <https://real-debrid.com/apitoken>
    - For AllDebrid: <https://alldebrid.com/apikeys/>
+   - For Premiumize: <https://www.premiumize.me/account>
 2. Create a JSON object with the data, like this:
    - For RealDebrid: `{"rdToken":"YOUR-API-TOKEN"}` or with an additional `"remote":true` (see below)
    - For AllDebrid: `{"adKey":"YOUR-API-KEY"}`
+   - For Premiumize: `{"pmKey":"YOUR-API-KEY"}`
 3. Encode the JSON as Base64URL, for example on <https://base64.guru/standards/base64url/encode> or <https://simplycalc.com/base64url-encode.php>
    - This becomes something like `eyJyZFRva2VuIjoiWU9VUi1BUEktVE9LRU4ifQ` or with a padding suffix (`==` in this case)  
      > Note: It has to be Base64URL, not Base64. For more info you can read [RFC 4648](https://tools.ietf.org/html/rfc4648#section-5).
@@ -100,6 +103,8 @@ Usage of deflix-stremio:
         Base URL for AllDebrid (default "https://api.alldebrid.com")
   -baseURLibit string
         Base URL for ibit (default "https://ibit.am")
+  -baseURLpm string
+        Base URL for Premiumize (default "https://www.premiumize.me/api")
   -baseURLrarbg string
         Base URL for RARBG (default "https://torrentapi.org")
   -baseURLrd string
@@ -111,13 +116,13 @@ Usage of deflix-stremio:
   -bindAddr string
         Local interface address to bind to. "localhost" only allows access from the local host. "0.0.0.0" binds to all network interfaces. (default "localhost")
   -cacheAgeXD duration
-        Max age of cache entries for instant availability responses from RealDebrid and AllDebrid. The format must be acceptable by Go's 'time.ParseDuration()', for example "24h". (default 24h0m0s)
+        Max age of cache entries for instant availability responses from RealDebrid, AllDebrid and Premiumize. The format must be acceptable by Go's 'time.ParseDuration()', for example "24h". (default 24h0m0s)
   -cachePath string
         Path for loading persisted caches on startup and persisting the current cache in regular intervals. An empty value will lead to 'os.UserCacheDir()+"/deflix-stremio/cache"'.
   -envPrefix string
         Prefix for environment variables
   -extraHeadersXD string
-        Additional HTTP request headers to set for requests to RealDebrid and AllDebrid, in a format like "X-Foo: bar", separated by newline characters ("\n")
+        Additional HTTP request headers to set for requests to RealDebrid, AllDebrid and Premiumize, in a format like "X-Foo: bar", separated by newline characters ("\n")
   -logFoundTorrents
         Set to true to log each single torrent that was found by one of the torrent site clients (with DEBUG level)
   -logLevel string
@@ -148,9 +153,9 @@ If you want to configure deflix-stremio via environment variables, you can use t
 
 If you *run* this web service on your local laptop or server, i.e. if you *self-host* this, you should know the following:
 
-Deflix doesn't download or upload any torrents, but it *does* send HTTP requests to YTS, The Pirate Bay, 1337x, RARBG and ibit, which *might* be illegal in some countries. Streaming movies from RealDebrid or AllDebrid *might* also be illegal in some countries.
+Deflix doesn't download or upload any torrents, but it *does* send HTTP requests to YTS, The Pirate Bay, 1337x, RARBG and ibit, which *might* be illegal in some countries. Streaming movies from RealDebrid, AllDebrid or Premiumize *might* also be illegal in some countries.
 
-> To encrypt your traffic so that your ISP can't see where those HTTP requests are sent and to not expose your real IP address to RealDebrid or AllDebrid you can use a VPN.
+> To encrypt your traffic so that your ISP can't see where those HTTP requests are sent and to not expose your real IP address to RealDebrid, AllDebrid or Premiumize you can use a VPN.
 
 Disclaimer
 ----------

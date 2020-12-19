@@ -16,6 +16,8 @@ type userData struct {
 	RDremote bool   `json:"rdRemote"`
 	// AllDebrid
 	ADkey string `json:"adKey"`
+	// Premiumize
+	PMkey string `json:"pmKey"`
 }
 
 func decodeUserData(data string, logger *zap.Logger) (userData, error) {

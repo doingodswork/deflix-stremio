@@ -14,6 +14,7 @@ import (
 
 	"github.com/deflix-tv/go-stremio"
 	"github.com/doingodswork/deflix-stremio/pkg/debrid/alldebrid"
+	"github.com/doingodswork/deflix-stremio/pkg/debrid/premiumize"
 	"github.com/doingodswork/deflix-stremio/pkg/debrid/realdebrid"
 	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
 )
@@ -28,7 +29,7 @@ type goCacher interface {
 	Get(string) (interface{}, bool)
 }
 
-func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdClient *realdebrid.Client, adClient *alldebrid.Client, redirectCache goCacher, logger *zap.Logger) stremio.StreamHandler {
+func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdClient *realdebrid.Client, adClient *alldebrid.Client, pmClient *premiumize.Client, redirectCache goCacher, logger *zap.Logger) stremio.StreamHandler {
 	return func(ctx context.Context, id string, userDataIface interface{}) ([]stremio.StreamItem, error) {
 		torrents, err := searchClient.FindMagnets(ctx, id)
 		if err != nil {
@@ -52,8 +53,10 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdCli
 		var availableInfoHashes []string
 		if userData.RDtoken != "" {
 			availableInfoHashes = rdClient.CheckInstantAvailability(ctx, userData.RDtoken, infoHashes...)
-		} else {
+		} else if userData.ADkey != "" {
 			availableInfoHashes = adClient.CheckInstantAvailability(ctx, userData.ADkey, infoHashes...)
+		} else {
+			availableInfoHashes = pmClient.CheckInstantAvailability(ctx, userData.PMkey, infoHashes...)
 		}
 		if len(availableInfoHashes) == 0 {
 			// TODO: queue for download on the debrid service, or log somewhere for an asynchronous process to go through them and queue them?
@@ -113,8 +116,10 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdCli
 		var requestIDPrefix string
 		if userData.RDtoken != "" {
 			requestIDPrefix = "rd-" + userData.RDtoken + "-" + strconv.FormatBool(userData.RDremote) + "-" + id
-		} else {
+		} else if userData.ADkey != "" {
 			requestIDPrefix = "ad-" + userData.ADkey + "-" + id
+		} else {
+			requestIDPrefix = "pm-" + userData.PMkey + "-" + id
 		}
 		if len(torrents720p) > 0 {
 			stream := createStreamItem(ctx, config, requestIDPrefix+"-"+"720p", "720p", torrents720p)
@@ -165,7 +170,7 @@ func createStreamItem(ctx context.Context, config config, redirectID, quality st
 	return stream
 }
 
-func createRedirectHandler(redirectCache, streamCache goCacher, rdClient *realdebrid.Client, adClient *alldebrid.Client, logger *zap.Logger) fiber.Handler {
+func createRedirectHandler(redirectCache, streamCache goCacher, rdClient *realdebrid.Client, adClient *alldebrid.Client, pmClient *premiumize.Client, logger *zap.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		logger.Debug("redirectHandler called", zap.String("request", fmt.Sprintf("%+v", c.Request())))
 
@@ -179,7 +184,8 @@ func createRedirectHandler(redirectCache, streamCache goCacher, rdClient *realde
 		// "<debridService>-<apiToken>-[<remote>]-<imdbID>-<quality>", where quality might contain a ".10bit" suffix
 		if len(idParts) < 4 ||
 			(idParts[0] == "rd" && len(idParts) != 5) ||
-			(idParts[0] == "ad" && len(idParts) != 4) {
+			(idParts[0] == "ad" && len(idParts) != 4) ||
+			(idParts[0] == "pm" && len(idParts) != 4) {
 			return c.SendStatus(fiber.StatusBadRequest)
 		}
 		apiToken := idParts[1]
@@ -247,8 +253,10 @@ func createRedirectHandler(redirectCache, streamCache goCacher, rdClient *realde
 		for _, torrent := range torrents {
 			if idParts[0] == "rd" {
 				streamURL, err = rdClient.GetStreamURL(c.Context(), torrent.MagnetURL, apiToken, remote)
-			} else {
+			} else if idParts[0] == "ad" {
 				streamURL, err = adClient.GetStreamURL(c.Context(), torrent.MagnetURL, apiToken)
+			} else {
+				streamURL, err = pmClient.GetStreamURL(c.Context(), torrent.MagnetURL, apiToken)
 			}
 			if err != nil {
 				logger.Warn("Couldn't get stream URL", zap.Error(err), zapFieldRedirectID)
@@ -274,15 +282,16 @@ func createRedirectHandler(redirectCache, streamCache goCacher, rdClient *realde
 	}
 }
 
-func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher, rdClient *realdebrid.Client, adClient *alldebrid.Client, goCaches map[string]*gocache.Cache, logger *zap.Logger) fiber.Handler {
+func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher, rdClient *realdebrid.Client, adClient *alldebrid.Client, pmClient *premiumize.Client, goCaches map[string]*gocache.Cache, logger *zap.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		logger.Debug("statusHandler called", zap.String("request", fmt.Sprintf("%+v", c.Request())))
 
 		imdbID := c.Query("imdbid", "")
 		rdToken := c.Query("rdtoken", "")
 		adKey := c.Query("adkey", "")
-		if imdbID == "" || rdToken == "" || adKey == "" {
-			logger.Warn("\"/status\" was called without IMDb ID or RD API token or AD API key")
+		pmKey := c.Query("pmkey", "")
+		if imdbID == "" || rdToken == "" || adKey == "" || pmKey == "" {
+			logger.Warn("\"/status\" was called without IMDb ID or RD API token or AD API key or Premiumize API key")
 			return c.SendStatus(fiber.StatusBadRequest)
 		}
 
@@ -354,6 +363,20 @@ func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher,
 		}
 		durationADmillis := time.Since(startAD).Milliseconds()
 		res += "\t\t" + `"duration": "` + strconv.FormatInt(durationADmillis, 10) + `ms"` + "\n"
+		res += "\t" + `},` + "\n"
+
+		// Check PM client
+
+		res += "\t" + `"PM": {` + "\n"
+		startPM := time.Now()
+		streamURL, err = pmClient.GetStreamURL(c.Context(), bigBuckBunnyMagnet, pmKey)
+		if err != nil {
+			res += "\t\t" + `"err":"` + err.Error() + `",` + "\n"
+		} else {
+			res += "\t\t" + `"res":"` + streamURL + `",` + "\n"
+		}
+		durationPMmillis := time.Since(startPM).Milliseconds()
+		res += "\t\t" + `"duration": "` + strconv.FormatInt(durationPMmillis, 10) + `ms"` + "\n"
 		res += "\t" + `},` + "\n"
 
 		// Check caches
