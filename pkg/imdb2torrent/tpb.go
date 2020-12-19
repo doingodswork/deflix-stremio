@@ -11,7 +11,7 @@ import (
 	"github.com/tidwall/gjson"
 	"go.uber.org/zap"
 
-	"github.com/deflix-tv/go-stremio/pkg/cinemeta"
+	"github.com/deflix-tv/go-stremio"
 )
 
 var (
@@ -57,12 +57,12 @@ type tpbClient struct {
 	httpClient       *http.Client
 	cache            Cache
 	cacheAge         time.Duration
-	cinemetaClient   *cinemeta.Client
+	metaFetcher      stremio.MetaFetcher
 	logger           *zap.Logger
 	logFoundTorrents bool
 }
 
-func NewTPBclient(opts TPBclientOptions, cache Cache, cinemetaClient *cinemeta.Client, logger *zap.Logger, logFoundTorrents bool) (*tpbClient, error) {
+func NewTPBclient(opts TPBclientOptions, cache Cache, metaFetcher stremio.MetaFetcher, logger *zap.Logger, logFoundTorrents bool) (*tpbClient, error) {
 	// Using a SOCKS5 proxy allows us to make requests to TPB via the TOR network
 	var httpClient *http.Client
 	if opts.SocksProxyAddr != "" {
@@ -80,7 +80,7 @@ func NewTPBclient(opts TPBclientOptions, cache Cache, cinemetaClient *cinemeta.C
 		httpClient:       httpClient,
 		cache:            cache,
 		cacheAge:         opts.CacheAge,
-		cinemetaClient:   cinemetaClient,
+		metaFetcher:      metaFetcher,
 		logger:           logger,
 		logFoundTorrents: logFoundTorrents,
 	}, nil
@@ -130,7 +130,7 @@ func (c *tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 	}
 
 	// Get movie name
-	meta, err := c.cinemetaClient.GetMovie(ctx, imdbID)
+	meta, err := c.metaFetcher.GetMovie(ctx, imdbID)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't get movie name via Cinemeta for IMDb ID %v: %v", imdbID, err)
 	}

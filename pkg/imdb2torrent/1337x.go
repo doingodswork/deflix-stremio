@@ -9,9 +9,8 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/deflix-tv/go-stremio"
 	"go.uber.org/zap"
-
-	"github.com/deflix-tv/go-stremio/pkg/cinemeta"
 )
 
 type LeetxClientOptions struct {
@@ -40,20 +39,20 @@ type leetxClient struct {
 	baseURL          string
 	httpClient       *http.Client
 	cache            Cache
-	cinemetaClient   *cinemeta.Client
+	metaFetcher      stremio.MetaFetcher
 	cacheAge         time.Duration
 	logger           *zap.Logger
 	logFoundTorrents bool
 }
 
-func NewLeetxClient(opts LeetxClientOptions, cache Cache, cinemetaClient *cinemeta.Client, logger *zap.Logger, logFoundTorrents bool) *leetxClient {
+func NewLeetxClient(opts LeetxClientOptions, cache Cache, metaFetcher stremio.MetaFetcher, logger *zap.Logger, logFoundTorrents bool) *leetxClient {
 	return &leetxClient{
 		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
 			Timeout: opts.Timeout,
 		},
 		cache:            cache,
-		cinemetaClient:   cinemetaClient,
+		metaFetcher:      metaFetcher,
 		cacheAge:         opts.CacheAge,
 		logger:           logger,
 		logFoundTorrents: logFoundTorrents,
@@ -83,7 +82,7 @@ func (c *leetxClient) Find(ctx context.Context, imdbID string) ([]Result, error)
 	}
 
 	// Get movie name
-	meta, err := c.cinemetaClient.GetMovie(ctx, imdbID)
+	meta, err := c.metaFetcher.GetMovie(ctx, imdbID)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't get movie name via Cinemeta for IMDb ID %v: %v", imdbID, err)
 	}
