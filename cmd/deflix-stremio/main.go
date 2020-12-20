@@ -18,6 +18,7 @@ import (
 	gocache "github.com/patrickmn/go-cache"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
+	"golang.org/x/oauth2"
 
 	"github.com/deflix-tv/go-stremio"
 	"github.com/deflix-tv/go-stremio/pkg/cinemeta"
@@ -245,9 +246,11 @@ func main() {
 	addon.AddEndpoint("HEAD", "/redirect/:id", redirHandler)
 
 	// For OAuth2 redirect handling for Premiumize
-	confPM := oauth2ConfigPM{
-		AuthorizeURL: config.OAUTH2authorizeURLpm,
-		ClientID:     config.OAUTH2clientIDpm,
+	confPM := oauth2.Config{
+		ClientID: config.OAUTH2clientIDpm,
+		Endpoint: oauth2.Endpoint{
+			AuthURL: config.OAUTH2authorizeURLpm,
+		},
 	}
 	oauth2initHandler := createOAUTH2initHandler(confPM, logger)
 	addon.AddEndpoint("GET", "/oauth2/init", oauth2initHandler)
