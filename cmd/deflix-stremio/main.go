@@ -177,6 +177,9 @@ func main() {
 	}
 	// If the dir doesn't exist, it's created when the files are written.
 
+	// TODO: Move above validations into this function as well
+	config.validate(logger)
+
 	// Load or create caches and stores
 
 	// Caches first, because some things can go wrong here, and we don't have the store closer yet, which can lead to corrupted BadgerDB files.
@@ -267,6 +270,14 @@ func main() {
 	addon.AddEndpoint("GET", "/redirect/:id", redirHandler)
 	// Stremio sends a HEAD request before starting a stream.
 	addon.AddEndpoint("HEAD", "/redirect/:id", redirHandler)
+
+	// For OAuth2 redirect handling for Premiumize
+	confPM := oauth2ConfigPM{
+		AuthorizeURL: config.OAUTH2authorizeURLpm,
+		ClientID:     config.OAUTH2clientIDpm,
+	}
+	oauth2initHandler := createOAUTH2initHandler(confPM, logger)
+	addon.AddEndpoint("GET", "/oauth2/init", oauth2initHandler)
 
 	// Save cache to file every hour
 	go func() {

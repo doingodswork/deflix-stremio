@@ -11,31 +11,34 @@ import (
 )
 
 type config struct {
-	BindAddr          string        `json:"bindAddr"`
-	Port              int           `json:"port"`
-	StreamURLaddr     string        `json:"streamURLaddr"`
-	StoragePath       string        `json:"storagePath"`
-	MaxAgeTorrents    time.Duration `json:"maxAgeTorrents"`
-	CachePath         string        `json:"cachePath"`
-	CacheAgeXD        time.Duration `json:"cacheAgeXD"`
-	RedisAddr         string        `json:"redisAddr"`
-	RedisCreds        string        `json:"redisCreds"`
-	BaseURLyts        string        `json:"baseURLyts"`
-	BaseURLtpb        string        `json:"baseURLtpb"`
-	BaseURL1337x      string        `json:"baseURL1337x"`
-	BaseURLibit       string        `json:"baseURLibit"`
-	BaseURLrarbg      string        `json:"baseURLrarbg"`
-	BaseURLrd         string        `json:"baseURLrd"`
-	BaseURLad         string        `json:"baseURLad"`
-	BaseURLpm         string        `json:"baseURLpm"`
-	LogLevel          string        `json:"logLevel"`
-	LogFoundTorrents  bool          `json:"logFoundTorrents"`
-	RootURL           string        `json:"rootURL"`
-	ExtraHeadersXD    []string      `json:"extraHeadersXD"`
-	SocksProxyAddrTPB string        `json:"socksProxyAddrTPB"`
-	WebConfigurePath  string        `json:"webConfigurePath"`
-	IMDB2metaAddr     string        `json:"imdb2metaAddr"`
-	EnvPrefix         string        `json:"envPrefix"`
+	BindAddr             string        `json:"bindAddr"`
+	Port                 int           `json:"port"`
+	StreamURLaddr        string        `json:"streamURLaddr"`
+	StoragePath          string        `json:"storagePath"`
+	MaxAgeTorrents       time.Duration `json:"maxAgeTorrents"`
+	CachePath            string        `json:"cachePath"`
+	CacheAgeXD           time.Duration `json:"cacheAgeXD"`
+	RedisAddr            string        `json:"redisAddr"`
+	RedisCreds           string        `json:"redisCreds"`
+	BaseURLyts           string        `json:"baseURLyts"`
+	BaseURLtpb           string        `json:"baseURLtpb"`
+	BaseURL1337x         string        `json:"baseURL1337x"`
+	BaseURLibit          string        `json:"baseURLibit"`
+	BaseURLrarbg         string        `json:"baseURLrarbg"`
+	BaseURLrd            string        `json:"baseURLrd"`
+	BaseURLad            string        `json:"baseURLad"`
+	BaseURLpm            string        `json:"baseURLpm"`
+	LogLevel             string        `json:"logLevel"`
+	LogFoundTorrents     bool          `json:"logFoundTorrents"`
+	RootURL              string        `json:"rootURL"`
+	ExtraHeadersXD       []string      `json:"extraHeadersXD"`
+	SocksProxyAddrTPB    string        `json:"socksProxyAddrTPB"`
+	WebConfigurePath     string        `json:"webConfigurePath"`
+	IMDB2metaAddr        string        `json:"imdb2metaAddr"`
+	UseOAUTH2            bool          `json:"useOAUTH2"`
+	OAUTH2authorizeURLpm string        `json:"oauth2authURLpm"`
+	OAUTH2clientIDpm     string        `json:"oauth2clientIDpm"`
+	EnvPrefix            string        `json:"envPrefix"`
 }
 
 func parseConfig(logger *zap.Logger) config {
@@ -67,6 +70,9 @@ func parseConfig(logger *zap.Logger) config {
 		socksProxyAddrTPB = flag.String("socksProxyAddrTPB", "", "SOCKS5 proxy address for accessing TPB, required for accessing TPB via the TOR network (where \"127.0.0.1:9050\" would be typical value)")
 		webConfigurePath  = flag.String("webConfigurePath", "", "Path to the directory with web files for the '/configure' endpoint. If empty, files compiled into the binary will be used")
 		imdb2metaAddr     = flag.String("imdb2metaAddr", "", "Address of the imdb2meta gRPC server. Won't be used if empty.")
+		useOAUTH2         = flag.Bool("useOAUTH2", false, "Flag for indicating whether to use OAuth2 for Premiumize authorization. This leads to a different configuration webpage that doesn't require API keys. It requires a client ID to be configured.")
+		oauth2authURLpm   = flag.String("oauth2authURLpm", "https://www.premiumize.me/authorize", "URL of the OAuth2 authorization endpoint of Premiumize")
+		oauth2clientIDpm  = flag.String("oauth2clientIDpm", "", "Client ID for deflix-stremio on Premiumize")
 		envPrefix         = flag.String("envPrefix", "", "Prefix for environment variables")
 	)
 
@@ -263,7 +269,36 @@ func parseConfig(logger *zap.Logger) config {
 	}
 	result.IMDB2metaAddr = *imdb2metaAddr
 
+	if !isArgSet("useOAUTH2") {
+		if val, ok := os.LookupEnv(*envPrefix + "USE_OAUTH2"); ok {
+			if *useOAUTH2, err = strconv.ParseBool(val); err != nil {
+				logger.Fatal("Couldn't convert environment variable from string to bool", zap.Error(err), zap.String("envVar", "USE_OAUTH2"))
+			}
+		}
+	}
+	result.UseOAUTH2 = *useOAUTH2
+
+	if !isArgSet("oauth2authURLpm") {
+		if val, ok := os.LookupEnv(*envPrefix + "OAUTH2_AUTH_URL_PM"); ok {
+			*oauth2authURLpm = val
+		}
+	}
+	result.OAUTH2authorizeURLpm = *oauth2authURLpm
+
+	if !isArgSet("oauth2clientIDpm") {
+		if val, ok := os.LookupEnv(*envPrefix + "OAUTH2_CLIENT_ID_PM"); ok {
+			*oauth2clientIDpm = val
+		}
+	}
+	result.OAUTH2clientIDpm = *oauth2clientIDpm
+
 	return result
+}
+
+func (c *config) validate(logger *zap.Logger) {
+	if c.UseOAUTH2 && c.OAUTH2clientIDpm == "" {
+		logger.Fatal("Using OAuth2 requires setting the Premiumize client ID")
+	}
 }
 
 // isArgSet returns true if the argument you're looking for is actually set as command line argument.
