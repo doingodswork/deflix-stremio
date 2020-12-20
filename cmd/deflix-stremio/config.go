@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -296,6 +297,30 @@ func parseConfig(logger *zap.Logger) config {
 }
 
 func (c *config) validate(logger *zap.Logger) {
+	if c.StoragePath == "" {
+		userCacheDir, err := os.UserCacheDir()
+		if err != nil {
+			logger.Fatal("Couldn't determine user cache directory via `os.UserCacheDir()`", zap.Error(err))
+		}
+		// Add two levels, because even if we're in `os.UserCacheDir()`, on Windows that's for example `C:\Users\John\AppData\Local`
+		c.StoragePath = filepath.Join(userCacheDir, "deflix-stremio/badger")
+	} else {
+		c.StoragePath = filepath.Clean(c.StoragePath)
+	}
+	// If the dir doesn't exist, BadgerDB creates it when writing its DB files.
+
+	if c.CachePath == "" {
+		userCacheDir, err := os.UserCacheDir()
+		if err != nil {
+			logger.Fatal("Couldn't determine user cache directory via `os.UserCacheDir()`", zap.Error(err))
+		}
+		// Add two levels, because even if we're in `os.UserCacheDir()`, on Windows that's for example `C:\Users\John\AppData\Local`
+		c.CachePath = filepath.Join(userCacheDir, "deflix-stremio/cache")
+	} else {
+		c.CachePath = filepath.Clean(c.CachePath)
+	}
+	// If the dir doesn't exist, it's created when the files are written.
+
 	if c.UseOAUTH2 && c.OAUTH2clientIDpm == "" {
 		logger.Fatal("Using OAuth2 requires setting the Premiumize client ID")
 	}

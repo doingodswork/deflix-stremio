@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"math/rand"
 	"net/http"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -135,7 +134,7 @@ func main() {
 		panic(err)
 	}
 
-	// Parse config
+	// Parse and validate config
 
 	logger.Info("Parsing config...")
 	config := parseConfig(logger)
@@ -143,42 +142,16 @@ func main() {
 	if err != nil {
 		logger.Fatal("Couldn't marshal config to JSON", zap.Error(err))
 	}
-
 	if config.LogLevel != "info" {
 		// Replace previously created logger
 		if logger, err = stremio.NewLogger(config.LogLevel); err != nil {
 			logger.Fatal("Couldn't create new logger", zap.Error(err))
 		}
 	}
-
 	logger.Info("Parsed config", zap.ByteString("config", configJSON))
 
-	if config.StoragePath == "" {
-		userCacheDir, err := os.UserCacheDir()
-		if err != nil {
-			logger.Fatal("Couldn't determine user cache directory via `os.UserCacheDir()`", zap.Error(err))
-		}
-		// Add two levels, because even if we're in `os.UserCacheDir()`, on Windows that's for example `C:\Users\John\AppData\Local`
-		config.StoragePath = filepath.Join(userCacheDir, "deflix-stremio/badger")
-	} else {
-		config.StoragePath = filepath.Clean(config.StoragePath)
-	}
-	// If the dir doesn't exist, BadgerDB creates it when writing its DB files.
-
-	if config.CachePath == "" {
-		userCacheDir, err := os.UserCacheDir()
-		if err != nil {
-			logger.Fatal("Couldn't determine user cache directory via `os.UserCacheDir()`", zap.Error(err))
-		}
-		// Add two levels, because even if we're in `os.UserCacheDir()`, on Windows that's for example `C:\Users\John\AppData\Local`
-		config.CachePath = filepath.Join(userCacheDir, "deflix-stremio/cache")
-	} else {
-		config.CachePath = filepath.Clean(config.CachePath)
-	}
-	// If the dir doesn't exist, it's created when the files are written.
-
-	// TODO: Move above validations into this function as well
 	config.validate(logger)
+	logger.Info("Validated config")
 
 	// Load or create caches and stores
 
