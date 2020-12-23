@@ -26,7 +26,10 @@ func createOAUTH2initHandler(confPM oauth2.Config, logger *zap.Logger) fiber.Han
 			return c.SendStatus(fiber.StatusInternalServerError)
 		}
 		b := make([]byte, statusLength.Uint64())
-		_, _ = crand.Read(b)
+		if _, err = crand.Read(b); err != nil {
+			logger.Error("Couldn't generate random bytes", zap.Error(err))
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
 		// URL-safe, no padding
 		state := base64.RawURLEncoding.EncodeToString(b)
 
@@ -38,7 +41,7 @@ func createOAUTH2initHandler(confPM oauth2.Config, logger *zap.Logger) fiber.Han
 			Value:    state,
 			Secure:   true,
 			HTTPOnly: true,
-			// We need the cookie to be sent upon redirect
+			// We need the cookie to be sent upon redirect from Premiumize to deflix-stremio.
 			SameSite: "lax",
 		}
 		c.Cookie(statusCookie)
