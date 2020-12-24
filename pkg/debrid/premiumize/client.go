@@ -23,14 +23,16 @@ type ClientOptions struct {
 	Timeout      time.Duration
 	CacheAge     time.Duration
 	ExtraHeaders []string
+	UseOAUTH2    bool
 }
 
-func NewClientOpts(baseURL string, timeout, cacheAge time.Duration, extraHeaders []string) ClientOptions {
+func NewClientOpts(baseURL string, timeout, cacheAge time.Duration, extraHeaders []string, useOAUTH2 bool) ClientOptions {
 	return ClientOptions{
 		BaseURL:      baseURL,
 		Timeout:      timeout,
 		CacheAge:     cacheAge,
 		ExtraHeaders: extraHeaders,
+		UseOAUTH2:    useOAUTH2,
 	}
 }
 
@@ -49,6 +51,7 @@ type Client struct {
 	availabilityCache debrid.Cache
 	cacheAge          time.Duration
 	extraHeaders      map[string]string
+	useOAUTH2         bool
 	logger            *zap.Logger
 }
 
@@ -83,18 +86,19 @@ func NewClient(opts ClientOptions, apiKeyCache, availabilityCache debrid.Cache, 
 		availabilityCache: availabilityCache,
 		cacheAge:          opts.CacheAge,
 		extraHeaders:      extraHeaderMap,
+		useOAUTH2:         opts.UseOAUTH2,
 		logger:            logger,
 	}, nil
 }
 
-func (c *Client) TestAPIkey(ctx context.Context, apiKey string) error {
+func (c *Client) TestAPIkey(ctx context.Context, keyOrToken string) error {
 	zapFieldDebridSite := zap.String("debridSite", "Premiumize")
-	zapFieldAPIkey := zap.String("apiKey", apiKey)
+	zapFieldAPIkey := zap.String("apiKey", keyOrToken)
 	c.logger.Debug("Testing API key...", zapFieldDebridSite, zapFieldAPIkey)
 
 	// Check cache first.
 	// Note: Only when an API key is valid a cache item was created, becausean API key is probably valid for another 24 hours, while whenan API key is invalid it's likely that the user makes a payment to Premiumize to extend his premium status and make his API key valid again *within* 24 hours.
-	created, found, err := c.apiKeyCache.Get(apiKey)
+	created, found, err := c.apiKeyCache.Get(keyOrToken)
 	if err != nil {
 		c.logger.Error("Couldn't decode API key cache item", zap.Error(err), zapFieldDebridSite, zapFieldAPIkey)
 	} else if !found {
@@ -107,7 +111,7 @@ func (c *Client) TestAPIkey(ctx context.Context, apiKey string) error {
 		return nil
 	}
 
-	resBytes, err := c.get(ctx, c.baseURL+"/account/info", apiKey)
+	resBytes, err := c.get(ctx, c.baseURL+"/account/info", keyOrToken)
 	if err != nil {
 		return fmt.Errorf("Couldn't fetch user info from www.premiumize.me with the provided API key: %v", err)
 	}
@@ -119,16 +123,16 @@ func (c *Client) TestAPIkey(ctx context.Context, apiKey string) error {
 	c.logger.Debug("API key OK", zapFieldDebridSite, zapFieldAPIkey)
 
 	// Create cache item
-	if err = c.apiKeyCache.Set(apiKey); err != nil {
+	if err = c.apiKeyCache.Set(keyOrToken); err != nil {
 		c.logger.Error("Couldn't cache API key", zap.Error(err), zapFieldDebridSite, zapFieldAPIkey)
 	}
 
 	return nil
 }
 
-func (c *Client) CheckInstantAvailability(ctx context.Context, apiKey string, infoHashes ...string) []string {
+func (c *Client) CheckInstantAvailability(ctx context.Context, keyOrToken string, infoHashes ...string) []string {
 	zapFieldDebridSite := zap.String("debridSite", "Premiumize")
-	zapFieldAPItoken := zap.String("apiKey", apiKey)
+	zapFieldAPItoken := zap.String("apiKey", keyOrToken)
 
 	// Precondition check
 	if len(infoHashes) == 0 {
@@ -192,7 +196,7 @@ func (c *Client) CheckInstantAvailability(ctx context.Context, apiKey string, in
 	// Only make HTTP request if we didn't find all hashes in the cache yet
 	if requestRequired {
 		url := c.baseURL + "/cache/check"
-		resBytes, err := c.post(ctx, url, apiKey, unknownAvailabilityData, false)
+		resBytes, err := c.post(ctx, url, keyOrToken, unknownAvailabilityData, false)
 		if err != nil {
 			c.logger.Error("Couldn't check torrents' instant availability on www.premiumize.me", zap.Error(err), zapFieldDebridSite, zapFieldAPItoken)
 			return nil
@@ -220,13 +224,13 @@ func (c *Client) CheckInstantAvailability(ctx context.Context, apiKey string, in
 	return result
 }
 
-func (c *Client) GetStreamURL(ctx context.Context, magnetURL, apiKey string) (string, error) {
+func (c *Client) GetStreamURL(ctx context.Context, magnetURL, keyOrToken string) (string, error) {
 	zapFieldDebridSite := zap.String("debridSite", "Premiumize")
-	zapFieldAPIkey := zap.String("apiKey", apiKey)
+	zapFieldAPIkey := zap.String("apiKey", keyOrToken)
 	c.logger.Debug("Adding magnet to Premiumize...", zapFieldDebridSite, zapFieldAPIkey)
 	data := url.Values{}
 	data.Set("src", magnetURL)
-	resBytes, err := c.post(ctx, c.baseURL+"/transfer/directdl", apiKey, data, true)
+	resBytes, err := c.post(ctx, c.baseURL+"/transfer/directdl", keyOrToken, data, true)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't add magnet to Premiumize: %v", err)
 	}
@@ -247,8 +251,12 @@ func (c *Client) GetStreamURL(ctx context.Context, magnetURL, apiKey string) (st
 	return ddlLink, nil
 }
 
-func (c *Client) get(ctx context.Context, url, apiKey string) ([]byte, error) {
-	url += "?apikey=" + apiKey
+func (c *Client) get(ctx context.Context, url, keyOrToken string) ([]byte, error) {
+	if c.useOAUTH2 {
+		url += "?access_token=" + keyOrToken
+	} else {
+		url += "?apikey=" + keyOrToken
+	}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't create GET request: %v", err)
@@ -278,8 +286,12 @@ func (c *Client) get(ctx context.Context, url, apiKey string) ([]byte, error) {
 	return ioutil.ReadAll(res.Body)
 }
 
-func (c *Client) post(ctx context.Context, urlString, apiKey string, data url.Values, form bool) ([]byte, error) {
-	urlString += "?apikey=" + apiKey
+func (c *Client) post(ctx context.Context, urlString, keyOrToken string, data url.Values, form bool) ([]byte, error) {
+	if c.useOAUTH2 {
+		urlString += "?access_token=" + keyOrToken
+	} else {
+		urlString += "?apikey=" + keyOrToken
+	}
 	var req *http.Request
 	var err error
 	if form {

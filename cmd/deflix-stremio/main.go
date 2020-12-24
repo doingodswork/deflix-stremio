@@ -231,22 +231,6 @@ func main() {
 
 	// Customize addon
 
-	tokenMiddleware := createTokenMiddleware(rdClient, adClient, pmClient, logger)
-	addon.AddMiddleware("/:userData/manifest.json", tokenMiddleware)
-	addon.AddMiddleware("/:userData/stream/:type/:id.json", tokenMiddleware)
-	// No need to set the middleware to the stream route without user data because go-stremio blocks it (with a 400 Bad Request response) if BehaviorHints.ConfigurationRequired is true.
-
-	// Requires URL query: "?imdbid=123&apitoken=foo"
-	statusEndpoint := createStatusHandler(searchClient.GetMagnetSearchers(), rdClient, adClient, pmClient, goCaches, logger)
-	addon.AddEndpoint("GET", "/status", statusEndpoint)
-
-	// Redirects stream URLs (previously sent to Stremio) to the actual RealDebrid stream URLs
-	redirHandler := createRedirectHandler(redirectCache, streamCache, rdClient, adClient, pmClient, logger)
-	addon.AddEndpoint("GET", "/redirect/:id", redirHandler)
-	// Stremio sends a HEAD request before starting a stream.
-	addon.AddEndpoint("HEAD", "/redirect/:id", redirHandler)
-
-	// For OAuth2 redirect handling for Premiumize
 	confPM := oauth2.Config{
 		ClientID:     config.OAUTH2clientIDpm,
 		ClientSecret: config.OAUTH2clientSecretPM,
@@ -266,6 +250,23 @@ func main() {
 	logger.Info("Finished hashing the OAuth2 encryption key.", zap.Duration("duration", time.Since(hashStart)))
 	// The bcrypt result is 60 bytes. We want 32 bytes for AES-256. The initial bytes in bcrypt are the same, so we use the last ones.
 	aesKey := bcryptKey[28:60]
+	authMiddleware := createAuthMiddleware(rdClient, adClient, pmClient, config.UseOAUTH2, confPM, aesKey, logger)
+	addon.AddMiddleware("/:userData/manifest.json", authMiddleware)
+	addon.AddMiddleware("/:userData/stream/:type/:id.json", authMiddleware)
+	addon.AddMiddleware("/:userData/redirect/:id", authMiddleware)
+	// No need to set the middleware to the stream route without user data because go-stremio blocks it (with a 400 Bad Request response) if BehaviorHints.ConfigurationRequired is true.
+
+	// Requires URL query: "?imdbid=123&apitoken=foo"
+	statusEndpoint := createStatusHandler(searchClient.GetMagnetSearchers(), rdClient, adClient, pmClient, goCaches, logger)
+	addon.AddEndpoint("GET", "/status", statusEndpoint)
+
+	// Redirects stream URLs (previously sent to Stremio) to the actual RealDebrid stream URLs
+	redirHandler := createRedirectHandler(redirectCache, streamCache, rdClient, adClient, pmClient, logger)
+	addon.AddEndpoint("GET", "/:userData/redirect/:id", redirHandler)
+	// Stremio sends a HEAD request before starting a stream.
+	addon.AddEndpoint("HEAD", "/:userData/redirect/:id", redirHandler)
+
+	// For OAuth2 redirect handling for Premiumize
 	oauth2initHandler := createOAUTH2initHandler(confPM, logger)
 	addon.AddEndpoint("GET", "/oauth2/init", oauth2initHandler)
 	oauth2installHandler := createOAUTH2installHandler(confPM, aesKey, logger)
@@ -470,7 +471,7 @@ func initClients(config config, logger *zap.Logger) {
 	rarbgClientOpts := imdb2torrent.NewRARBGclientOpts(config.BaseURLrarbg, timeout, config.MaxAgeTorrents)
 	rdClientOpts := realdebrid.NewClientOpts(config.BaseURLrd, timeout, config.CacheAgeXD, config.ExtraHeadersXD)
 	adClientOpts := alldebrid.NewClientOpts(config.BaseURLad, timeout, config.CacheAgeXD, config.ExtraHeadersXD)
-	pmClientOpts := premiumize.NewClientOpts(config.BaseURLpm, timeout, config.CacheAgeXD, config.ExtraHeadersXD)
+	pmClientOpts := premiumize.NewClientOpts(config.BaseURLpm, timeout, config.CacheAgeXD, config.ExtraHeadersXD, config.UseOAUTH2)
 
 	tpbClient, err := imdb2torrent.NewTPBclient(tpbClientOpts, torrentCache, metaFetcher, logger, config.LogFoundTorrents)
 	if err != nil {
