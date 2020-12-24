@@ -93,7 +93,7 @@ func NewClient(opts ClientOptions, apiKeyCache, availabilityCache debrid.Cache, 
 
 func (c *Client) TestAPIkey(ctx context.Context, keyOrToken string) error {
 	zapFieldDebridSite := zap.String("debridSite", "Premiumize")
-	zapFieldAPIkey := zap.String("apiKey", keyOrToken)
+	zapFieldAPIkey := zap.String("keyOrToken", keyOrToken)
 	c.logger.Debug("Testing API key...", zapFieldDebridSite, zapFieldAPIkey)
 
 	// Check cache first.
@@ -132,7 +132,7 @@ func (c *Client) TestAPIkey(ctx context.Context, keyOrToken string) error {
 
 func (c *Client) CheckInstantAvailability(ctx context.Context, keyOrToken string, infoHashes ...string) []string {
 	zapFieldDebridSite := zap.String("debridSite", "Premiumize")
-	zapFieldAPItoken := zap.String("apiKey", keyOrToken)
+	zapFieldAPItoken := zap.String("keyOrToken", keyOrToken)
 
 	// Precondition check
 	if len(infoHashes) == 0 {
@@ -226,7 +226,7 @@ func (c *Client) CheckInstantAvailability(ctx context.Context, keyOrToken string
 
 func (c *Client) GetStreamURL(ctx context.Context, magnetURL, keyOrToken string) (string, error) {
 	zapFieldDebridSite := zap.String("debridSite", "Premiumize")
-	zapFieldAPIkey := zap.String("apiKey", keyOrToken)
+	zapFieldAPIkey := zap.String("keyOrToken", keyOrToken)
 	c.logger.Debug("Adding magnet to Premiumize...", zapFieldDebridSite, zapFieldAPIkey)
 	data := url.Values{}
 	data.Set("src", magnetURL)
