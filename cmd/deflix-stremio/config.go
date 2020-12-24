@@ -38,7 +38,10 @@ type config struct {
 	IMDB2metaAddr        string        `json:"imdb2metaAddr"`
 	UseOAUTH2            bool          `json:"useOAUTH2"`
 	OAUTH2authorizeURLpm string        `json:"oauth2authURLpm"`
+	OAUTH2tokenURLpm     string        `json:"oauth2tokenURLpm"`
 	OAUTH2clientIDpm     string        `json:"oauth2clientIDpm"`
+	OAUTH2clientSecretPM string        `json:"oauth2clientSecretPM"`
+	OAUTH2encryptionKey  string        `json:"oauth2encryptionKey"`
 	EnvPrefix            string        `json:"envPrefix"`
 }
 
@@ -47,34 +50,37 @@ func parseConfig(logger *zap.Logger) config {
 
 	// Flags
 	var (
-		bindAddr          = flag.String("bindAddr", "localhost", `Local interface address to bind to. "localhost" only allows access from the local host. "0.0.0.0" binds to all network interfaces.`)
-		port              = flag.Int("port", 8080, "Port to listen on")
-		streamURLaddr     = flag.String("streamURLaddr", "http://localhost:8080", "Address to be used in a stream URL that's delivered to Stremio and later used to redirect to RealDebrid")
-		storagePath       = flag.String("storagePath", "", `Path for storing the data of the persistent DB which stores torrent results. An empty value will lead to 'os.UserCacheDir()+"/deflix-stremio/badger"'.`)
-		maxAgeTorrents    = flag.Duration("maxAgeTorrents", 7*24*time.Hour, "Max age of cache entries for torrents found per IMDb ID. The format must be acceptable by Go's 'time.ParseDuration()', for example \"24h\". Default is 7 days.")
-		cachePath         = flag.String("cachePath", "", `Path for loading persisted caches on startup and persisting the current cache in regular intervals. An empty value will lead to 'os.UserCacheDir()+"/deflix-stremio/cache"'.`)
-		cacheAgeXD        = flag.Duration("cacheAgeXD", 24*time.Hour, "Max age of cache entries for instant availability responses from RealDebrid, AllDebrid and Premiumize. The format must be acceptable by Go's 'time.ParseDuration()', for example \"24h\".")
-		redisAddr         = flag.String("redisAddr", "", `Redis host and port, for example "localhost:6379". It's used for the redirect and stream cache. Keep empty to use in-memory go-cache.`)
-		redisCreds        = flag.String("redisCreds", "", `Credentials for Redis. Password for Redis version 5 and older, username and password for Redis version 6 and newer. Use the colon character (":") for separating username and password. This implies you can't use a colon in the password when using Redis version 5 or older.`)
-		baseURLyts        = flag.String("baseURLyts", "https://yts.mx", "Base URL for YTS")
-		baseURLtpb        = flag.String("baseURLtpb", "https://apibay.org", "Base URL for the TPB API")
-		baseURL1337x      = flag.String("baseURL1337x", "https://1337x.to", "Base URL for 1337x")
-		baseURLibit       = flag.String("baseURLibit", "https://ibit.am", "Base URL for ibit")
-		baseURLrarbg      = flag.String("baseURLrarbg", "https://torrentapi.org", "Base URL for RARBG")
-		baseURLrd         = flag.String("baseURLrd", "https://api.real-debrid.com", "Base URL for RealDebrid")
-		baseURLad         = flag.String("baseURLad", "https://api.alldebrid.com", "Base URL for AllDebrid")
-		baseURLpm         = flag.String("baseURLpm", "https://www.premiumize.me/api", "Base URL for Premiumize")
-		logLevel          = flag.String("logLevel", "debug", `Log level to show only logs with the given and more severe levels. Can be "debug", "info", "warn", "error".`)
-		logFoundTorrents  = flag.Bool("logFoundTorrents", false, "Set to true to log each single torrent that was found by one of the torrent site clients (with DEBUG level)")
-		rootURL           = flag.String("rootURL", "https://www.deflix.tv", "Redirect target for the root")
-		extraHeadersXD    = flag.String("extraHeadersXD", "", `Additional HTTP request headers to set for requests to RealDebrid, AllDebrid and Premiumize, in a format like "X-Foo: bar", separated by newline characters ("\n")`)
-		socksProxyAddrTPB = flag.String("socksProxyAddrTPB", "", "SOCKS5 proxy address for accessing TPB, required for accessing TPB via the TOR network (where \"127.0.0.1:9050\" would be typical value)")
-		webConfigurePath  = flag.String("webConfigurePath", "", "Path to the directory with web files for the '/configure' endpoint. If empty, files compiled into the binary will be used")
-		imdb2metaAddr     = flag.String("imdb2metaAddr", "", "Address of the imdb2meta gRPC server. Won't be used if empty.")
-		useOAUTH2         = flag.Bool("useOAUTH2", false, "Flag for indicating whether to use OAuth2 for Premiumize authorization. This leads to a different configuration webpage that doesn't require API keys. It requires a client ID to be configured.")
-		oauth2authURLpm   = flag.String("oauth2authURLpm", "https://www.premiumize.me/authorize", "URL of the OAuth2 authorization endpoint of Premiumize")
-		oauth2clientIDpm  = flag.String("oauth2clientIDpm", "", "Client ID for deflix-stremio on Premiumize")
-		envPrefix         = flag.String("envPrefix", "", "Prefix for environment variables")
+		bindAddr             = flag.String("bindAddr", "localhost", `Local interface address to bind to. "localhost" only allows access from the local host. "0.0.0.0" binds to all network interfaces.`)
+		port                 = flag.Int("port", 8080, "Port to listen on")
+		streamURLaddr        = flag.String("streamURLaddr", "http://localhost:8080", "Address to be used in a stream URL that's delivered to Stremio and later used to redirect to RealDebrid")
+		storagePath          = flag.String("storagePath", "", `Path for storing the data of the persistent DB which stores torrent results. An empty value will lead to 'os.UserCacheDir()+"/deflix-stremio/badger"'.`)
+		maxAgeTorrents       = flag.Duration("maxAgeTorrents", 7*24*time.Hour, "Max age of cache entries for torrents found per IMDb ID. The format must be acceptable by Go's 'time.ParseDuration()', for example \"24h\". Default is 7 days.")
+		cachePath            = flag.String("cachePath", "", `Path for loading persisted caches on startup and persisting the current cache in regular intervals. An empty value will lead to 'os.UserCacheDir()+"/deflix-stremio/cache"'.`)
+		cacheAgeXD           = flag.Duration("cacheAgeXD", 24*time.Hour, "Max age of cache entries for instant availability responses from RealDebrid, AllDebrid and Premiumize. The format must be acceptable by Go's 'time.ParseDuration()', for example \"24h\".")
+		redisAddr            = flag.String("redisAddr", "", `Redis host and port, for example "localhost:6379". It's used for the redirect and stream cache. Keep empty to use in-memory go-cache.`)
+		redisCreds           = flag.String("redisCreds", "", `Credentials for Redis. Password for Redis version 5 and older, username and password for Redis version 6 and newer. Use the colon character (":") for separating username and password. This implies you can't use a colon in the password when using Redis version 5 or older.`)
+		baseURLyts           = flag.String("baseURLyts", "https://yts.mx", "Base URL for YTS")
+		baseURLtpb           = flag.String("baseURLtpb", "https://apibay.org", "Base URL for the TPB API")
+		baseURL1337x         = flag.String("baseURL1337x", "https://1337x.to", "Base URL for 1337x")
+		baseURLibit          = flag.String("baseURLibit", "https://ibit.am", "Base URL for ibit")
+		baseURLrarbg         = flag.String("baseURLrarbg", "https://torrentapi.org", "Base URL for RARBG")
+		baseURLrd            = flag.String("baseURLrd", "https://api.real-debrid.com", "Base URL for RealDebrid")
+		baseURLad            = flag.String("baseURLad", "https://api.alldebrid.com", "Base URL for AllDebrid")
+		baseURLpm            = flag.String("baseURLpm", "https://www.premiumize.me/api", "Base URL for Premiumize")
+		logLevel             = flag.String("logLevel", "debug", `Log level to show only logs with the given and more severe levels. Can be "debug", "info", "warn", "error".`)
+		logFoundTorrents     = flag.Bool("logFoundTorrents", false, "Set to true to log each single torrent that was found by one of the torrent site clients (with DEBUG level)")
+		rootURL              = flag.String("rootURL", "https://www.deflix.tv", "Redirect target for the root")
+		extraHeadersXD       = flag.String("extraHeadersXD", "", `Additional HTTP request headers to set for requests to RealDebrid, AllDebrid and Premiumize, in a format like "X-Foo: bar", separated by newline characters ("\n")`)
+		socksProxyAddrTPB    = flag.String("socksProxyAddrTPB", "", "SOCKS5 proxy address for accessing TPB, required for accessing TPB via the TOR network (where \"127.0.0.1:9050\" would be typical value)")
+		webConfigurePath     = flag.String("webConfigurePath", "", "Path to the directory with web files for the '/configure' endpoint. If empty, files compiled into the binary will be used")
+		imdb2metaAddr        = flag.String("imdb2metaAddr", "", "Address of the imdb2meta gRPC server. Won't be used if empty.")
+		useOAUTH2            = flag.Bool("useOAUTH2", false, "Flag for indicating whether to use OAuth2 for Premiumize authorization. This leads to a different configuration webpage that doesn't require API keys. It requires a client ID to be configured.")
+		oauth2authURLpm      = flag.String("oauth2authURLpm", "https://www.premiumize.me/authorize", "URL of the OAuth2 authorization endpoint of Premiumize")
+		oauth2tokenURLpm     = flag.String("oauth2tokenURLpm", "https://www.premiumize.me/token", "URL of the OAuth2 token endpoint of Premiumize")
+		oauth2clientIDpm     = flag.String("oauth2clientIDpm", "", "Client ID for deflix-stremio on Premiumize")
+		oauth2clientSecretPM = flag.String("oauth2clientSecretPM", "", "Client secret for deflix-stremio on Premiumize")
+		oauth2encryptionKey  = flag.String("oauth2encryptionKey", "", "OAuth2 data encryption key")
+		envPrefix            = flag.String("envPrefix", "", "Prefix for environment variables")
 	)
 
 	flag.Parse()
@@ -286,12 +292,33 @@ func parseConfig(logger *zap.Logger) config {
 	}
 	result.OAUTH2authorizeURLpm = *oauth2authURLpm
 
+	if !isArgSet("oauth2tokenURLpm") {
+		if val, ok := os.LookupEnv(*envPrefix + "OAUTH2_TOKEN_URL_PM"); ok {
+			*oauth2tokenURLpm = val
+		}
+	}
+	result.OAUTH2tokenURLpm = *oauth2tokenURLpm
+
 	if !isArgSet("oauth2clientIDpm") {
 		if val, ok := os.LookupEnv(*envPrefix + "OAUTH2_CLIENT_ID_PM"); ok {
 			*oauth2clientIDpm = val
 		}
 	}
 	result.OAUTH2clientIDpm = *oauth2clientIDpm
+
+	if !isArgSet("oauth2clientSecretPM") {
+		if val, ok := os.LookupEnv(*envPrefix + "OAUTH2_CLIENT_SECRET_PM"); ok {
+			*oauth2clientSecretPM = val
+		}
+	}
+	result.OAUTH2clientSecretPM = *oauth2clientSecretPM
+
+	if !isArgSet("oauth2encryptionKey") {
+		if val, ok := os.LookupEnv(*envPrefix + "OAUTH2_ENCRYPTION_KEY"); ok {
+			*oauth2encryptionKey = val
+		}
+	}
+	result.OAUTH2encryptionKey = *oauth2encryptionKey
 
 	return result
 }
@@ -321,8 +348,9 @@ func (c *config) validate(logger *zap.Logger) {
 	}
 	// If the dir doesn't exist, it's created when the files are written.
 
-	if c.UseOAUTH2 && c.OAUTH2clientIDpm == "" {
-		logger.Fatal("Using OAuth2 requires setting the Premiumize client ID")
+	if c.UseOAUTH2 &&
+		(c.OAUTH2authorizeURLpm == "" || c.OAUTH2clientIDpm == "" || c.OAUTH2clientSecretPM == "" || c.OAUTH2encryptionKey == "" || c.OAUTH2tokenURLpm == "") {
+		logger.Fatal("Using OAuth2 requires setting all OAuth2 config values")
 	}
 }
 
