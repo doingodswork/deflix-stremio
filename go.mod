@@ -12,6 +12,7 @@ require (
 	github.com/google/go-cmp v0.5.4
 	github.com/markbates/pkger v0.17.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
+	github.com/spf13/afero v1.5.1
 	github.com/stretchr/testify v1.6.1
 	github.com/tidwall/gjson v1.6.4
 	go.uber.org/multierr v1.6.0

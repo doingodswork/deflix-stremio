@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/markbates/pkger"
 	gocache "github.com/patrickmn/go-cache"
+	"github.com/spf13/afero"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
@@ -202,7 +204,59 @@ func main() {
 
 	var httpFS http.FileSystem
 	if config.WebConfigurePath == "" {
-		httpFS = pkger.Dir("/web/configure")
+		pkgerDir := pkger.Dir("/web/configure")
+		mm := afero.NewMemMapFs()
+		// Copy all files from packr to afero memory-mapped FS.
+		// This is a workaround so we can *write* a file to it.
+		// TODO: Replace all this as soon as Go 1.16 supports embedding files into a binary.
+		for _, fName := range []string{"/deflix.css", "/favicon.ico", "/index-apikey.html", "/index-oauth2.html", "/mvp.css"} {
+			f, err := pkgerDir.Open(fName)
+			if err != nil {
+				logger.Fatal("Couldn't open "+fName, zap.Error(err))
+			}
+			fData, err := ioutil.ReadAll(f)
+			if err != nil {
+				logger.Fatal("Couldn't read "+fName, zap.Error(err))
+			}
+			absPath := "/" + fName
+			if err = afero.WriteFile(mm, absPath, fData, 0644); err != nil {
+				logger.Fatal("Couldn't write to "+absPath, zap.Error(err))
+			}
+		}
+
+		// Rename one of the index.html files depending on OAuth2 configuration
+		var fromPath string
+		if config.UseOAUTH2 {
+			fromPath = "/index-oauth2.html"
+		} else {
+			fromPath = "/index-apikey.html"
+		}
+		from, err := mm.Open(fromPath)
+		if err != nil {
+			logger.Fatal("Couldn't open "+fromPath, zap.Error(err))
+		}
+		to, err := mm.Create("/index.html")
+		if err != nil {
+			logger.Fatal(`Couldn't create "/index.html"`, zap.Error(err))
+		}
+		fromBytes, err := ioutil.ReadAll(from)
+		if err != nil {
+			logger.Fatal("Couldn't read "+fromPath, zap.Error(err))
+		}
+		_, err = to.Write(fromBytes)
+		if err != nil {
+			logger.Fatal(`Couldn't write "/index.html"`, zap.Error(err))
+		}
+
+		// Clean up memory and FS a bit by removing the unnecessary files.
+		// FS because we don't want people to access `www.example.com/index-apikey.html` for example.
+		if err = mm.Remove("/index-oauth2.html"); err != nil {
+			logger.Fatal(`Couldn't remove "/index-oauth2.html"`, zap.Error(err))
+		}
+		if err = mm.Remove("/index-apikey.html"); err != nil {
+			logger.Fatal(`Couldn't remove "/index-apikey.html"`, zap.Error(err))
+		}
+		httpFS = afero.NewHttpFs(mm)
 	} else {
 		configurePath := filepath.Clean(config.WebConfigurePath)
 		logger.Info("Cleaned web configure path", zap.String("path", configurePath))
