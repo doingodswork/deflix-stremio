@@ -206,7 +206,7 @@ func main() {
 	if config.WebConfigurePath == "" {
 		pkgerDir := pkger.Dir("/web/configure")
 		mm := afero.NewMemMapFs()
-		// Copy all files from packr to afero memory-mapped FS.
+		// Copy all files from pkger to afero memory-mapped FS.
 		// This is a workaround so we can *write* a file to it.
 		// TODO: Replace all this as soon as Go 1.16 supports embedding files into a binary.
 		for _, fName := range []string{"/deflix.css", "/favicon.ico", "/index-apikey.html", "/index-oauth2.html", "/mvp.css"} {
@@ -321,7 +321,8 @@ func main() {
 	addon.AddEndpoint("HEAD", "/:userData/redirect/:id", redirHandler)
 
 	// For OAuth2 redirect handling for Premiumize
-	oauth2initHandler := createOAUTH2initHandler(confPM, logger)
+	isHTTPS := strings.HasPrefix(config.StreamURLaddr, "https")
+	oauth2initHandler := createOAUTH2initHandler(confPM, isHTTPS, logger)
 	addon.AddEndpoint("GET", "/oauth2/init", oauth2initHandler)
 	oauth2installHandler := createOAUTH2installHandler(confPM, aesKey, logger)
 	addon.AddEndpoint("GET", "/oauth2/install", oauth2installHandler)

@@ -16,7 +16,7 @@ import (
 
 // createOAUTH2initHandler returns a handler for OAuth2 initialization requests from the deflix-stremio frontend.
 // The handler returns a redirect to the Premiumize OAuth2 *authorize* endpoint.
-func createOAUTH2initHandler(confPM oauth2.Config, logger *zap.Logger) fiber.Handler {
+func createOAUTH2initHandler(confPM oauth2.Config, isHTTPS bool, logger *zap.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Create random state string
 		randInt, err := crand.Int(crand.Reader, big.NewInt(6)) // 0-5
@@ -43,7 +43,7 @@ func createOAUTH2initHandler(confPM oauth2.Config, logger *zap.Logger) fiber.Han
 		statusCookie := &fiber.Cookie{
 			Name:     "deflix_oauth2state",
 			Value:    state,
-			Secure:   true,
+			Secure:   isHTTPS,
 			HTTPOnly: true,
 			// We need the cookie to be sent upon redirect from Premiumize to deflix-stremio.
 			SameSite: "lax",
