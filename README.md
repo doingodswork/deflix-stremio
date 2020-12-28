@@ -123,12 +123,24 @@ Usage of deflix-stremio:
         Prefix for environment variables
   -extraHeadersXD string
         Additional HTTP request headers to set for requests to RealDebrid, AllDebrid and Premiumize, in a format like "X-Foo: bar", separated by newline characters ("\n")
+  -imdb2metaAddr string
+        Address of the imdb2meta gRPC server. Won't be used if empty.
   -logFoundTorrents
         Set to true to log each single torrent that was found by one of the torrent site clients (with DEBUG level)
   -logLevel string
         Log level to show only logs with the given and more severe levels. Can be "debug", "info", "warn", "error". (default "debug")
   -maxAgeTorrents duration
         Max age of cache entries for torrents found per IMDb ID. The format must be acceptable by Go's 'time.ParseDuration()', for example "24h". Default is 7 days. (default 168h0m0s)
+  -oauth2authURLpm string
+        URL of the OAuth2 authorization endpoint of Premiumize (default "https://www.premiumize.me/authorize")
+  -oauth2clientIDpm string
+        Client ID for deflix-stremio on Premiumize
+  -oauth2clientSecretPM string
+        Client secret for deflix-stremio on Premiumize
+  -oauth2encryptionKey string
+        OAuth2 data encryption key
+  -oauth2tokenURLpm string
+        URL of the OAuth2 token endpoint of Premiumize (default "https://www.premiumize.me/token")
   -port int
         Port to listen on (default 8080)
   -redisAddr string
@@ -142,7 +154,9 @@ Usage of deflix-stremio:
   -storagePath string
         Path for storing the data of the persistent DB which stores torrent results. An empty value will lead to 'os.UserCacheDir()+"/deflix-stremio/badger"'.
   -streamURLaddr string
-        Address to be used in a stream URL that's delivered to Stremio and later used to redirect to RealDebrid (default "http://localhost:8080")
+        Address to be used in a stream URL that's delivered to Stremio and later used to redirect to , AllDebrid and Premiumize. If you enable OAuth2 handling this will also be used to determine whether the state cookie is a secure one or not. (default "http://localhost:8080")
+  -useOAUTH2
+        Flag for indicating whether to use OAuth2 for Premiumize authorization. This leads to a different configuration webpage that doesn't require API keys. It requires a client ID to be configured.
   -webConfigurePath string
         Path to the directory with web files for the '/configure' endpoint. If empty, files compiled into the binary will be used
 ```
