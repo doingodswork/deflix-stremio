@@ -12,12 +12,23 @@ import (
 
 type userData struct {
 	// RealDebrid
-	RDtoken  string `json:"rdToken"`
-	RDremote bool   `json:"rdRemote"`
+	RDtoken  string `json:"rdToken,omitempty"`
+	RDremote bool   `json:"rdRemote,omitempty"`
 	// AllDebrid
-	ADkey string `json:"adKey"`
+	ADkey string `json:"adKey,omitempty"`
 	// Premiumize
-	PMkey string `json:"pmKey"`
+	PMkey    string `json:"pmKey,omitempty"`
+	PMoauth2 string `json:"pmOAUTH2,omitempty"`
+}
+
+func (ud userData) encode(logger *zap.Logger) (string, error) {
+	logger.Debug("Encoding user data")
+	userDataJSON, err := json.Marshal(ud)
+	if err != nil {
+		return "", err
+	}
+	userDataEncoded := base64.RawURLEncoding.EncodeToString(userDataJSON)
+	return userDataEncoded, nil
 }
 
 func decodeUserData(data string, logger *zap.Logger) (userData, error) {
@@ -48,7 +59,7 @@ func decodeUserData(data string, logger *zap.Logger) (userData, error) {
 	// If there's padding, we remove it, so that the decoding works with both:
 	data = strings.TrimSuffix(data, "=")
 	var userDataDecoded []byte
-	userDataDecoded, err := base64.URLEncoding.WithPadding(base64.NoPadding).DecodeString(data)
+	userDataDecoded, err := base64.RawURLEncoding.DecodeString(data)
 	if err != nil {
 		// We use WARN instead of ERROR because it's most likely an *encoding* error on the client side
 		logger.Warn("Couldn't decode user data", zap.Error(err))

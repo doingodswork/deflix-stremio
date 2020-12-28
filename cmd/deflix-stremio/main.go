@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -17,8 +17,11 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/markbates/pkger"
 	gocache "github.com/patrickmn/go-cache"
+	"github.com/spf13/afero"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
+	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/oauth2"
 
 	"github.com/deflix-tv/go-stremio"
 	"github.com/deflix-tv/go-stremio/pkg/cinemeta"
@@ -135,7 +138,7 @@ func main() {
 		panic(err)
 	}
 
-	// Parse config
+	// Parse and validate config
 
 	logger.Info("Parsing config...")
 	config := parseConfig(logger)
@@ -143,39 +146,16 @@ func main() {
 	if err != nil {
 		logger.Fatal("Couldn't marshal config to JSON", zap.Error(err))
 	}
-
 	if config.LogLevel != "info" {
 		// Replace previously created logger
 		if logger, err = stremio.NewLogger(config.LogLevel); err != nil {
 			logger.Fatal("Couldn't create new logger", zap.Error(err))
 		}
 	}
-
 	logger.Info("Parsed config", zap.ByteString("config", configJSON))
 
-	if config.StoragePath == "" {
-		userCacheDir, err := os.UserCacheDir()
-		if err != nil {
-			logger.Fatal("Couldn't determine user cache directory via `os.UserCacheDir()`", zap.Error(err))
-		}
-		// Add two levels, because even if we're in `os.UserCacheDir()`, on Windows that's for example `C:\Users\John\AppData\Local`
-		config.StoragePath = filepath.Join(userCacheDir, "deflix-stremio/badger")
-	} else {
-		config.StoragePath = filepath.Clean(config.StoragePath)
-	}
-	// If the dir doesn't exist, BadgerDB creates it when writing its DB files.
-
-	if config.CachePath == "" {
-		userCacheDir, err := os.UserCacheDir()
-		if err != nil {
-			logger.Fatal("Couldn't determine user cache directory via `os.UserCacheDir()`", zap.Error(err))
-		}
-		// Add two levels, because even if we're in `os.UserCacheDir()`, on Windows that's for example `C:\Users\John\AppData\Local`
-		config.CachePath = filepath.Join(userCacheDir, "deflix-stremio/cache")
-	} else {
-		config.CachePath = filepath.Clean(config.CachePath)
-	}
-	// If the dir doesn't exist, it's created when the files are written.
+	config.validate(logger)
+	logger.Info("Validated config")
 
 	// Load or create caches and stores
 
@@ -196,8 +176,8 @@ func main() {
 	// Init cache maps
 
 	goCaches := map[string]*gocache.Cache{
-		"availability-rd": adAvailabilityCache.cache,
-		"availability-ad": rdAvailabilityCache.cache,
+		"availability-rd": rdAvailabilityCache.cache,
+		"availability-ad": adAvailabilityCache.cache,
 		"availability-pm": pmAvailabilityCache.cache,
 		"token":           tokenCache.cache,
 	}
@@ -224,7 +204,59 @@ func main() {
 
 	var httpFS http.FileSystem
 	if config.WebConfigurePath == "" {
-		httpFS = pkger.Dir("/web/configure")
+		pkgerDir := pkger.Dir("/web/configure")
+		mm := afero.NewMemMapFs()
+		// Copy all files from pkger to afero memory-mapped FS.
+		// This is a workaround so we can *write* a file to it.
+		// TODO: Replace all this as soon as Go 1.16 supports embedding files into a binary.
+		for _, fName := range []string{"/deflix.css", "/favicon.ico", "/index-apikey.html", "/index-oauth2.html", "/mvp.css"} {
+			f, err := pkgerDir.Open(fName)
+			if err != nil {
+				logger.Fatal("Couldn't open "+fName, zap.Error(err))
+			}
+			fData, err := ioutil.ReadAll(f)
+			if err != nil {
+				logger.Fatal("Couldn't read "+fName, zap.Error(err))
+			}
+			absPath := "/" + fName
+			if err = afero.WriteFile(mm, absPath, fData, 0644); err != nil {
+				logger.Fatal("Couldn't write to "+absPath, zap.Error(err))
+			}
+		}
+
+		// Rename one of the index.html files depending on OAuth2 configuration
+		var fromPath string
+		if config.UseOAUTH2 {
+			fromPath = "/index-oauth2.html"
+		} else {
+			fromPath = "/index-apikey.html"
+		}
+		from, err := mm.Open(fromPath)
+		if err != nil {
+			logger.Fatal("Couldn't open "+fromPath, zap.Error(err))
+		}
+		to, err := mm.Create("/index.html")
+		if err != nil {
+			logger.Fatal(`Couldn't create "/index.html"`, zap.Error(err))
+		}
+		fromBytes, err := ioutil.ReadAll(from)
+		if err != nil {
+			logger.Fatal("Couldn't read "+fromPath, zap.Error(err))
+		}
+		_, err = to.Write(fromBytes)
+		if err != nil {
+			logger.Fatal(`Couldn't write "/index.html"`, zap.Error(err))
+		}
+
+		// Clean up memory and FS a bit by removing the unnecessary files.
+		// FS because we don't want people to access `www.example.com/index-apikey.html` for example.
+		if err = mm.Remove("/index-oauth2.html"); err != nil {
+			logger.Fatal(`Couldn't remove "/index-oauth2.html"`, zap.Error(err))
+		}
+		if err = mm.Remove("/index-apikey.html"); err != nil {
+			logger.Fatal(`Couldn't remove "/index-apikey.html"`, zap.Error(err))
+		}
+		httpFS = afero.NewHttpFs(mm)
 	} else {
 		configurePath := filepath.Clean(config.WebConfigurePath)
 		logger.Info("Cleaned web configure path", zap.String("path", configurePath))
@@ -253,9 +285,29 @@ func main() {
 
 	// Customize addon
 
-	tokenMiddleware := createTokenMiddleware(rdClient, adClient, pmClient, logger)
-	addon.AddMiddleware("/:userData/manifest.json", tokenMiddleware)
-	addon.AddMiddleware("/:userData/stream/:type/:id.json", tokenMiddleware)
+	confPM := oauth2.Config{
+		ClientID:     config.OAUTH2clientIDpm,
+		ClientSecret: config.OAUTH2clientSecretPM,
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  config.OAUTH2authorizeURLpm,
+			TokenURL: config.OAUTH2tokenURLpm,
+		},
+	}
+
+	logger.Info("Starting to hash the OAuth2 encryption key...")
+	hashStart := time.Now()
+	// Default bcrypt "cost" is 10, but we're only hashing this one time at startup, so we can spend a second or so.
+	bcryptKey, err := bcrypt.GenerateFromPassword([]byte(config.OAUTH2encryptionKey), 14)
+	if err != nil {
+		logger.Fatal("Couldn't hash OAuth2 encryption key via bcrypt", zap.Error(err))
+	}
+	logger.Info("Finished hashing the OAuth2 encryption key.", zap.Duration("duration", time.Since(hashStart)))
+	// The bcrypt result is 60 bytes. We want 32 bytes for AES-256. The initial bytes in bcrypt are the same, so we use the last ones.
+	aesKey := bcryptKey[28:60]
+	authMiddleware := createAuthMiddleware(rdClient, adClient, pmClient, config.UseOAUTH2, confPM, aesKey, logger)
+	addon.AddMiddleware("/:userData/manifest.json", authMiddleware)
+	addon.AddMiddleware("/:userData/stream/:type/:id.json", authMiddleware)
+	addon.AddMiddleware("/:userData/redirect/:id", authMiddleware)
 	// No need to set the middleware to the stream route without user data because go-stremio blocks it (with a 400 Bad Request response) if BehaviorHints.ConfigurationRequired is true.
 
 	// Requires URL query: "?imdbid=123&apitoken=foo"
@@ -264,9 +316,16 @@ func main() {
 
 	// Redirects stream URLs (previously sent to Stremio) to the actual RealDebrid stream URLs
 	redirHandler := createRedirectHandler(redirectCache, streamCache, rdClient, adClient, pmClient, logger)
-	addon.AddEndpoint("GET", "/redirect/:id", redirHandler)
+	addon.AddEndpoint("GET", "/:userData/redirect/:id", redirHandler)
 	// Stremio sends a HEAD request before starting a stream.
-	addon.AddEndpoint("HEAD", "/redirect/:id", redirHandler)
+	addon.AddEndpoint("HEAD", "/:userData/redirect/:id", redirHandler)
+
+	// For OAuth2 redirect handling for Premiumize
+	isHTTPS := strings.HasPrefix(config.StreamURLaddr, "https")
+	oauth2initHandler := createOAUTH2initHandler(confPM, isHTTPS, logger)
+	addon.AddEndpoint("GET", "/oauth2/init", oauth2initHandler)
+	oauth2installHandler := createOAUTH2installHandler(confPM, aesKey, logger)
+	addon.AddEndpoint("GET", "/oauth2/install", oauth2installHandler)
 
 	// Save cache to file every hour
 	go func() {
@@ -467,7 +526,7 @@ func initClients(config config, logger *zap.Logger) {
 	rarbgClientOpts := imdb2torrent.NewRARBGclientOpts(config.BaseURLrarbg, timeout, config.MaxAgeTorrents)
 	rdClientOpts := realdebrid.NewClientOpts(config.BaseURLrd, timeout, config.CacheAgeXD, config.ExtraHeadersXD)
 	adClientOpts := alldebrid.NewClientOpts(config.BaseURLad, timeout, config.CacheAgeXD, config.ExtraHeadersXD)
-	pmClientOpts := premiumize.NewClientOpts(config.BaseURLpm, timeout, config.CacheAgeXD, config.ExtraHeadersXD)
+	pmClientOpts := premiumize.NewClientOpts(config.BaseURLpm, timeout, config.CacheAgeXD, config.ExtraHeadersXD, config.UseOAUTH2)
 
 	tpbClient, err := imdb2torrent.NewTPBclient(tpbClientOpts, torrentCache, metaFetcher, logger, config.LogFoundTorrents)
 	if err != nil {

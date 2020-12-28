@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <link rel="icon" href="/configure/favicon.ico">
+  <link rel="stylesheet" href="/configure/mvp.css">
+  <link rel="stylesheet" href="/configure/deflix.css">
+
+  <meta charset="utf-8">
+  <meta name="description" content="Debrid flicks - stream movies without torrenting">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Deflix - Debrid flicks</title>
+</head>
+
+<body onload="showForm()">
+  <header>
+    <nav>
+      <a href="https://www.deflix.tv"><img alt="Deflix" src="https://www.deflix.tv/images/Letters.png" width=120px></a>
+      <ul>
+        <li><a href="https://github.com/Deflix-tv" target="_blank">GitHub ↗</a></li>
+      </ul>
+    </nav>
+  </header>
+  <main>
+    <header>
+       <h1>Deflix - Debrid flicks</h1>
+       <p>Stream movies <em>without torrenting</em>.</p>
+    </header>
+    <article>
+      <p>The <em>Deflix addon for Stremio</em> finds movies from many different sources (YTS, The Pirate Bay, 1337x, RARBG and ibit) and automatically
+        turns them into cached HTTP streams with a debrid service like <a href="https://real-debrid.com" target="_blank">RealDebrid ↗</a>, 
+        <a href="https://alldebrid.com" target="_blank">AllDebrid ↗</a> or <a href="https://www.premiumize.me" target="_blank">Premiumize ↗</a>, for high speed 4k streaming and <mark>no P2P uploading</mark>.</p>
+      <p>The addon is under constant development and more features will be added in the future: Support for <em>TV shows</em>, more sources, grouping by bitrate, more custom options (like language filter) and more.</p>
+      <p><a href="https://www.github.com/doingodswork/deflix-stremio" target="_blank">Source code ↗</a></p>
+    </article>
+    <section id="install">
+      <header>
+        <h2>Install</h2>
+        <p>Here you can configure and then install the addon:</p>
+      </header>
+      <form>
+        <label for="debridService">Which debrid service do you use?</label>
+        <select name="debridService" id="debridService" required onchange="showForm()">
+          <option value="" selected>Choose...</option>
+          <option value="RealDebrid">RealDebrid</option>
+          <option value="AllDebrid">AllDebrid</option>
+          <option value="Premiumize">Premiumize</option>
+        </select>
+        <div id="formRD" style="display: none;">
+          <label>Get your RealDebrid API token from <a href="https://real-debrid.com/apitoken" target="_blank">here
+              ↗</a>.</label>
+          <input type="text" id="apiTokenRD" placeholder="ABC123DEF...">
+          <input type="checkbox" id="remote"><label for="remote">Use "remote traffic"<sup>1</sup></label>
+          <br>
+          <button type="button" onclick="installRD(); return false;">Install</button>
+          <div id="installInfoRD" style="display: none;">
+            <p>ℹ️ If the installation form doesn't work, you can just paste the addon URL into the search box in the
+              Stremio addon section:<br>
+              <input type="text" id="urlRD" readonly><button onclick="copy('urlRD'); return false;" title="Copy to clipboard">📋</button></p>
+          </div>
+          <p><sup>1</sup>) RealDebrid allows you to share your account with friends as long as they use your "remote
+            traffic", which has to be paid separately.<br>
+            ⚠️ When sharing your account and <em>not</em> using remote traffic, you might get suspended - see RealDebrid's
+            <a href="https://real-debrid.com/terms" target="_blank">terms ↗</a> and <a href="https://real-debrid.com/faq"
+              target="_blank">FAQ ↗</a>.</p>
+        </div>
+        <div id="formAD" style="display: none;">
+          <label>Get your AllDebrid API key from <a href="https://alldebrid.com/apikeys/" target="_blank">here
+              ↗</a>.</label>
+          <input type="text" id="apiKeyAD" placeholder="ABC123DEF...">
+          <br>
+          <button type="button" onclick="installAD(); return false;">Install</button>
+          <div id="installInfoAD" style="display: none;">
+            <p>ℹ️ If the installation form doesn't work, you can just paste the addon URL into the search box in the
+              Stremio addon section:<br>
+            <input type="text" id="urlAD" readonly><button onclick="copy('urlAD'); return false;" title="Copy to clipboard">📋</button></p>
+          </div>
+        </div>
+        <div id="formPM" style="display: none;">
+          <button id="initPMbutton" type="button" onclick="initPM(); return false;">Authorize Deflix</button>
+          <button id="installPMbutton" type="button" onclick="installPM(); return false;" style="display: none;">Install</button>
+          <div id="installInfoPM" style="display: none;">
+            <p>ℹ️ If the installation form doesn't work, you can just paste the addon URL into the search box in the
+              Stremio addon section:<br>
+            <input type="text" id="urlPM" readonly><button onclick="copy('urlPM'); return false;" title="Copy to clipboard">📋</button></p>
+          </div>
+        </div>
+      </form>
+    </section>
+  </main>
+  <footer>
+    <hr>
+    <p>Made by <em><a href="https://www.github.com/doingodswork/" target="_blank">doingodswork ↗</a></em></p>
+  </footer>
+
+  <script>
+    function showForm() {
+      document.getElementById("formRD").style.display = "none";
+      document.getElementById("formAD").style.display = "none";
+      document.getElementById("formPM").style.display = "none";
+
+      var service = document.getElementById("debridService").value;
+
+      // If no hash is set, we're on the initial configure page.
+      // Otherwise we're in the redirect after Premiumize authorization.
+      // BUT a user could try to switch to one of the others.
+      if (window.location.hash == "" || service != ""){
+        if (service === "RealDebrid") {
+          document.getElementById("formRD").style.display = "block";
+        } else if (service === "AllDebrid"){
+          document.getElementById("formAD").style.display = "block";
+        } else if (service === "Premiumize"){
+          document.getElementById("formPM").style.display = "block";
+        }
+      } else {
+        userData = decode(window.location.hash.substring(1));
+        // If the decoding failed, maybe the user entered bogus data, potentially accidentally. Revert to regular page to start anew.
+        if (userData == null){
+          window.location.href = window.location.protocol+"//"+window.location.host+"/configure";
+        }else{
+          document.getElementById("debridService").value = "Premiumize";
+          document.getElementById("initPMbutton").textContent = "Reauthorize Deflix";
+          document.getElementById("initPMbutton").style.backgroundColor = "#44aa44";
+          document.getElementById("initPMbutton").style.border = "#44aa44";
+          document.getElementById("installPMbutton").style.display = "block";
+          document.getElementById("formPM").style.display = "block";
+        }
+      }
+    }
+
+    function installRD() {
+      var apiToken = document.getElementById("apiTokenRD").value;
+      var remote = document.getElementById("remote").checked;
+
+      if (apiToken == null || apiToken.length === 0) {
+        document.getElementById("apiTokenRD").style.backgroundColor = "#ff3333";
+      } else {
+        document.getElementById("apiTokenRD").style.backgroundColor = "";
+        userData = {rdToken: apiToken};
+        if (remote) {
+          userData.rdRemote = true;
+        }
+        
+        encoded = encode(userData);
+        document.getElementById("urlRD").value = window.location.protocol+"//"+window.location.host+"/"+ encoded+"/manifest.json";
+        document.getElementById("installInfoRD").style.display = "block";
+        window.location.href = "stremio://"+window.location.host+"/" + encoded + "/manifest.json";
+      }
+    }
+
+    function installAD() {
+      var apiKey = document.getElementById("apiKeyAD").value;
+
+      if (apiKey == null || apiKey.length === 0) {
+        document.getElementById("apiKeyAD").style.backgroundColor = "#ff3333";
+      } else {
+        document.getElementById("apiKeyAD").style.backgroundColor = "";
+        userData = {adKey: apiKey};
+
+        encoded = encode(userData);
+        document.getElementById("urlAD").value = window.location.protocol+"//"+window.location.host+"/"+ encoded+"/manifest.json";
+        document.getElementById("installInfoAD").style.display = "block";
+        window.location.href = "stremio://"+window.location.host+"/" + encoded + "/manifest.json";
+      }
+    }
+
+    function initPM() {
+      window.location.href = window.location.protocol+"//"+window.location.host+"/oauth2/init";
+    }
+
+    function installPM() {
+      encoded = window.location.hash.substring(1)
+      document.getElementById("urlPM").value = window.location.protocol+"//"+window.location.host+"/"+ encoded+"/manifest.json";
+      document.getElementById("installInfoPM").style.display = "block";
+      window.location.href = "stremio://"+window.location.host+"/" + encoded + "/manifest.json";
+    }
+
+    function encode(userData) {
+        // Encode to Base64, make URL-safe, remove padding (leading to Base64URL as described in RFC 4648).
+        return btoa(JSON.stringify(userData)).replace(/\+/g, '-').replace(/\//g, '_').split('=')[0]
+    }
+
+    function decode(encodedUserData) {
+        // Turn Base64URL encoding into regular Base64 decoding, decode from Base64, parse as JSON.
+        try{
+          return JSON.parse(atob(encodedUserData.replace(/-/g, '+').replace(/_/g, '/')))
+        } catch (e){
+          // TODO: Show an error message
+          console.error(e)
+          return null
+        }
+    }
+
+    function copy(id){
+      document.getElementById(id).select();
+      document.execCommand("copy");
+    }
+  </script>
+</body>
+
+</html>
