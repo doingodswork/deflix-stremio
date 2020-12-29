@@ -47,8 +47,8 @@ var manifest = stremio.Manifest{
 		{
 			Name:  "stream",
 			Types: []string{"movie"},
-			// Not required as long as we define them globally in the manifest
-			//IDprefixes: []string{"tt"},
+			// Shouldn't be required as long as they're defined globally in the manifest, but some Stremio clients send stream requests for non-IMDb IDs, so maybe setting this here as well helps
+			IDprefixes: []string{"tt"},
 		},
 	},
 	Types: []string{"movie"},
