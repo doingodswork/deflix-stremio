@@ -6,7 +6,7 @@ WORKDIR /go/src/app/
 RUN apk add --update bash
 
 # Fill cache with source code of dependencies
-COPY go.mod .
+COPY go.mod go.sum ./
 RUN go mod download -x
 
 COPY . .
