@@ -29,6 +29,26 @@ type goCacher interface {
 	Get(string) (interface{}, bool)
 }
 
+func createCatalogHandler(rdClient *realdebrid.Client, adClient *alldebrid.Client, pmClient *premiumize.Client, logger *zap.Logger) stremio.CatalogHandler {
+	return func(ctx context.Context, id string, userDataIface interface{}) ([]stremio.MetaPreviewItem, error) {
+		// No need to check if the interface is a string or if the decoding worked, because the token middleware does that already.
+		udString := userDataIface.(string)
+		userData, _ := decodeUserData(udString, logger)
+
+		if userData.RDtoken != "" {
+			// TODO: use rd client to fetch downloads
+		} else if userData.ADkey != "" {
+			// TODO: use ad client to fetch downloads
+		} else {
+			// TODO: use pm client to fetch downloads
+		}
+
+		// TODO: turn download items into meta items
+
+		return nil, nil
+	}
+}
+
 func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdClient *realdebrid.Client, adClient *alldebrid.Client, pmClient *premiumize.Client, redirectCache goCacher, logger *zap.Logger) stremio.StreamHandler {
 	return func(ctx context.Context, id string, userDataIface interface{}) ([]stremio.StreamItem, error) {
 		torrents, err := searchClient.FindMagnets(ctx, id)

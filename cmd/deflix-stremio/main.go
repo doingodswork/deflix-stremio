@@ -15,6 +15,7 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/go-redis/redis/v8"
+	"github.com/gofiber/fiber/v2"
 	"github.com/markbates/pkger"
 	gocache "github.com/patrickmn/go-cache"
 	"github.com/spf13/afero"
@@ -37,35 +38,61 @@ const (
 	version = "0.10.2"
 )
 
-var manifest = stremio.Manifest{
-	ID:          "tv.deflix.stremio",
-	Name:        "Deflix - Debrid flicks",
-	Description: "Finds movies on YTS, The Pirate Bay, 1337x, RARBG and ibit and automatically turns them into cached HTTP streams with a debrid service like RealDebrid, AllDebrid or Premiumize, for high speed 4k streaming and no P2P uploading (!). For more info see https://www.deflix.tv",
-	Version:     version,
+var (
+	manifest = stremio.Manifest{
+		ID:          "tv.deflix.stremio",
+		Name:        "Deflix - Debrid flicks",
+		Description: "Finds movies on YTS, The Pirate Bay, 1337x, RARBG and ibit and automatically turns them into cached HTTP streams with a debrid service like RealDebrid, AllDebrid or Premiumize, for high speed 4k streaming and no P2P uploading (!). For more info see https://www.deflix.tv",
+		Version:     version,
 
-	ResourceItems: []stremio.ResourceItem{
-		{
-			Name:  "stream",
-			Types: []string{"movie"},
-			// Shouldn't be required as long as they're defined globally in the manifest, but some Stremio clients send stream requests for non-IMDb IDs, so maybe setting this here as well helps
-			IDprefixes: []string{"tt"},
+		ResourceItems: []stremio.ResourceItem{
+			{
+				Name:  "stream",
+				Types: []string{"movie"},
+				// Shouldn't be required as long as they're defined globally in the manifest, but some Stremio clients send stream requests for non-IMDb IDs, so maybe setting this here as well helps
+				IDprefixes: []string{"tt"},
+			},
+			{
+				Name: "catalog",
+				// All Stremio-supported types that a user could've downloaded to RD/AD/Premiumize. This excludes "channel" (like YouTube channels, so a list of videos) and "tv" (which is live). Custom names are allowed.
+				Types: []string{"movie", "series", "unknown"},
+			},
 		},
-	},
-	Types: []string{"movie"},
-	// An empty slice is required for serializing to a JSON that Stremio expects
-	Catalogs: []stremio.CatalogItem{},
+		Types: []string{"movie"},
+		// An empty slice is required for serializing to a JSON that Stremio expects.
+		// We're altering the manifest and add a catalog (of videos downloaded to RD/AD/Premiumize) if a user configured the addon that way.
+		Catalogs: []stremio.CatalogItem{},
 
-	IDprefixes: []string{"tt"},
-	// Must use www.deflix.tv instead of just deflix.tv because GitHub takes care of redirecting non-www to www and this leads to HTTPS certificate issues.
-	Background: "https://www.deflix.tv/images/Logo-1024px.png",
-	Logo:       "https://www.deflix.tv/images/Logo-250px.png",
+		IDprefixes: []string{"tt"},
+		// Must use www.deflix.tv instead of just deflix.tv because GitHub takes care of redirecting non-www to www and this leads to HTTPS certificate issues.
+		Background: "https://www.deflix.tv/images/Logo-1024px.png",
+		Logo:       "https://www.deflix.tv/images/Logo-250px.png",
 
-	BehaviorHints: stremio.BehaviorHints{
-		P2P:                   false,
-		Configurable:          true,
-		ConfigurationRequired: true,
-	},
-}
+		BehaviorHints: stremio.BehaviorHints{
+			P2P:                   false,
+			Configurable:          true,
+			ConfigurationRequired: true,
+		},
+	}
+
+	catalogs = []stremio.CatalogItem{
+		{
+			Type: "unknown",
+			ID:   "rd-downloads",
+			Name: "Videos from the RealDebrid downloads",
+		},
+		{
+			Type: "unknown",
+			ID:   "ad-downloads",
+			Name: "Videos from the AllDebrid downloads",
+		},
+		{
+			Type: "unknown",
+			ID:   "pm-downloads",
+			Name: "Videos from the Premiumize downloads",
+		},
+	}
+)
 
 var (
 	// Timeout used for HTTP requests in the cinemeta, imdb2torrent and realdebrid clients.
@@ -199,7 +226,9 @@ func main() {
 
 	// Prepare addon creation
 
+	catalogHandler := createCatalogHandler(rdClient, adClient, pmClient, logger)
 	streamHandler := createStreamHandler(config, searchClient, rdClient, adClient, pmClient, redirectCache, logger)
+	catalogHandlers := map[string]stremio.CatalogHandler{"unknown": catalogHandler}
 	streamHandlers := map[string]stremio.StreamHandler{"movie": streamHandler}
 
 	var httpFS http.FileSystem
@@ -278,7 +307,7 @@ func main() {
 
 	// Create addon
 
-	addon, err := stremio.NewAddon(manifest, nil, streamHandlers, options)
+	addon, err := stremio.NewAddon(manifest, catalogHandlers, streamHandlers, options)
 	if err != nil {
 		logger.Fatal("Couldn't create new addon", zap.Error(err))
 	}
@@ -309,6 +338,24 @@ func main() {
 	addon.AddMiddleware("/:userData/stream/:type/:id.json", authMiddleware)
 	addon.AddMiddleware("/:userData/redirect/:id", authMiddleware)
 	// No need to set the middleware to the stream route without user data because go-stremio blocks it (with a 400 Bad Request response) if BehaviorHints.ConfigurationRequired is true.
+
+	manifestCallback := func(ctx context.Context, m *stremio.Manifest, userDataIface interface{}) int {
+		// The middleware already took care of validating the user data
+		udString := userDataIface.(string)
+		userData, _ := decodeUserData(udString, logger)
+		// If the user wants RD/AD/Premiumize downloads as catalog, we add the catalog to the manifest
+		if userData.Catalog {
+			if userData.RDtoken != "" {
+				m.Catalogs = append(m.Catalogs, catalogs[0])
+			} else if userData.ADkey != "" {
+				m.Catalogs = append(m.Catalogs, catalogs[1])
+			} else {
+				m.Catalogs = append(m.Catalogs, catalogs[2])
+			}
+		}
+		return fiber.StatusOK
+	}
+	addon.SetManifestCallback(manifestCallback)
 
 	// Requires URL query: "?imdbid=123&apitoken=foo"
 	statusEndpoint := createStatusHandler(searchClient.GetMagnetSearchers(), rdClient, adClient, pmClient, goCaches, logger)

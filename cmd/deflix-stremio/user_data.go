@@ -19,6 +19,8 @@ type userData struct {
 	// Premiumize
 	PMkey    string `json:"pmKey,omitempty"`
 	PMoauth2 string `json:"pmOAUTH2,omitempty"`
+	// Common
+	Catalog bool `json:"catalog,omitempty"`
 }
 
 func (ud userData) encode(logger *zap.Logger) (string, error) {
