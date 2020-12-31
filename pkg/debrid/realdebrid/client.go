@@ -2,6 +2,7 @@ package realdebrid
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -327,6 +328,33 @@ func (c *Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, r
 	c.logger.Debug("Unrestricted link", zap.String("unrestrictedLink", streamURL), zapFieldDebridSite, zapFieldAPItoken)
 
 	return streamURL, nil
+}
+
+// GetTorrents returns the *downloaded* torrents from RealDebrid.
+func (c *Client) GetTorrents(ctx context.Context, apiToken string, logger *zap.Logger) ([]Torrent, error) {
+	logger.Debug("Getting torrents...")
+	url := c.baseURL + "/rest/1.0/torrents"
+	resBytes, err := c.get(ctx, url, apiToken)
+	if err != nil {
+		return nil, fmt.Errorf("Couldn't get torrents from real-debrid.com: %v", err)
+	}
+	var torrents []Torrent
+	if err = json.Unmarshal(resBytes, &torrents); err != nil {
+		return nil, fmt.Errorf("Couldn't unmarshal torrents: %v", err)
+	}
+	logger.Debug("Got torrents", zap.Int("torrentCount", len(torrents)))
+
+	// Filter downloaded ones
+	i := 0
+	for _, torrent := range torrents {
+		if torrent.Status == "downloaded" {
+			torrents[i] = torrent
+			i++
+		}
+	}
+	downloadedTorrents := torrents[:i]
+
+	return downloadedTorrents, nil
 }
 
 func (c *Client) get(ctx context.Context, url, apiToken string) ([]byte, error) {

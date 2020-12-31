@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -48,22 +49,24 @@ var (
 		ResourceItems: []stremio.ResourceItem{
 			{
 				Name:  "stream",
-				Types: []string{"movie"},
-				// Shouldn't be required as long as they're defined globally in the manifest, but some Stremio clients send stream requests for non-IMDb IDs, so maybe setting this here as well helps
-				IDprefixes: []string{"tt"},
+				Types: []string{"movie", "unknown"},
+				// Shouldn't be required as long as they're defined globally in the manifest, but some Stremio clients send stream requests for non-IMDb IDs, so maybe setting this here as well helps.
+				// The "deflix-" prefix is for debrid service catalog items.
+				IDprefixes: []string{"tt", "deflix-"},
 			},
 			{
 				Name: "catalog",
 				// All Stremio-supported types that a user could've downloaded to RD/AD/Premiumize. This excludes "channel" (like YouTube channels, so a list of videos) and "tv" (which is live). Custom names are allowed.
-				Types: []string{"movie", "series", "unknown"},
+				Types: []string{"unknown"},
 			},
 		},
-		Types: []string{"movie"},
+		Types: []string{"movie", "unknown"},
 		// An empty slice is required for serializing to a JSON that Stremio expects.
 		// We're altering the manifest and add a catalog (of videos downloaded to RD/AD/Premiumize) if a user configured the addon that way.
 		Catalogs: []stremio.CatalogItem{},
 
-		IDprefixes: []string{"tt"},
+		// The "deflix-" prefix is for debrid service catalog items.
+		IDprefixes: []string{"tt", "deflix-"},
 		// Must use www.deflix.tv instead of just deflix.tv because GitHub takes care of redirecting non-www to www and this leads to HTTPS certificate issues.
 		Background: "https://www.deflix.tv/images/Logo-1024px.png",
 		Logo:       "https://www.deflix.tv/images/Logo-250px.png",
@@ -78,18 +81,18 @@ var (
 	catalogs = []stremio.CatalogItem{
 		{
 			Type: "unknown",
-			ID:   "rd-downloads",
-			Name: "Videos from the RealDebrid downloads",
+			ID:   "rd-torrents",
+			Name: "Torrents you added to RealDebrid",
 		},
 		{
 			Type: "unknown",
-			ID:   "ad-downloads",
-			Name: "Videos from the AllDebrid downloads",
+			ID:   "ad-torrents",
+			Name: "Torrents you added to AllDebrid",
 		},
 		{
 			Type: "unknown",
-			ID:   "pm-downloads",
-			Name: "Videos from the Premiumize downloads",
+			ID:   "pm-torrents",
+			Name: "Torrents you added to Premiumize",
 		},
 	}
 )
@@ -228,8 +231,9 @@ func main() {
 
 	catalogHandler := createCatalogHandler(rdClient, adClient, pmClient, logger)
 	streamHandler := createStreamHandler(config, searchClient, rdClient, adClient, pmClient, redirectCache, logger)
+	catalogStreamHandler := createCatalogStreamHandler(config, searchClient, rdClient, adClient, pmClient, redirectCache, logger)
 	catalogHandlers := map[string]stremio.CatalogHandler{"unknown": catalogHandler}
-	streamHandlers := map[string]stremio.StreamHandler{"movie": streamHandler}
+	streamHandlers := map[string]stremio.StreamHandler{"movie": streamHandler, "unknown": catalogStreamHandler}
 
 	var httpFS http.FileSystem
 	if config.WebConfigurePath == "" {
@@ -302,7 +306,8 @@ func main() {
 		// We already have a metaFetcher Client
 		MetaClient:      metaFetcher,
 		ConfigureHTMLfs: httpFS,
-		StreamIDregex:   "tt\\d{7,8}",
+		// IMDb IDs for regular streams and "deflix-" for debrid service catalog items
+		StreamIDregex: "(tt\\d{7,8}|deflix-.+)",
 	}
 
 	// Create addon
@@ -346,6 +351,7 @@ func main() {
 		// If the user wants RD/AD/Premiumize downloads as catalog, we add the catalog to the manifest
 		if userData.Catalog {
 			if userData.RDtoken != "" {
+				fmt.Printf("============= adding catalog to manifest")
 				m.Catalogs = append(m.Catalogs, catalogs[0])
 			} else if userData.ADkey != "" {
 				m.Catalogs = append(m.Catalogs, catalogs[1])

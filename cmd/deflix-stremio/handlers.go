@@ -30,21 +30,45 @@ type goCacher interface {
 }
 
 func createCatalogHandler(rdClient *realdebrid.Client, adClient *alldebrid.Client, pmClient *premiumize.Client, logger *zap.Logger) stremio.CatalogHandler {
-	return func(ctx context.Context, id string, userDataIface interface{}) ([]stremio.MetaPreviewItem, error) {
+	// Second parameter is the catalog ID, but we only have one per debrid service so we can ignore it.
+	return func(ctx context.Context, _ string, userDataIface interface{}) ([]stremio.MetaPreviewItem, error) {
 		// No need to check if the interface is a string or if the decoding worked, because the token middleware does that already.
 		udString := userDataIface.(string)
 		userData, _ := decodeUserData(udString, logger)
 
+		var metaPreviewItems []stremio.MetaPreviewItem
 		if userData.RDtoken != "" {
-			// TODO: use rd client to fetch downloads
+			torrents, err := rdClient.GetTorrents(ctx, userData.RDtoken, logger)
+			if err != nil {
+				logger.Warn("Couldn't find torrents", zap.Error(err))
+				return nil, fmt.Errorf("Couldn't find torrents: %w", err)
+			}
+			metaPreviewItems = make([]stremio.MetaPreviewItem, len(torrents))
+			fmt.Printf("================ torrents: %+v\n", torrents)
+			for i, torrent := range torrents {
+				metaPreviewItems[i] = stremio.MetaPreviewItem{
+					ID:   "deflix-" + torrent.ID,
+					Type: "unknown",
+					Name: torrent.Filename,
+
+					ReleaseInfo: torrent.Added,
+				}
+			}
 		} else if userData.ADkey != "" {
 			// TODO: use ad client to fetch downloads
 		} else {
 			// TODO: use pm client to fetch downloads
 		}
 
-		// TODO: turn download items into meta items
+		return metaPreviewItems, nil
+	}
+}
 
+func createCatalogStreamHandler(config config, searchClient *imdb2torrent.Client, rdClient *realdebrid.Client, adClient *alldebrid.Client, pmClient *premiumize.Client, redirectCache goCacher, logger *zap.Logger) stremio.StreamHandler {
+	// IDs have the prefix "deflix-". This is guaranteed because the meta items we return in the catalog have type "unknown" and this stream handler is registered for that type.
+	return func(ctx context.Context, id string, userDataIface interface{}) ([]stremio.StreamItem, error) {
+		fmt.Printf("================= id: %v\n", id)
+		// TODO: implement
 		return nil, nil
 	}
 }
