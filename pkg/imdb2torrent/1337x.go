@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/deflix-tv/go-stremio"
 	"go.uber.org/zap"
 )
 
@@ -39,20 +39,20 @@ type leetxClient struct {
 	baseURL          string
 	httpClient       *http.Client
 	cache            Cache
-	metaFetcher      stremio.MetaFetcher
+	metaGetter       MetaGetter
 	cacheAge         time.Duration
 	logger           *zap.Logger
 	logFoundTorrents bool
 }
 
-func NewLeetxClient(opts LeetxClientOptions, cache Cache, metaFetcher stremio.MetaFetcher, logger *zap.Logger, logFoundTorrents bool) *leetxClient {
+func NewLeetxClient(opts LeetxClientOptions, cache Cache, metaGetter MetaGetter, logger *zap.Logger, logFoundTorrents bool) *leetxClient {
 	return &leetxClient{
 		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
 			Timeout: opts.Timeout,
 		},
 		cache:            cache,
-		metaFetcher:      metaFetcher,
+		metaGetter:       metaGetter,
 		cacheAge:         opts.CacheAge,
 		logger:           logger,
 		logFoundTorrents: logFoundTorrents,
@@ -82,13 +82,13 @@ func (c *leetxClient) Find(ctx context.Context, imdbID string) ([]Result, error)
 	}
 
 	// Get movie name
-	meta, err := c.metaFetcher.GetMovie(ctx, imdbID)
+	meta, err := c.metaGetter.GetMeta(ctx, imdbID)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't get movie name via Cinemeta for IMDb ID %v: %v", imdbID, err)
 	}
-	movieSearch := meta.Name
-	if meta.ReleaseInfo != "" {
-		movieSearch += " " + meta.ReleaseInfo
+	movieSearch := meta.Title
+	if meta.Year != 0 {
+		movieSearch += " " + strconv.Itoa(meta.Year)
 	}
 	// Use this for general searching in URL "https://1337x.to/search/foo+bar/1/"
 	//movieSearch = strings.Replace(movieSearch, " ", "+", -1)
@@ -215,13 +215,13 @@ func (c *leetxClient) Find(ctx context.Context, imdbID string) ([]Result, error)
 			}
 
 			result := Result{
-				Title:     meta.Name,
+				Title:     meta.Title,
 				Quality:   quality,
 				InfoHash:  infoHash,
 				MagnetURL: magnet,
 			}
 			if c.logFoundTorrents {
-				c.logger.Debug("Found torrent", zap.String("title", meta.Name), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnet), zapFieldID, zapFieldTorrentSite)
+				c.logger.Debug("Found torrent", zap.String("title", meta.Title), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnet), zapFieldID, zapFieldTorrentSite)
 			}
 
 			resultChan <- result

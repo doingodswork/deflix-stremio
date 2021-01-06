@@ -10,8 +10,6 @@ import (
 
 	"github.com/tidwall/gjson"
 	"go.uber.org/zap"
-
-	"github.com/deflix-tv/go-stremio"
 )
 
 var (
@@ -57,12 +55,12 @@ type tpbClient struct {
 	httpClient       *http.Client
 	cache            Cache
 	cacheAge         time.Duration
-	metaFetcher      stremio.MetaFetcher
+	metaGetter       MetaGetter
 	logger           *zap.Logger
 	logFoundTorrents bool
 }
 
-func NewTPBclient(opts TPBclientOptions, cache Cache, metaFetcher stremio.MetaFetcher, logger *zap.Logger, logFoundTorrents bool) (*tpbClient, error) {
+func NewTPBclient(opts TPBclientOptions, cache Cache, metaGetter MetaGetter, logger *zap.Logger, logFoundTorrents bool) (*tpbClient, error) {
 	// Using a SOCKS5 proxy allows us to make requests to TPB via the TOR network
 	var httpClient *http.Client
 	if opts.SocksProxyAddr != "" {
@@ -80,7 +78,7 @@ func NewTPBclient(opts TPBclientOptions, cache Cache, metaFetcher stremio.MetaFe
 		httpClient:       httpClient,
 		cache:            cache,
 		cacheAge:         opts.CacheAge,
-		metaFetcher:      metaFetcher,
+		metaGetter:       metaGetter,
 		logger:           logger,
 		logFoundTorrents: logFoundTorrents,
 	}, nil
@@ -130,7 +128,7 @@ func (c *tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 	}
 
 	// Get movie name
-	meta, err := c.metaFetcher.GetMovie(ctx, imdbID)
+	meta, err := c.metaGetter.GetMeta(ctx, imdbID)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't get movie name via Cinemeta for IMDb ID %v: %v", imdbID, err)
 	}
@@ -165,12 +163,12 @@ func (c *tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 			c.logger.Error("InfoHash isn't 40 characters long", zapFieldID, zapFieldTorrentSite)
 			continue
 		}
-		magnetURL := createMagnetURL(ctx, infoHash, meta.Name, trackersTPB)
+		magnetURL := createMagnetURL(ctx, infoHash, meta.Title, trackersTPB)
 		if c.logFoundTorrents {
-			c.logger.Debug("Found torrent", zap.String("title", meta.Name), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnetURL), zapFieldID, zapFieldTorrentSite)
+			c.logger.Debug("Found torrent", zap.String("title", meta.Title), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnetURL), zapFieldID, zapFieldTorrentSite)
 		}
 		result := Result{
-			Title:     meta.Name,
+			Title:     meta.Title,
 			Quality:   quality,
 			InfoHash:  infoHash,
 			MagnetURL: magnetURL,

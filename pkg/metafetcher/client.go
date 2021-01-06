@@ -12,9 +12,11 @@ import (
 	"github.com/deflix-tv/go-stremio"
 	"github.com/deflix-tv/go-stremio/pkg/cinemeta"
 	"github.com/deflix-tv/imdb2meta/pb"
+	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
 )
 
 var _ stremio.MetaFetcher = (*Client)(nil)
+var _ imdb2torrent.MetaGetter = (*Client)(nil)
 
 // Client is used to implement stremio.MetaFetcher.
 type Client struct {
@@ -91,6 +93,25 @@ func (c *Client) GetTVShow(ctx context.Context, imdbID string, season int, episo
 		return c.cinemetaClient.GetTVShow(ctx, imdbID, season, episode)
 	}
 	return cinemeta.Meta{}, nil
+}
+
+// GetMeta implements imdb2torrent.MetaGetter.
+func (c *Client) GetMeta(ctx context.Context, imdbID string) (imdb2torrent.Meta, error) {
+	// deflix-stremio currently only supports movies, so no need to call both.
+	// TODO: Update this as soon as we support TV shows.
+	movieMeta, err := c.GetMovie(ctx, imdbID)
+	if err != nil {
+		return imdb2torrent.Meta{}, err
+	}
+	year, err := strconv.Atoi(movieMeta.ReleaseInfo)
+	if err != nil {
+		c.logger.Error("Couldn't convert movieMeta.ReleaseInfo to int", zap.Error(err), zap.String("releaseInfo", movieMeta.ReleaseInfo))
+		return imdb2torrent.Meta{}, err
+	}
+	return imdb2torrent.Meta{
+		Title: movieMeta.Name,
+		Year:  year,
+	}, nil
 }
 
 func (c *Client) Close() error {

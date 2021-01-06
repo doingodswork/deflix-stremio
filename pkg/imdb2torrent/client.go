@@ -17,6 +17,15 @@ var (
 	regexMagnet          = regexp.MustCompile(`'magnet:?.+?'`) // The "?" makes the ".+" non-greedy
 )
 
+type Meta struct {
+	Title string
+	Year  int
+}
+
+type MetaGetter interface {
+	GetMeta(ctx context.Context, imdbID string) (Meta, error)
+}
+
 type MagnetSearcher interface {
 	Find(ctx context.Context, imdbID string) ([]Result, error)
 	IsSlow() bool
