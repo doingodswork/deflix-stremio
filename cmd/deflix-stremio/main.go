@@ -285,25 +285,28 @@ func main() {
 
 	// Customize addon
 
-	confPM := oauth2.Config{
-		ClientID:     config.OAUTH2clientIDpm,
-		ClientSecret: config.OAUTH2clientSecretPM,
-		Endpoint: oauth2.Endpoint{
-			AuthURL:  config.OAUTH2authorizeURLpm,
-			TokenURL: config.OAUTH2tokenURLpm,
-		},
+	var confPM oauth2.Config
+	var aesKey []byte
+	if config.UseOAUTH2 {
+		confPM = oauth2.Config{
+			ClientID:     config.OAUTH2clientIDpm,
+			ClientSecret: config.OAUTH2clientSecretPM,
+			Endpoint: oauth2.Endpoint{
+				AuthURL:  config.OAUTH2authorizeURLpm,
+				TokenURL: config.OAUTH2tokenURLpm,
+			},
+		}
+		logger.Info("Starting to hash the OAuth2 encryption key...")
+		hashStart := time.Now()
+		// Default bcrypt "cost" is 10, but we're only hashing this one time at startup, so we can spend a second or so.
+		bcryptKey, err := bcrypt.GenerateFromPassword([]byte(config.OAUTH2encryptionKey), 14)
+		if err != nil {
+			logger.Fatal("Couldn't hash OAuth2 encryption key via bcrypt", zap.Error(err))
+		}
+		logger.Info("Finished hashing the OAuth2 encryption key.", zap.Duration("duration", time.Since(hashStart)))
+		// The bcrypt result is 60 bytes. We want 32 bytes for AES-256. The initial bytes in bcrypt are the same, so we use the last ones.
+		aesKey = bcryptKey[28:60]
 	}
-
-	logger.Info("Starting to hash the OAuth2 encryption key...")
-	hashStart := time.Now()
-	// Default bcrypt "cost" is 10, but we're only hashing this one time at startup, so we can spend a second or so.
-	bcryptKey, err := bcrypt.GenerateFromPassword([]byte(config.OAUTH2encryptionKey), 14)
-	if err != nil {
-		logger.Fatal("Couldn't hash OAuth2 encryption key via bcrypt", zap.Error(err))
-	}
-	logger.Info("Finished hashing the OAuth2 encryption key.", zap.Duration("duration", time.Since(hashStart)))
-	// The bcrypt result is 60 bytes. We want 32 bytes for AES-256. The initial bytes in bcrypt are the same, so we use the last ones.
-	aesKey := bcryptKey[28:60]
 	authMiddleware := createAuthMiddleware(rdClient, adClient, pmClient, config.UseOAUTH2, confPM, aesKey, logger)
 	addon.AddMiddleware("/:userData/manifest.json", authMiddleware)
 	addon.AddMiddleware("/:userData/stream/:type/:id.json", authMiddleware)
