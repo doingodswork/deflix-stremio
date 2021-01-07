@@ -97,6 +97,8 @@ The following options can be configured via either command line argument or envi
 
 ```text
 Usage of deflix-stremio:
+  -baseURL string
+        Base URL of this service. It's used in a stream URL that's delivered to Stremio and later used to redirect to RealDebrid, AllDebrid and Premiumize. If you enable OAuth2 handling this will also be used for the redirects and to determine whether the state cookie is a secure one or not. (default "http://localhost:8080")
   -baseURL1337x string
         Base URL for 1337x (default "https://1337x.to")
   -baseURLad string
@@ -133,14 +135,22 @@ Usage of deflix-stremio:
         Max age of cache entries for torrents found per IMDb ID. The format must be acceptable by Go's 'time.ParseDuration()', for example "24h". Default is 7 days. (default 168h0m0s)
   -oauth2authURLpm string
         URL of the OAuth2 authorization endpoint of Premiumize (default "https://www.premiumize.me/authorize")
+  -oauth2authURLrd string
+        URL of the OAuth2 authorization endpoint of RealDebrid (default "https://api.real-debrid.com/oauth/v2/auth")
   -oauth2clientIDpm string
         Client ID for deflix-stremio on Premiumize
+  -oauth2clientIDrd string
+        Client ID for deflix-stremio on RealDebrid
   -oauth2clientSecretPM string
         Client secret for deflix-stremio on Premiumize
+  -oauth2clientSecretRD string
+        Client secret for deflix-stremio on RealDebrid
   -oauth2encryptionKey string
         OAuth2 data encryption key
   -oauth2tokenURLpm string
         URL of the OAuth2 token endpoint of Premiumize (default "https://www.premiumize.me/token")
+  -oauth2tokenURLrd string
+        URL of the OAuth2 token endpoint of RealDebrid (default "https://api.real-debrid.com/oauth/v2/token")
   -port int
         Port to listen on (default 8080)
   -redisAddr string
@@ -153,8 +163,6 @@ Usage of deflix-stremio:
         SOCKS5 proxy address for accessing TPB, required for accessing TPB via the TOR network (where "127.0.0.1:9050" would be typical value)
   -storagePath string
         Path for storing the data of the persistent DB which stores torrent results. An empty value will lead to 'os.UserCacheDir()+"/deflix-stremio/badger"'.
-  -streamURLaddr string
-        Address to be used in a stream URL that's delivered to Stremio and later used to redirect to , AllDebrid and Premiumize. If you enable OAuth2 handling this will also be used to determine whether the state cookie is a secure one or not. (default "http://localhost:8080")
   -useOAUTH2
         Flag for indicating whether to use OAuth2 for Premiumize authorization. This leads to a different configuration webpage that doesn't require API keys. It requires a client ID to be configured.
   -webConfigurePath string
