@@ -285,12 +285,23 @@ func main() {
 
 	// Customize addon
 
+	var confRD oauth2.Config
 	var confPM oauth2.Config
 	var aesKey []byte
 	if config.UseOAUTH2 {
+		confRD = oauth2.Config{
+			ClientID:     config.OAUTH2clientIDrd,
+			ClientSecret: config.OAUTH2clientSecretRD,
+			RedirectURL:  config.BaseURL + "/oauth2/install/rd",
+			Endpoint: oauth2.Endpoint{
+				AuthURL:  config.OAUTH2authorizeURLrd,
+				TokenURL: config.OAUTH2tokenURLrd,
+			},
+		}
 		confPM = oauth2.Config{
 			ClientID:     config.OAUTH2clientIDpm,
 			ClientSecret: config.OAUTH2clientSecretPM,
+			RedirectURL:  config.BaseURL + "/oauth2/install/pm",
 			Endpoint: oauth2.Endpoint{
 				AuthURL:  config.OAUTH2authorizeURLpm,
 				TokenURL: config.OAUTH2tokenURLpm,
@@ -307,7 +318,7 @@ func main() {
 		// The bcrypt result is 60 bytes. We want 32 bytes for AES-256. The initial bytes in bcrypt are the same, so we use the last ones.
 		aesKey = bcryptKey[28:60]
 	}
-	authMiddleware := createAuthMiddleware(rdClient, adClient, pmClient, config.UseOAUTH2, confPM, aesKey, logger)
+	authMiddleware := createAuthMiddleware(rdClient, adClient, pmClient, config.UseOAUTH2, confRD, confPM, aesKey, logger)
 	addon.AddMiddleware("/:userData/manifest.json", authMiddleware)
 	addon.AddMiddleware("/:userData/stream/:type/:id.json", authMiddleware)
 	addon.AddMiddleware("/:userData/redirect/:id", authMiddleware)
@@ -323,12 +334,12 @@ func main() {
 	// Stremio sends a HEAD request before starting a stream.
 	addon.AddEndpoint("HEAD", "/:userData/redirect/:id", redirHandler)
 
-	// For OAuth2 redirect handling for Premiumize
-	isHTTPS := strings.HasPrefix(config.StreamURLaddr, "https")
-	oauth2initHandler := createOAUTH2initHandler(confPM, isHTTPS, logger)
-	addon.AddEndpoint("GET", "/oauth2/init", oauth2initHandler)
-	oauth2installHandler := createOAUTH2installHandler(confPM, aesKey, logger)
-	addon.AddEndpoint("GET", "/oauth2/install", oauth2installHandler)
+	// For OAuth2 redirect handling for RealDebrid and Premiumize
+	isHTTPS := strings.HasPrefix(config.BaseURL, "https")
+	oauth2initHandler := createOAUTH2initHandler(confRD, confPM, isHTTPS, logger)
+	addon.AddEndpoint("GET", "/oauth2/init/:service", oauth2initHandler)
+	oauth2installHandler := createOAUTH2installHandler(confRD, confPM, aesKey, logger)
+	addon.AddEndpoint("GET", "/oauth2/install/:service", oauth2installHandler)
 
 	// Save cache to file every hour
 	go func() {

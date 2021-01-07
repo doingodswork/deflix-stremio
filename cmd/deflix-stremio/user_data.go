@@ -13,6 +13,7 @@ import (
 type userData struct {
 	// RealDebrid
 	RDtoken  string `json:"rdToken,omitempty"`
+	RDoauth2 string `json:"rdOAUTH2,omitempty"`
 	RDremote bool   `json:"rdRemote,omitempty"`
 	// AllDebrid
 	ADkey string `json:"adKey,omitempty"`
@@ -34,7 +35,7 @@ func (ud userData) encode(logger *zap.Logger) (string, error) {
 func decodeUserData(data string, logger *zap.Logger) (userData, error) {
 	logger.Debug("Decoding user data", zap.String("userData", data))
 
-	// Legacy user data (plain string).
+	// Legacy user data (plain string, RD only).
 	// - If it's ending with "-remote" it's 100% clear
 	// - RD API tokens always seem to be 52 chars long
 	// - Base64 encoded JSON starts with "eyJ" or "eyI"

@@ -51,12 +51,12 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdCli
 			infoHashes = append(infoHashes, torrent.InfoHash)
 		}
 		var availableInfoHashes []string
-		if userData.RDtoken != "" {
-			availableInfoHashes = rdClient.CheckInstantAvailability(ctx, userData.RDtoken, infoHashes...)
+		keyOrToken := ctx.Value("deflix_keyOrToken").(string)
+		if userData.RDtoken != "" || userData.RDoauth2 != "" {
+			availableInfoHashes = rdClient.CheckInstantAvailability(ctx, keyOrToken, infoHashes...)
 		} else if userData.ADkey != "" {
-			availableInfoHashes = adClient.CheckInstantAvailability(ctx, userData.ADkey, infoHashes...)
+			availableInfoHashes = adClient.CheckInstantAvailability(ctx, keyOrToken, infoHashes...)
 		} else {
-			keyOrToken := ctx.Value("deflix_keyOrToken").(string)
 			availableInfoHashes = pmClient.CheckInstantAvailability(ctx, keyOrToken, infoHashes...)
 		}
 		if len(availableInfoHashes) == 0 {
@@ -141,7 +141,7 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdCli
 
 func createStreamItem(ctx context.Context, config config, encodedUserData string, redirectID, quality string, torrents []imdb2torrent.Result) stremio.StreamItem {
 	stream := stremio.StreamItem{
-		URL: config.StreamURLaddr + "/" + encodedUserData + "/redirect/" + redirectID,
+		URL: config.BaseURL + "/" + encodedUserData + "/redirect/" + redirectID,
 		// Stremio docs recommend to use the stream quality as title.
 		// See https://github.com/Stremio/stremio-addon-sdk/blob/ddaa3b80def8a44e553349734dd02ec9c3fea52c/docs/api/responses/stream.md#additional-properties-to-provide-information--behaviour-flags
 		Title: quality,
@@ -230,13 +230,13 @@ func createRedirectHandler(redirectCache, streamCache goCacher, rdClient *realde
 		userData, _ := decodeUserData(udString, logger)
 		var streamURL string
 		var err error
+		keyOrToken := c.Locals("deflix_keyOrToken").(string)
 		for _, torrent := range torrents {
-			if userData.RDtoken != "" {
-				streamURL, err = rdClient.GetStreamURL(c.Context(), torrent.MagnetURL, userData.RDtoken, userData.RDremote)
+			if userData.RDtoken != "" || userData.RDoauth2 != "" {
+				streamURL, err = rdClient.GetStreamURL(c.Context(), torrent.MagnetURL, keyOrToken, userData.RDremote)
 			} else if userData.ADkey != "" {
-				streamURL, err = adClient.GetStreamURL(c.Context(), torrent.MagnetURL, userData.ADkey)
+				streamURL, err = adClient.GetStreamURL(c.Context(), torrent.MagnetURL, keyOrToken)
 			} else {
-				keyOrToken := c.Locals("deflix_keyOrToken").(string)
 				streamURL, err = pmClient.GetStreamURL(c.Context(), torrent.MagnetURL, keyOrToken)
 			}
 			if err != nil {

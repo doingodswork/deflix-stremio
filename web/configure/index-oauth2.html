@@ -48,18 +48,18 @@
           <option value="Premiumize">Premiumize</option>
         </select>
         <div id="formRD" style="display: none;">
-          <label>Get your RealDebrid API token from <a href="https://real-debrid.com/apitoken" target="_blank">here
-              ↗</a>.</label>
-          <input type="text" id="apiTokenRD" placeholder="ABC123DEF...">
-          <input type="checkbox" id="remote"><label for="remote">Use "remote traffic"<sup>1</sup></label>
+          <button id="initRDbutton" type="button" onclick="initRD(); return false;">Authorize Deflix</button>
           <br>
-          <button type="button" onclick="installRD(); return false;">Install</button>
+          <div id="remoteDiv" style="display: none;">
+            <input type="checkbox" id="remote"><label for="remote">Use "remote traffic"<sup>1</sup></label>
+          </div>
+          <button id="installRDbutton" type="button" onclick="installRD(); return false;" style="display: none;">Install</button>
           <div id="installInfoRD" style="display: none;">
             <p>ℹ️ If the installation form doesn't work, you can just paste the addon URL into the search box in the
               Stremio addon section:<br>
               <input type="text" id="urlRD" readonly><button onclick="copy('urlRD'); return false;" title="Copy to clipboard">📋</button></p>
           </div>
-          <p><sup>1</sup>) RealDebrid allows you to share your account with friends as long as they use your "remote
+          <p id="supRD" style="display: none;"><sup>1</sup>) RealDebrid allows you to share your account with friends as long as they use your "remote
             traffic", which has to be paid separately.<br>
             ⚠️ When sharing your account and <em>not</em> using remote traffic, you might get suspended - see RealDebrid's
             <a href="https://real-debrid.com/terms" target="_blank">terms ↗</a> and <a href="https://real-debrid.com/faq"
@@ -103,7 +103,7 @@
       var service = document.getElementById("debridService").value;
 
       // If no hash is set, we're on the initial configure page.
-      // Otherwise we're in the redirect after Premiumize authorization.
+      // Otherwise we're in the redirect after RealDebrid or Premiumize authorization.
       // BUT a user could try to switch to one of the others.
       if (window.location.hash == "" || service != ""){
         if (service === "RealDebrid") {
@@ -118,35 +118,43 @@
         // If the decoding failed, maybe the user entered bogus data, potentially accidentally. Revert to regular page to start anew.
         if (userData == null){
           window.location.href = window.location.protocol+"//"+window.location.host+"/configure";
-        }else{
+        }else if (userData.rdOAUTH2 != null && userData.rdOAUTH2 != "") {
+          document.getElementById("debridService").value = "RealDebrid";
+          document.getElementById("initRDbutton").textContent = "Reauthorize Deflix";
+          document.getElementById("initRDbutton").style.backgroundColor = "#44aa44";
+          document.getElementById("initRDbutton").style.border = "#44aa44";
+          document.getElementById("installRDbutton").style.display = "block";
+          document.getElementById("remoteDiv").style.display = "block";
+          document.getElementById("supRD").style.display = "block";
+          document.getElementById("formRD").style.display = "block";
+        }else if (userData.pmOAUTH2 != null && userData.pmOAUTH2 != ""){
           document.getElementById("debridService").value = "Premiumize";
           document.getElementById("initPMbutton").textContent = "Reauthorize Deflix";
           document.getElementById("initPMbutton").style.backgroundColor = "#44aa44";
           document.getElementById("initPMbutton").style.border = "#44aa44";
           document.getElementById("installPMbutton").style.display = "block";
           document.getElementById("formPM").style.display = "block";
+        }else{
+          // TODO: Show an error message
+          console.error("Got a hash in the URL but it doesn't seem to be RD or PM")
         }
       }
     }
 
-    function installRD() {
-      var apiToken = document.getElementById("apiTokenRD").value;
-      var remote = document.getElementById("remote").checked;
+    function initRD() {
+      window.location.href = window.location.protocol+"//"+window.location.host+"/oauth2/init/rd";
+    }
 
-      if (apiToken == null || apiToken.length === 0) {
-        document.getElementById("apiTokenRD").style.backgroundColor = "#ff3333";
-      } else {
-        document.getElementById("apiTokenRD").style.backgroundColor = "";
-        userData = {rdToken: apiToken};
-        if (remote) {
-          userData.rdRemote = true;
-        }
-        
-        encoded = encode(userData);
-        document.getElementById("urlRD").value = window.location.protocol+"//"+window.location.host+"/"+ encoded+"/manifest.json";
-        document.getElementById("installInfoRD").style.display = "block";
-        window.location.href = "stremio://"+window.location.host+"/" + encoded + "/manifest.json";
+    function installRD() {
+      var remote = document.getElementById("remote").checked;
+      userData = decode(window.location.hash.substring(1));
+      if (remote){
+        userData.rdRemote = true;
       }
+      encoded = encode(userData);
+      document.getElementById("urlRD").value = window.location.protocol+"//"+window.location.host+"/"+ encoded+"/manifest.json";
+      document.getElementById("installInfoRD").style.display = "block";
+      window.location.href = "stremio://"+window.location.host+"/" + encoded + "/manifest.json";
     }
 
     function installAD() {
@@ -166,7 +174,7 @@
     }
 
     function initPM() {
-      window.location.href = window.location.protocol+"//"+window.location.host+"/oauth2/init";
+      window.location.href = window.location.protocol+"//"+window.location.host+"/oauth2/init/pm";
     }
 
     function installPM() {

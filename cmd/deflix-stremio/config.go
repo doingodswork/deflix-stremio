@@ -14,7 +14,7 @@ import (
 type config struct {
 	BindAddr             string        `json:"bindAddr"`
 	Port                 int           `json:"port"`
-	StreamURLaddr        string        `json:"streamURLaddr"`
+	BaseURL              string        `json:"baseURL"`
 	StoragePath          string        `json:"storagePath"`
 	MaxAgeTorrents       time.Duration `json:"maxAgeTorrents"`
 	CachePath            string        `json:"cachePath"`
@@ -37,9 +37,13 @@ type config struct {
 	WebConfigurePath     string        `json:"webConfigurePath"`
 	IMDB2metaAddr        string        `json:"imdb2metaAddr"`
 	UseOAUTH2            bool          `json:"useOAUTH2"`
+	OAUTH2authorizeURLrd string        `json:"oauth2authURLrd"`
 	OAUTH2authorizeURLpm string        `json:"oauth2authURLpm"`
+	OAUTH2tokenURLrd     string        `json:"oauth2tokenURLrd"`
 	OAUTH2tokenURLpm     string        `json:"oauth2tokenURLpm"`
+	OAUTH2clientIDrd     string        `json:"oauth2clientIDrd"`
 	OAUTH2clientIDpm     string        `json:"oauth2clientIDpm"`
+	OAUTH2clientSecretRD string        `json:"oauth2clientSecretRD"`
 	OAUTH2clientSecretPM string        `json:"oauth2clientSecretPM"`
 	OAUTH2encryptionKey  string        `json:"oauth2encryptionKey"`
 	EnvPrefix            string        `json:"envPrefix"`
@@ -52,7 +56,7 @@ func parseConfig(logger *zap.Logger) config {
 	var (
 		bindAddr             = flag.String("bindAddr", "localhost", `Local interface address to bind to. "localhost" only allows access from the local host. "0.0.0.0" binds to all network interfaces.`)
 		port                 = flag.Int("port", 8080, "Port to listen on")
-		streamURLaddr        = flag.String("streamURLaddr", "http://localhost:8080", "Address to be used in a stream URL that's delivered to Stremio and later used to redirect to , AllDebrid and Premiumize. If you enable OAuth2 handling this will also be used to determine whether the state cookie is a secure one or not.")
+		baseURL              = flag.String("baseURL", "http://localhost:8080", "Base URL of this service. It's used in a stream URL that's delivered to Stremio and later used to redirect to RealDebrid, AllDebrid and Premiumize. If you enable OAuth2 handling this will also be used for the redirects and to determine whether the state cookie is a secure one or not.")
 		storagePath          = flag.String("storagePath", "", `Path for storing the data of the persistent DB which stores torrent results. An empty value will lead to 'os.UserCacheDir()+"/deflix-stremio/badger"'.`)
 		maxAgeTorrents       = flag.Duration("maxAgeTorrents", 7*24*time.Hour, "Max age of cache entries for torrents found per IMDb ID. The format must be acceptable by Go's 'time.ParseDuration()', for example \"24h\". Default is 7 days.")
 		cachePath            = flag.String("cachePath", "", `Path for loading persisted caches on startup and persisting the current cache in regular intervals. An empty value will lead to 'os.UserCacheDir()+"/deflix-stremio/cache"'.`)
@@ -75,9 +79,13 @@ func parseConfig(logger *zap.Logger) config {
 		webConfigurePath     = flag.String("webConfigurePath", "", "Path to the directory with web files for the '/configure' endpoint. If empty, files compiled into the binary will be used")
 		imdb2metaAddr        = flag.String("imdb2metaAddr", "", "Address of the imdb2meta gRPC server. Won't be used if empty.")
 		useOAUTH2            = flag.Bool("useOAUTH2", false, "Flag for indicating whether to use OAuth2 for Premiumize authorization. This leads to a different configuration webpage that doesn't require API keys. It requires a client ID to be configured.")
+		oauth2authURLrd      = flag.String("oauth2authURLrd", "https://api.real-debrid.com/oauth/v2/auth", "URL of the OAuth2 authorization endpoint of RealDebrid")
 		oauth2authURLpm      = flag.String("oauth2authURLpm", "https://www.premiumize.me/authorize", "URL of the OAuth2 authorization endpoint of Premiumize")
+		oauth2tokenURLrd     = flag.String("oauth2tokenURLrd", "https://api.real-debrid.com/oauth/v2/token", "URL of the OAuth2 token endpoint of RealDebrid")
 		oauth2tokenURLpm     = flag.String("oauth2tokenURLpm", "https://www.premiumize.me/token", "URL of the OAuth2 token endpoint of Premiumize")
+		oauth2clientIDrd     = flag.String("oauth2clientIDrd", "", "Client ID for deflix-stremio on RealDebrid")
 		oauth2clientIDpm     = flag.String("oauth2clientIDpm", "", "Client ID for deflix-stremio on Premiumize")
+		oauth2clientSecretRD = flag.String("oauth2clientSecretRD", "", "Client secret for deflix-stremio on RealDebrid")
 		oauth2clientSecretPM = flag.String("oauth2clientSecretPM", "", "Client secret for deflix-stremio on Premiumize")
 		oauth2encryptionKey  = flag.String("oauth2encryptionKey", "", "OAuth2 data encryption key")
 		envPrefix            = flag.String("envPrefix", "", "Prefix for environment variables")
@@ -108,12 +116,12 @@ func parseConfig(logger *zap.Logger) config {
 	}
 	result.Port = *port
 
-	if !isArgSet("streamURLaddr") {
-		if val, ok := os.LookupEnv(*envPrefix + "STREAM_URL_ADDR"); ok {
-			*streamURLaddr = val
+	if !isArgSet("baseURL") {
+		if val, ok := os.LookupEnv(*envPrefix + "BASE_URL"); ok {
+			*baseURL = val
 		}
 	}
-	result.StreamURLaddr = *streamURLaddr
+	result.BaseURL = *baseURL
 
 	if !isArgSet("storagePath") {
 		if val, ok := os.LookupEnv(*envPrefix + "STORAGE_PATH"); ok {
@@ -285,12 +293,26 @@ func parseConfig(logger *zap.Logger) config {
 	}
 	result.UseOAUTH2 = *useOAUTH2
 
+	if !isArgSet("oauth2authURLrd") {
+		if val, ok := os.LookupEnv(*envPrefix + "OAUTH2_AUTH_URL_RD"); ok {
+			*oauth2authURLrd = val
+		}
+	}
+	result.OAUTH2authorizeURLrd = *oauth2authURLrd
+
 	if !isArgSet("oauth2authURLpm") {
 		if val, ok := os.LookupEnv(*envPrefix + "OAUTH2_AUTH_URL_PM"); ok {
 			*oauth2authURLpm = val
 		}
 	}
 	result.OAUTH2authorizeURLpm = *oauth2authURLpm
+
+	if !isArgSet("oauth2tokenURLrd") {
+		if val, ok := os.LookupEnv(*envPrefix + "OAUTH2_TOKEN_URL_RD"); ok {
+			*oauth2tokenURLrd = val
+		}
+	}
+	result.OAUTH2tokenURLrd = *oauth2tokenURLrd
 
 	if !isArgSet("oauth2tokenURLpm") {
 		if val, ok := os.LookupEnv(*envPrefix + "OAUTH2_TOKEN_URL_PM"); ok {
@@ -299,12 +321,26 @@ func parseConfig(logger *zap.Logger) config {
 	}
 	result.OAUTH2tokenURLpm = *oauth2tokenURLpm
 
+	if !isArgSet("oauth2clientIDrd") {
+		if val, ok := os.LookupEnv(*envPrefix + "OAUTH2_CLIENT_ID_RD"); ok {
+			*oauth2clientIDrd = val
+		}
+	}
+	result.OAUTH2clientIDrd = *oauth2clientIDrd
+
 	if !isArgSet("oauth2clientIDpm") {
 		if val, ok := os.LookupEnv(*envPrefix + "OAUTH2_CLIENT_ID_PM"); ok {
 			*oauth2clientIDpm = val
 		}
 	}
 	result.OAUTH2clientIDpm = *oauth2clientIDpm
+
+	if !isArgSet("oauth2clientSecretRD") {
+		if val, ok := os.LookupEnv(*envPrefix + "OAUTH2_CLIENT_SECRET_RD"); ok {
+			*oauth2clientSecretRD = val
+		}
+	}
+	result.OAUTH2clientSecretRD = *oauth2clientSecretRD
 
 	if !isArgSet("oauth2clientSecretPM") {
 		if val, ok := os.LookupEnv(*envPrefix + "OAUTH2_CLIENT_SECRET_PM"); ok {
@@ -349,7 +385,9 @@ func (c *config) validate(logger *zap.Logger) {
 	// If the dir doesn't exist, it's created when the files are written.
 
 	if c.UseOAUTH2 &&
-		(c.OAUTH2authorizeURLpm == "" || c.OAUTH2clientIDpm == "" || c.OAUTH2clientSecretPM == "" || c.OAUTH2encryptionKey == "" || c.OAUTH2tokenURLpm == "") {
+		(c.OAUTH2authorizeURLpm == "" || c.OAUTH2clientIDpm == "" || c.OAUTH2clientSecretPM == "" || c.OAUTH2tokenURLpm == "" ||
+			c.OAUTH2authorizeURLrd == "" || c.OAUTH2clientIDrd == "" || c.OAUTH2clientSecretRD == "" || c.OAUTH2tokenURLrd == "" ||
+			c.OAUTH2encryptionKey == "") {
 		logger.Fatal("Using OAuth2 requires setting all OAuth2 config values")
 	}
 }

@@ -87,14 +87,14 @@ func NewClient(opts ClientOptions, tokenCache, availabilityCache debrid.Cache, l
 	}, nil
 }
 
-func (c *Client) TestToken(ctx context.Context, apiToken string) error {
+func (c *Client) TestToken(ctx context.Context, keyOrToken string) error {
 	zapFieldDebridSite := zap.String("debridSite", "RealDebrid")
-	zapFieldAPItoken := zap.String("apiToken", apiToken)
+	zapFieldAPItoken := zap.String("keyOrToken", keyOrToken)
 	c.logger.Debug("Testing token...", zapFieldDebridSite, zapFieldAPItoken)
 
 	// Check cache first.
 	// Note: Only when a token is valid a cache item was created, because a token is probably valid for another 24 hours, while when a token is invalid it's likely that the user makes a payment to RealDebrid to extend his premium status and make his token valid again *within* 24 hours.
-	created, found, err := c.tokenCache.Get(apiToken)
+	created, found, err := c.tokenCache.Get(keyOrToken)
 	if err != nil {
 		c.logger.Error("Couldn't decode token cache item", zap.Error(err), zapFieldDebridSite, zapFieldAPItoken)
 	} else if !found {
@@ -107,7 +107,7 @@ func (c *Client) TestToken(ctx context.Context, apiToken string) error {
 		return nil
 	}
 
-	resBytes, err := c.get(ctx, c.baseURL+"/rest/1.0/user", apiToken)
+	resBytes, err := c.get(ctx, c.baseURL+"/rest/1.0/user", keyOrToken)
 	if err != nil {
 		return fmt.Errorf("Couldn't fetch user info from real-debrid.com with the provided token: %v", err)
 	}
@@ -118,16 +118,16 @@ func (c *Client) TestToken(ctx context.Context, apiToken string) error {
 	c.logger.Debug("Token OK", zapFieldDebridSite, zapFieldAPItoken)
 
 	// Create cache item
-	if err = c.tokenCache.Set(apiToken); err != nil {
+	if err = c.tokenCache.Set(keyOrToken); err != nil {
 		c.logger.Error("Couldn't cache API token", zap.Error(err), zapFieldDebridSite, zapFieldAPItoken)
 	}
 
 	return nil
 }
 
-func (c *Client) CheckInstantAvailability(ctx context.Context, apiToken string, infoHashes ...string) []string {
+func (c *Client) CheckInstantAvailability(ctx context.Context, keyOrToken string, infoHashes ...string) []string {
 	zapFieldDebridSite := zap.String("debridSite", "RealDebrid")
-	zapFieldAPItoken := zap.String("apiToken", apiToken)
+	zapFieldAPItoken := zap.String("keyOrToken", keyOrToken)
 
 	// Precondition check
 	if len(infoHashes) == 0 {
@@ -186,7 +186,7 @@ func (c *Client) CheckInstantAvailability(ctx context.Context, apiToken string, 
 
 	// Only make HTTP request if we didn't find all hashes in the cache yet
 	if requestRequired {
-		resBytes, err := c.get(ctx, url, apiToken)
+		resBytes, err := c.get(ctx, url, keyOrToken)
 		if err != nil {
 			c.logger.Error("Couldn't check torrents' instant availability on real-debrid.com", zap.Error(err), zapFieldDebridSite, zapFieldAPItoken)
 		} else {
@@ -210,13 +210,13 @@ func (c *Client) CheckInstantAvailability(ctx context.Context, apiToken string, 
 	return result
 }
 
-func (c *Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, remote bool) (string, error) {
+func (c *Client) GetStreamURL(ctx context.Context, magnetURL, keyOrToken string, remote bool) (string, error) {
 	zapFieldDebridSite := zap.String("debridSite", "RealDebrid")
-	zapFieldAPItoken := zap.String("apiToken", apiToken)
+	zapFieldAPItoken := zap.String("keyOrToken", keyOrToken)
 	c.logger.Debug("Adding torrent to RealDebrid...", zapFieldDebridSite, zapFieldAPItoken)
 	data := url.Values{}
 	data.Set("magnet", magnetURL)
-	resBytes, err := c.post(ctx, c.baseURL+"/rest/1.0/torrents/addMagnet", apiToken, data)
+	resBytes, err := c.post(ctx, c.baseURL+"/rest/1.0/torrents/addMagnet", keyOrToken, data)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't add torrent to RealDebrid: %v", err)
 	}
@@ -231,7 +231,7 @@ func (c *Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, r
 	if err != nil {
 		return "", fmt.Errorf("Couldn't replace URL which was retrieved from an HTML link: %v", err)
 	}
-	resBytes, err = c.get(ctx, rdTorrentURL, apiToken)
+	resBytes, err = c.get(ctx, rdTorrentURL, keyOrToken)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't get torrent info from real-debrid.com: %v", err)
 	}
@@ -255,7 +255,7 @@ func (c *Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, r
 	c.logger.Debug("Adding torrent to RealDebrid downloads...", zapFieldDebridSite, zapFieldAPItoken)
 	data = url.Values{}
 	data.Set("files", fileID)
-	_, err = c.post(ctx, c.baseURL+"/rest/1.0/torrents/selectFiles/"+torrentID, apiToken, data)
+	_, err = c.post(ctx, c.baseURL+"/rest/1.0/torrents/selectFiles/"+torrentID, keyOrToken, data)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't add torrent to RealDebrid downloads: %v", err)
 	}
@@ -268,7 +268,7 @@ func (c *Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, r
 	waitForDownloadSeconds := 5
 	waitedForDownloadSeconds := 0
 	for torrentStatus != "downloaded" {
-		resBytes, err = c.get(ctx, rdTorrentURL, apiToken)
+		resBytes, err = c.get(ctx, rdTorrentURL, keyOrToken)
 		if err != nil {
 			return "", fmt.Errorf("Couldn't get torrent info from real-debrid.com: %v", err)
 		}
@@ -319,7 +319,7 @@ func (c *Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, r
 	if remote {
 		data.Set("remote", "1")
 	}
-	resBytes, err = c.post(ctx, c.baseURL+"/rest/1.0/unrestrict/link", apiToken, data)
+	resBytes, err = c.post(ctx, c.baseURL+"/rest/1.0/unrestrict/link", keyOrToken, data)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't unrestrict link: %v", err)
 	}
@@ -329,12 +329,12 @@ func (c *Client) GetStreamURL(ctx context.Context, magnetURL, apiToken string, r
 	return streamURL, nil
 }
 
-func (c *Client) get(ctx context.Context, url, apiToken string) ([]byte, error) {
+func (c *Client) get(ctx context.Context, url, keyOrToken string) ([]byte, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't create GET request: %v", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+apiToken)
+	req.Header.Set("Authorization", "Bearer "+keyOrToken)
 	for headerKey, headerVal := range c.extraHeaders {
 		req.Header.Add(headerKey, headerVal)
 	}
@@ -365,12 +365,12 @@ func (c *Client) get(ctx context.Context, url, apiToken string) ([]byte, error) 
 	return ioutil.ReadAll(res.Body)
 }
 
-func (c *Client) post(ctx context.Context, url, apiToken string, data url.Values) ([]byte, error) {
+func (c *Client) post(ctx context.Context, url, keyOrToken string, data url.Values) ([]byte, error) {
 	req, err := http.NewRequest("POST", url, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't create POST request: %v", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+apiToken)
+	req.Header.Set("Authorization", "Bearer "+keyOrToken)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	for headerKey, headerVal := range c.extraHeaders {
 		req.Header.Add(headerKey, headerVal)
