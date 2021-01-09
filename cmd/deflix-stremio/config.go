@@ -30,6 +30,7 @@ type config struct {
 	BaseURLad            string        `json:"baseURLad"`
 	BaseURLpm            string        `json:"baseURLpm"`
 	LogLevel             string        `json:"logLevel"`
+	LogEncoding          string        `json:"logEncoding"`
 	LogFoundTorrents     bool          `json:"logFoundTorrents"`
 	RootURL              string        `json:"rootURL"`
 	ExtraHeadersXD       []string      `json:"extraHeadersXD"`
@@ -72,6 +73,7 @@ func parseConfig(logger *zap.Logger) config {
 		baseURLad            = flag.String("baseURLad", "https://api.alldebrid.com", "Base URL for AllDebrid")
 		baseURLpm            = flag.String("baseURLpm", "https://www.premiumize.me/api", "Base URL for Premiumize")
 		logLevel             = flag.String("logLevel", "debug", `Log level to show only logs with the given and more severe levels. Can be "debug", "info", "warn", "error".`)
+		logEncoding          = flag.String("logEncoding", "console", `Log encoding. Can be "console" or "json", where "json" makes more sense when using centralized logging solutions like ELK, Graylog or Loki.`)
 		logFoundTorrents     = flag.Bool("logFoundTorrents", false, "Set to true to log each single torrent that was found by one of the torrent site clients (with DEBUG level)")
 		rootURL              = flag.String("rootURL", "https://www.deflix.tv", "Redirect target for the root")
 		extraHeadersXD       = flag.String("extraHeadersXD", "", `Additional HTTP request headers to set for requests to RealDebrid, AllDebrid and Premiumize, in a format like "X-Foo: bar", separated by newline characters ("\n")`)
@@ -232,6 +234,13 @@ func parseConfig(logger *zap.Logger) config {
 	}
 	result.LogLevel = *logLevel
 
+	if !isArgSet("logEncoding") {
+		if val, ok := os.LookupEnv(*envPrefix + "LOG_ENCODING"); ok {
+			*logEncoding = val
+		}
+	}
+	result.LogEncoding = *logEncoding
+
 	if !isArgSet("logFoundTorrents") {
 		if val, ok := os.LookupEnv(*envPrefix + "LOG_FOUND_TORRENTS"); ok {
 			if *logFoundTorrents, err = strconv.ParseBool(val); err != nil {
@@ -389,6 +398,10 @@ func (c *config) validate(logger *zap.Logger) {
 			c.OAUTH2authorizeURLrd == "" || c.OAUTH2clientIDrd == "" || c.OAUTH2clientSecretRD == "" || c.OAUTH2tokenURLrd == "" ||
 			c.OAUTH2encryptionKey == "") {
 		logger.Fatal("Using OAuth2 requires setting all OAuth2 config values")
+	}
+
+	if c.LogEncoding != "console" && c.LogEncoding != "json" {
+		logger.Fatal(`logEncoding must be one of "console" or "json"`, zap.String("logEncoding", c.LogEncoding))
 	}
 }
 

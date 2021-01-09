@@ -77,7 +77,7 @@ func TestRedis(t *testing.T) {
 	// defer deferFunc()
 	ip, port := "localhost", "6379"
 
-	logger, err := stremio.NewLogger("debug")
+	logger, err := stremio.NewLogger("debug", "")
 	require.NoError(t, err)
 
 	// Type: torrent result slice (for redirect cache use case)

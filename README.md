@@ -127,6 +127,8 @@ Usage of deflix-stremio:
         Additional HTTP request headers to set for requests to RealDebrid, AllDebrid and Premiumize, in a format like "X-Foo: bar", separated by newline characters ("\n")
   -imdb2metaAddr string
         Address of the imdb2meta gRPC server. Won't be used if empty.
+  -logEncoding string
+        Log encoding. Can be "console" or "json", where "json" makes more sense when using centralized logging solutions like ELK, Graylog or Loki. (default "console")
   -logFoundTorrents
         Set to true to log each single torrent that was found by one of the torrent site clients (with DEBUG level)
   -logLevel string
