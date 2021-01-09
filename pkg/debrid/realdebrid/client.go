@@ -344,6 +344,7 @@ func (c *Client) get(ctx context.Context, url, keyOrToken string) ([]byte, error
 		req.Header.Add(headerKey, headerVal)
 	}
 
+	c.logger.Debug("Sending request to RealDebrid", zap.String("request", fmt.Sprintf("%+v", req)))
 	res, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't send GET request: %v", err)
@@ -383,6 +384,7 @@ func (c *Client) post(ctx context.Context, url, keyOrToken string, data url.Valu
 		req.Header.Add(headerKey, headerVal)
 	}
 
+	c.logger.Debug("Sending request to RealDebrid", zap.String("request", fmt.Sprintf("%+v", req)))
 	res, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't send POST request: %v", err)

@@ -301,6 +301,7 @@ func (c *Client) get(ctx context.Context, url, apiKey string) ([]byte, error) {
 	fakeVersion := strconv.Itoa(rand.Intn(10000))
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0."+fakeVersion+".149 Safari/537.36")
 
+	c.logger.Debug("Sending request to AllDebrid", zap.String("request", fmt.Sprintf("%+v", req)))
 	res, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't send GET request: %v", err)
@@ -333,6 +334,7 @@ func (c *Client) post(ctx context.Context, url, apiKey string, data url.Values) 
 	fakeVersion := strconv.Itoa(rand.Intn(10000))
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0."+fakeVersion+".149 Safari/537.36")
 
+	c.logger.Debug("Sending request to AllDebrid", zap.String("request", fmt.Sprintf("%+v", req)))
 	res, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't send POST request: %v", err)
