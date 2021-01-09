@@ -40,7 +40,7 @@ func createOAUTH2initHandler(confRD, confPM oauth2.Config, isHTTPS bool, logger 
 		}
 		statusLength := randInt.Add(randInt, big.NewInt(5)) // 5-10
 		if !statusLength.IsUint64() {
-			logger.Error("Random status length can't be represendted as uint64", zap.Any("statusLength", statusLength))
+			logger.Error("Random status length can't be represendted as uint64", zap.String("statusLength", statusLength.String()))
 			return c.SendStatus(fiber.StatusInternalServerError)
 		}
 		b := make([]byte, statusLength.Uint64())
