@@ -47,6 +47,7 @@ type config struct {
 	OAUTH2clientSecretRD string        `json:"oauth2clientSecretRD"`
 	OAUTH2clientSecretPM string        `json:"oauth2clientSecretPM"`
 	OAUTH2encryptionKey  string        `json:"oauth2encryptionKey"`
+	ForwardOriginIP      bool          `json:"forwardOriginIP"`
 	EnvPrefix            string        `json:"envPrefix"`
 }
 
@@ -90,6 +91,7 @@ func parseConfig(logger *zap.Logger) config {
 		oauth2clientSecretRD = flag.String("oauth2clientSecretRD", "", "Client secret for deflix-stremio on RealDebrid")
 		oauth2clientSecretPM = flag.String("oauth2clientSecretPM", "", "Client secret for deflix-stremio on Premiumize")
 		oauth2encryptionKey  = flag.String("oauth2encryptionKey", "", "OAuth2 data encryption key")
+		forwardOriginIP      = flag.Bool("forwardOriginIP", false, `Forward the user's original IP address to RealDebrid and Premiumize. The first "X-Forwarded-For" entry will be used.`)
 		envPrefix            = flag.String("envPrefix", "", "Prefix for environment variables")
 	)
 
@@ -364,6 +366,15 @@ func parseConfig(logger *zap.Logger) config {
 		}
 	}
 	result.OAUTH2encryptionKey = *oauth2encryptionKey
+
+	if !isArgSet("forwardOriginIP") {
+		if val, ok := os.LookupEnv(*envPrefix + "FORWARD_ORIGIN_IP"); ok {
+			if *forwardOriginIP, err = strconv.ParseBool(val); err != nil {
+				logger.Fatal("Couldn't convert environment variable from string to bool", zap.Error(err), zap.String("envVar", "FORWARD_ORIGIN_IP"))
+			}
+		}
+	}
+	result.ForwardOriginIP = *forwardOriginIP
 
 	return result
 }

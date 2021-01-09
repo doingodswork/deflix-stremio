@@ -163,7 +163,7 @@ func createStreamItem(ctx context.Context, config config, encodedUserData string
 	return stream
 }
 
-func createRedirectHandler(redirectCache, streamCache goCacher, rdClient *realdebrid.Client, adClient *alldebrid.Client, pmClient *premiumize.Client, logger *zap.Logger) fiber.Handler {
+func createRedirectHandler(redirectCache, streamCache goCacher, rdClient *realdebrid.Client, adClient *alldebrid.Client, pmClient *premiumize.Client, forwardOriginIP bool, logger *zap.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		logger.Debug("redirectHandler called", zap.String("request", fmt.Sprintf("%+v", c.Request())))
 
@@ -231,6 +231,9 @@ func createRedirectHandler(redirectCache, streamCache goCacher, rdClient *realde
 		var streamURL string
 		var err error
 		keyOrToken := c.Locals("deflix_keyOrToken").(string)
+		if forwardOriginIP && len(c.IPs()) > 0 {
+			c.Locals("debrid_originIP", c.IPs()[0])
+		}
 		for _, torrent := range torrents {
 			if userData.RDtoken != "" || userData.RDoauth2 != "" {
 				streamURL, err = rdClient.GetStreamURL(c.Context(), torrent.MagnetURL, keyOrToken, userData.RDremote)
@@ -263,7 +266,7 @@ func createRedirectHandler(redirectCache, streamCache goCacher, rdClient *realde
 	}
 }
 
-func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher, rdClient *realdebrid.Client, adClient *alldebrid.Client, pmClient *premiumize.Client, goCaches map[string]*gocache.Cache, logger *zap.Logger) fiber.Handler {
+func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher, rdClient *realdebrid.Client, adClient *alldebrid.Client, pmClient *premiumize.Client, goCaches map[string]*gocache.Cache, forwardOriginIP bool, logger *zap.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		logger.Debug("statusHandler called", zap.String("request", fmt.Sprintf("%+v", c.Request())))
 
@@ -317,6 +320,12 @@ func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher,
 		wg.Wait()
 		res = strings.TrimRight(res, ",\n") + "\n"
 		res += "\t" + `},` + "\n"
+
+		// Check debrid clients
+
+		if forwardOriginIP && len(c.IPs()) > 0 {
+			c.Locals("debrid_originIP", c.IPs()[0])
+		}
 
 		// Check RD client
 

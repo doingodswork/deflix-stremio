@@ -5,10 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -24,15 +22,18 @@ type ClientOptions struct {
 	CacheAge     time.Duration
 	ExtraHeaders []string
 	UseOAUTH2    bool
+	// When setting this to true, the user's original IP address is read from the context parameter with the key "debrid_originIP".
+	ForwardOriginIP bool
 }
 
-func NewClientOpts(baseURL string, timeout, cacheAge time.Duration, extraHeaders []string, useOAUTH2 bool) ClientOptions {
+func NewClientOpts(baseURL string, timeout, cacheAge time.Duration, extraHeaders []string, useOAUTH2 bool, forwardOriginIP bool) ClientOptions {
 	return ClientOptions{
-		BaseURL:      baseURL,
-		Timeout:      timeout,
-		CacheAge:     cacheAge,
-		ExtraHeaders: extraHeaders,
-		UseOAUTH2:    useOAUTH2,
+		BaseURL:         baseURL,
+		Timeout:         timeout,
+		CacheAge:        cacheAge,
+		ExtraHeaders:    extraHeaders,
+		UseOAUTH2:       useOAUTH2,
+		ForwardOriginIP: forwardOriginIP,
 	}
 }
 
@@ -52,6 +53,7 @@ type Client struct {
 	cacheAge          time.Duration
 	extraHeaders      map[string]string
 	useOAUTH2         bool
+	forwardOriginIP   bool
 	logger            *zap.Logger
 }
 
@@ -230,6 +232,11 @@ func (c *Client) GetStreamURL(ctx context.Context, magnetURL, keyOrToken string)
 	c.logger.Debug("Adding magnet to Premiumize...", zapFieldDebridSite, zapFieldAPIkey)
 	data := url.Values{}
 	data.Set("src", magnetURL)
+	// Different from RealDebrid, Premiumize asks for the original IP only for directdl requests
+	if c.forwardOriginIP && ctx.Value("debrid_originIP") != nil {
+		ip := ctx.Value("debrid_originIP").(string)
+		data.Add("download_ip", ip)
+	}
 	resBytes, err := c.post(ctx, c.baseURL+"/transfer/directdl", keyOrToken, data, true)
 	if err != nil {
 		return "", fmt.Errorf("Couldn't add magnet to Premiumize: %v", err)
@@ -264,9 +271,6 @@ func (c *Client) get(ctx context.Context, url, keyOrToken string) ([]byte, error
 	for headerKey, headerVal := range c.extraHeaders {
 		req.Header.Add(headerKey, headerVal)
 	}
-	// In case Premiumize blocks requests based on User-Agent
-	fakeVersion := strconv.Itoa(rand.Intn(10000))
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0."+fakeVersion+".149 Safari/537.36")
 
 	res, err := c.httpClient.Do(req)
 	if err != nil {
@@ -314,9 +318,6 @@ func (c *Client) post(ctx context.Context, urlString, keyOrToken string, data ur
 	for headerKey, headerVal := range c.extraHeaders {
 		req.Header.Add(headerKey, headerVal)
 	}
-	// In case Premiumize blocks requests based on User-Agent
-	fakeVersion := strconv.Itoa(rand.Intn(10000))
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0."+fakeVersion+".149 Safari/537.36")
 
 	res, err := c.httpClient.Do(req)
 	if err != nil {

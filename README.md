@@ -125,6 +125,8 @@ Usage of deflix-stremio:
         Prefix for environment variables
   -extraHeadersXD string
         Additional HTTP request headers to set for requests to RealDebrid, AllDebrid and Premiumize, in a format like "X-Foo: bar", separated by newline characters ("\n")
+  -forwardOriginIP
+        Forward the user's original IP address to RealDebrid and Premiumize. The first "X-Forwarded-For" entry will be used.
   -imdb2metaAddr string
         Address of the imdb2meta gRPC server. Won't be used if empty.
   -logEncoding string
