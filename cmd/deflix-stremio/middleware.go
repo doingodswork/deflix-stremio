@@ -36,10 +36,11 @@ func createAuthMiddleware(rdClient *realdebrid.Client, adClient *alldebrid.Clien
 		// Note: Even when useOAUTH2 is true, some Stremio clients might still use the API key from the past.
 		if useOAUTH2 && (userData.RDoauth2 != "" || userData.PMoauth2 != "") {
 			if userData.RDoauth2 != "" {
-				accessToken, err := getAccessTokenForOAuth2data(c, confRD, aesKey, userData.RDoauth2, logger)
+				accessToken, err, fiberErr := getAccessTokenForOAuth2data(c, confRD, aesKey, userData.RDoauth2, logger)
 				if err != nil {
+					logger.Warn("Couldn't get access token for OAUTH2 data", zap.Error(err))
 					// HTTP responses are already handled
-					return err
+					return fiberErr
 				}
 				if err = rdClient.TestToken(c.Context(), accessToken); err != nil {
 					logger.Info("Access token is invalid or validation failed", zap.Error(err))
@@ -47,10 +48,11 @@ func createAuthMiddleware(rdClient *realdebrid.Client, adClient *alldebrid.Clien
 				}
 				c.Locals("deflix_keyOrToken", accessToken)
 			} else if userData.PMoauth2 != "" {
-				accessToken, err := getAccessTokenForOAuth2data(c, confPM, aesKey, userData.PMoauth2, logger)
+				accessToken, err, fiberErr := getAccessTokenForOAuth2data(c, confPM, aesKey, userData.PMoauth2, logger)
 				if err != nil {
+					logger.Warn("Couldn't get access token for OAUTH2 data", zap.Error(err))
 					// HTTP responses are already handled
-					return err
+					return fiberErr
 				}
 				c.Locals("debrid_OAUTH2", struct{}{})
 				if err = pmClient.TestAPIkey(c.Context(), accessToken); err != nil {
@@ -93,22 +95,25 @@ func createAuthMiddleware(rdClient *realdebrid.Client, adClient *alldebrid.Clien
 	}
 }
 
-func getAccessTokenForOAuth2data(c *fiber.Ctx, conf oauth2.Config, aesKey []byte, oauth2data string, logger *zap.Logger) (string, error) {
+// getAccessTokenForOAuth2data is a convenience function that decrypts the OAUTH2 data and returns a valid (potentially refreshed) access token,
+// while taking care of Fiber responses in error cases.
+// The first error return value is the error that occurred inside this function. The second is from sending the response via Fiber.
+func getAccessTokenForOAuth2data(c *fiber.Ctx, conf oauth2.Config, aesKey []byte, oauth2data string, logger *zap.Logger) (string, error, error) {
 	ciphertext, err := base64.RawURLEncoding.DecodeString(oauth2data)
 	if err != nil {
 		// It's most likely a client-side encoding error
-		return "", c.SendStatus(fiber.StatusBadRequest)
+		return "", err, c.SendStatus(fiber.StatusBadRequest)
 	}
 
 	block, err := aes.NewCipher(aesKey)
 	if err != nil {
 		logger.Warn("Couldn't create block cipher from AES key", zap.Error(err))
-		return "", c.SendStatus(fiber.StatusInternalServerError)
+		return "", err, c.SendStatus(fiber.StatusInternalServerError)
 	}
 	aesgcm, err := cipher.NewGCM(block)
 	if err != nil {
 		logger.Error("Couldn't create AES GCM", zap.Error(err))
-		return "", c.SendStatus(fiber.StatusInternalServerError)
+		return "", err, c.SendStatus(fiber.StatusInternalServerError)
 	}
 	// The nonce is prepended
 	nonce := ciphertext[:aesgcm.NonceSize()]
@@ -116,19 +121,19 @@ func getAccessTokenForOAuth2data(c *fiber.Ctx, conf oauth2.Config, aesKey []byte
 
 	tokenJSON, err := aesgcm.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		return "", c.SendStatus(fiber.StatusForbidden)
+		return "", err, c.SendStatus(fiber.StatusForbidden)
 	}
 	token := &oauth2.Token{}
 	if err = json.Unmarshal(tokenJSON, token); err != nil {
 		// How likely is it that if the previous decoding worked, that it's now the client's fault vs ours?
-		return "", c.SendStatus(fiber.StatusBadRequest)
+		return "", err, c.SendStatus(fiber.StatusBadRequest)
 	}
 	tokenSource := conf.TokenSource(c.Context(), token)
 	// The token source automatically refreshes the token with the refresh token
 	validToken, err := tokenSource.Token()
 	if err != nil {
-		return "", c.SendStatus(fiber.StatusForbidden)
+		return "", err, c.SendStatus(fiber.StatusForbidden)
 	}
 
-	return validToken.AccessToken, nil
+	return validToken.AccessToken, nil, nil
 }
