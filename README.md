@@ -47,27 +47,6 @@ This addon is a remote addon, so it's an HTTP web service and Stremio just sends
 
 Here's the official Deflix website, that guides you through the installation: <https://www.deflix.tv/stremio>
 
-But it's just a few simple steps, so you can do it without the website as well:
-
-1. Get your debrid service API key
-   - For RealDebrid: <https://real-debrid.com/apitoken>
-   - For AllDebrid: <https://alldebrid.com/apikeys/>
-   - For Premiumize: <https://www.premiumize.me/account>
-2. Create a JSON object with the data, like this:
-   - For RealDebrid: `{"rdToken":"YOUR-API-TOKEN"}` or with an additional `"remote":true` (see below)
-   - For AllDebrid: `{"adKey":"YOUR-API-KEY"}`
-   - For Premiumize: `{"pmKey":"YOUR-API-KEY"}`
-3. Encode the JSON as Base64URL, for example on <https://base64.guru/standards/base64url/encode> or <https://simplycalc.com/base64url-encode.php>
-   - This becomes something like `eyJyZFRva2VuIjoiWU9VUi1BUEktVE9LRU4ifQ` or with a padding suffix (`==` in this case)  
-     > Note: It has to be Base64URL, not Base64. For more info you can read [RFC 4648](https://tools.ietf.org/html/rfc4648#section-5).
-4. Enter the addon URL in the search box of the addons section of Stremio, like this:
-   - `https://stremio.deflix.tv/eyJyZFRva2VuIjoiWU9VUi1BUEktVE9LRU4ifQ/manifest.json`  
-     > ⚠️ Replace `eyJyZFRva2VuIjoiWU9VUi1BUEktVE9LRU4ifQ` by your own encoded user data!
-
-That's it!
-
-Regarding `"remote":true` for RealDebrid: This will lead to your "remote traffic" being used, which allows you to share your RealDebrid account (and API token) with friends. (⚠️ When sharing your account and *not* using remote traffic, you might get suspended - see RealDebrid's [terms](https://real-debrid.com/terms) and [faq](https://real-debrid.com/faq)!)
-
 Run locally
 -----------
 
@@ -76,8 +55,9 @@ Alternatively you can also run the addon locally and use that in Stremio. The ad
 You can use one of the precompiled binaries from GitHub:
 
 1. Download the binary for your OS from <https://github.com/doingodswork/deflix-stremio/releases>
-2. Simply run the executable binary
-3. To stop the program press `Ctrl-C` (or `⌃-C` on macOS)
+2. Simply run the executable binary (`deflix-stremio.exe` for Windows, `deflix-stremio` for macOS and Linux)
+3. Visit <http://localhost:8080/configure> in the browser to configure and install the addon in Stremio
+4. To stop the program press `Ctrl-C` (or `⌃-C` on macOS) in the terminal windows where `deflix-stremio` is running
 
 Or use Docker:
 
@@ -85,11 +65,9 @@ Or use Docker:
 2. Start the container: `docker run --name deflix-stremio -p 8080:8080 doingodswork/deflix-stremio`
    - > Note: `Ctrl-C` only detaches from the container. It doesn't stop it.
    - When detached, you can attach again with `docker attach deflix-stremio`
-3. To stop the container: `docker stop deflix-stremio`
-4. To start the (still existing) container again: `docker start deflix-stremio`
-
-And then you can visit the addon configuration page in your browser to install the locally running addon in Stremio: <http://localhost:8080/configure>  
-Or like mentioned in the [Install section](#install) you can generate the encoded user data manually and paste the URL into the search box of the addons section of Stremio.
+3. Visit <http://localhost:8080/configure> in the browser to configure and install the addon in Stremio
+4. To stop the container: `docker stop deflix-stremio`
+5. To start the (still existing) container again: `docker start deflix-stremio`
 
 ### Configuration
 
