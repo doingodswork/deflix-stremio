@@ -21,13 +21,15 @@ func createAuthMiddleware(rdClient *realdebrid.Client, adClient *alldebrid.Clien
 		rCtx := c.Context()
 		udString := c.Params("userData", "")
 		if udString == "" {
+			// Should never occur, because the manifest states that configuration is required and go-stremio's route matcher middleware filters these out.
+			logger.Error("User data is empty, but this should have been handled by go-stremio's router matcher middleware alraedy")
 			return c.SendStatus(fiber.StatusUnauthorized)
 		}
 		userData, err := decodeUserData(udString, logger)
 		if err != nil {
-			// It's most likely a client-side encoding error
+			// The error is already logged in the decodeUserData function.
+			// It's most likely a client-side encoding error.
 			return c.SendStatus(fiber.StatusBadRequest)
-			// The error is already logged by decodeUserData
 		}
 
 		if useOAUTH2 {
@@ -42,11 +44,13 @@ func createAuthMiddleware(rdClient *realdebrid.Client, adClient *alldebrid.Clien
 					return err
 				}
 				if err = rdClient.TestToken(c.Context(), accessToken); err != nil {
+					logger.Info("Access token is invalid or validation failed", zap.Error(err))
 					return c.SendStatus(fiber.StatusForbidden)
 				}
 				c.Locals("deflix_keyOrToken", accessToken)
 			} else if userData.ADkey != "" {
 				if err := adClient.TestAPIkey(rCtx, userData.ADkey); err != nil {
+					logger.Info("API key is invalid or validation failed", zap.Error(err))
 					return c.SendStatus(fiber.StatusForbidden)
 				}
 				c.Locals("deflix_keyOrToken", userData.ADkey)
@@ -57,6 +61,7 @@ func createAuthMiddleware(rdClient *realdebrid.Client, adClient *alldebrid.Clien
 					return err
 				}
 				if err = pmClient.TestAPIkey(c.Context(), accessToken); err != nil {
+					logger.Info("Access token is invalid or validation failed", zap.Error(err))
 					return c.SendStatus(fiber.StatusForbidden)
 				}
 				c.Locals("deflix_keyOrToken", accessToken)
@@ -68,16 +73,19 @@ func createAuthMiddleware(rdClient *realdebrid.Client, adClient *alldebrid.Clien
 			// We expect a user to have *either* an RD token *or* an AD key *or* a Premiumize key
 			if userData.RDtoken != "" {
 				if err := rdClient.TestToken(rCtx, userData.RDtoken); err != nil {
+					logger.Info("API key is invalid or validation failed", zap.Error(err))
 					return c.SendStatus(fiber.StatusForbidden)
 				}
 				c.Locals("deflix_keyOrToken", userData.RDtoken)
 			} else if userData.ADkey != "" {
 				if err := adClient.TestAPIkey(rCtx, userData.ADkey); err != nil {
+					logger.Info("API key is invalid or validation failed", zap.Error(err))
 					return c.SendStatus(fiber.StatusForbidden)
 				}
 				c.Locals("deflix_keyOrToken", userData.ADkey)
 			} else if userData.PMkey != "" {
 				if err := pmClient.TestAPIkey(rCtx, userData.PMkey); err != nil {
+					logger.Info("API key is invalid or validation failed", zap.Error(err))
 					return c.SendStatus(fiber.StatusForbidden)
 				}
 				c.Locals("deflix_keyOrToken", userData.PMkey)
