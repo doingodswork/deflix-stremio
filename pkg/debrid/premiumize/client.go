@@ -21,18 +21,16 @@ type ClientOptions struct {
 	Timeout      time.Duration
 	CacheAge     time.Duration
 	ExtraHeaders []string
-	UseOAUTH2    bool
 	// When setting this to true, the user's original IP address is read from the context parameter with the key "debrid_originIP".
 	ForwardOriginIP bool
 }
 
-func NewClientOpts(baseURL string, timeout, cacheAge time.Duration, extraHeaders []string, useOAUTH2 bool, forwardOriginIP bool) ClientOptions {
+func NewClientOpts(baseURL string, timeout, cacheAge time.Duration, extraHeaders []string, forwardOriginIP bool) ClientOptions {
 	return ClientOptions{
 		BaseURL:         baseURL,
 		Timeout:         timeout,
 		CacheAge:        cacheAge,
 		ExtraHeaders:    extraHeaders,
-		UseOAUTH2:       useOAUTH2,
 		ForwardOriginIP: forwardOriginIP,
 	}
 }
@@ -52,7 +50,6 @@ type Client struct {
 	availabilityCache debrid.Cache
 	cacheAge          time.Duration
 	extraHeaders      map[string]string
-	useOAUTH2         bool
 	forwardOriginIP   bool
 	logger            *zap.Logger
 }
@@ -88,7 +85,6 @@ func NewClient(opts ClientOptions, apiKeyCache, availabilityCache debrid.Cache, 
 		availabilityCache: availabilityCache,
 		cacheAge:          opts.CacheAge,
 		extraHeaders:      extraHeaderMap,
-		useOAUTH2:         opts.UseOAUTH2,
 		logger:            logger,
 	}, nil
 }
@@ -259,7 +255,8 @@ func (c *Client) GetStreamURL(ctx context.Context, magnetURL, keyOrToken string)
 }
 
 func (c *Client) get(ctx context.Context, url, keyOrToken string) ([]byte, error) {
-	if c.useOAUTH2 {
+	useOAUTH2 := ctx.Value("debrid_OAUTH2") != nil
+	if useOAUTH2 {
 		url += "?access_token=" + keyOrToken
 	} else {
 		url += "?apikey=" + keyOrToken
@@ -292,7 +289,8 @@ func (c *Client) get(ctx context.Context, url, keyOrToken string) ([]byte, error
 }
 
 func (c *Client) post(ctx context.Context, urlString, keyOrToken string, data url.Values, form bool) ([]byte, error) {
-	if c.useOAUTH2 {
+	useOAUTH2 := ctx.Value("debrid_OAUTH2") != nil
+	if useOAUTH2 {
 		urlString += "?access_token=" + keyOrToken
 	} else {
 		urlString += "?apikey=" + keyOrToken

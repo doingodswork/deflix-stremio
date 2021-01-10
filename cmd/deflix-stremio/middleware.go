@@ -5,6 +5,7 @@ import (
 	"crypto/cipher"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 
 	"github.com/gofiber/fiber/v2"
 	"go.uber.org/zap"
@@ -32,11 +33,8 @@ func createAuthMiddleware(rdClient *realdebrid.Client, adClient *alldebrid.Clien
 			return c.SendStatus(fiber.StatusBadRequest)
 		}
 
-		if useOAUTH2 {
-			if userData.RDoauth2 == "" && userData.ADkey == "" && userData.PMoauth2 == "" {
-				return c.SendStatus(fiber.StatusUnauthorized)
-			}
-			// We expect a user to have *either* RD OAuth2 data *or* an AD key *or* Premiumize OAuth2 data
+		// Note: Even when useOAUTH2 is true, some Stremio clients might still use the API key from the past.
+		if useOAUTH2 && (userData.RDoauth2 != "" || userData.PMoauth2 != "") {
 			if userData.RDoauth2 != "" {
 				accessToken, err := getAccessTokenForOAuth2data(c, confRD, aesKey, userData.RDoauth2, logger)
 				if err != nil {
@@ -48,18 +46,13 @@ func createAuthMiddleware(rdClient *realdebrid.Client, adClient *alldebrid.Clien
 					return c.SendStatus(fiber.StatusForbidden)
 				}
 				c.Locals("deflix_keyOrToken", accessToken)
-			} else if userData.ADkey != "" {
-				if err := adClient.TestAPIkey(rCtx, userData.ADkey); err != nil {
-					logger.Info("API key is invalid or validation failed", zap.Error(err))
-					return c.SendStatus(fiber.StatusForbidden)
-				}
-				c.Locals("deflix_keyOrToken", userData.ADkey)
 			} else if userData.PMoauth2 != "" {
 				accessToken, err := getAccessTokenForOAuth2data(c, confPM, aesKey, userData.PMoauth2, logger)
 				if err != nil {
 					// HTTP responses are already handled
 					return err
 				}
+				c.Locals("debrid_OAUTH2", struct{}{})
 				if err = pmClient.TestAPIkey(c.Context(), accessToken); err != nil {
 					logger.Info("Access token is invalid or validation failed", zap.Error(err))
 					return c.SendStatus(fiber.StatusForbidden)
@@ -67,8 +60,9 @@ func createAuthMiddleware(rdClient *realdebrid.Client, adClient *alldebrid.Clien
 				c.Locals("deflix_keyOrToken", accessToken)
 			}
 		} else {
-			if userData.RDtoken == "" && userData.ADkey == "" && userData.PMkey == "" {
-				return c.SendStatus(fiber.StatusUnauthorized)
+			// Log "legacy" info. Only for RD and PM, because we're still using API keys for AD even if useOAUTH2 is true.
+			if useOAUTH2 && (userData.RDtoken != "" || userData.PMkey != "") {
+				logger.Info("Using OAUTH2, but a client used an API key")
 			}
 			// We expect a user to have *either* an RD token *or* an AD key *or* a Premiumize key
 			if userData.RDtoken != "" {
@@ -89,6 +83,9 @@ func createAuthMiddleware(rdClient *realdebrid.Client, adClient *alldebrid.Clien
 					return c.SendStatus(fiber.StatusForbidden)
 				}
 				c.Locals("deflix_keyOrToken", userData.PMkey)
+			} else {
+				logger.Info("API key is empty", zap.String("userData", fmt.Sprintf("%+v", userData)))
+				return c.SendStatus(fiber.StatusUnauthorized)
 			}
 		}
 

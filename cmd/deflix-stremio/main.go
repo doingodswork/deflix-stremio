@@ -539,7 +539,7 @@ func initClients(config config, logger *zap.Logger) {
 	rarbgClientOpts := imdb2torrent.NewRARBGclientOpts(config.BaseURLrarbg, timeout, config.MaxAgeTorrents)
 	rdClientOpts := realdebrid.NewClientOpts(config.BaseURLrd, timeout, config.CacheAgeXD, config.ExtraHeadersXD, config.ForwardOriginIP)
 	adClientOpts := alldebrid.NewClientOpts(config.BaseURLad, timeout, config.CacheAgeXD, config.ExtraHeadersXD)
-	pmClientOpts := premiumize.NewClientOpts(config.BaseURLpm, timeout, config.CacheAgeXD, config.ExtraHeadersXD, config.UseOAUTH2, config.ForwardOriginIP)
+	pmClientOpts := premiumize.NewClientOpts(config.BaseURLpm, timeout, config.CacheAgeXD, config.ExtraHeadersXD, config.ForwardOriginIP)
 
 	tpbClient, err := imdb2torrent.NewTPBclient(tpbClientOpts, torrentCache, metaFetcher, logger, config.LogFoundTorrents)
 	if err != nil {
