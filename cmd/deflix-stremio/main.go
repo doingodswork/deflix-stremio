@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"io/ioutil"
 	"math/rand"
@@ -20,7 +21,6 @@ import (
 	"github.com/spf13/afero"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
-	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/oauth2"
 
 	"github.com/deflix-tv/go-stremio"
@@ -307,16 +307,13 @@ func main() {
 				TokenURL: config.OAUTH2tokenURLpm,
 			},
 		}
-		logger.Info("Starting to hash the OAuth2 encryption key...")
-		hashStart := time.Now()
-		// Default bcrypt "cost" is 10, but we're only hashing this one time at startup, so we can spend a second or so.
-		bcryptKey, err := bcrypt.GenerateFromPassword([]byte(config.OAUTH2encryptionKey), 14)
-		if err != nil {
-			logger.Fatal("Couldn't hash OAuth2 encryption key via bcrypt", zap.Error(err))
-		}
-		logger.Info("Finished hashing the OAuth2 encryption key.", zap.Duration("duration", time.Since(hashStart)))
-		// The bcrypt result is 60 bytes. We want 32 bytes for AES-256. The initial bytes in bcrypt are the same, so we use the last ones.
-		aesKey = bcryptKey[28:60]
+		// We need 32 bytes for AES-256, but the provided password might not be 32 bytes long.
+		// => Simply hash the password.
+		// Hashing it doesn't reduce the security. Also: Using a slow hash (like bcrypt) doesn't help much,
+		// because we don't store the hash anywhere where an attacker could start calculating hashes of values in dictionaries to find a match.
+		hash := sha256.Sum256([]byte(config.OAUTH2encryptionKey))
+		// SHA-256 result is 32 bytes, exactly as many as we need.
+		aesKey = hash[:]
 	}
 	authMiddleware := createAuthMiddleware(rdClient, adClient, pmClient, config.UseOAUTH2, confRD, confPM, aesKey, logger)
 	addon.AddMiddleware("/:userData/manifest.json", authMiddleware)
