@@ -40,18 +40,18 @@ const (
 var manifest = stremio.Manifest{
 	ID:          "tv.deflix.stremio",
 	Name:        "Deflix - Debrid flicks",
-	Description: "Finds movies on YTS, The Pirate Bay, 1337x, RARBG and ibit and automatically turns them into cached HTTP streams with a debrid service like RealDebrid, AllDebrid or Premiumize, for high speed 4k streaming and no P2P uploading (!). For more info see https://www.deflix.tv",
+	Description: "Finds movies and TV shows on YTS, The Pirate Bay, 1337x, RARBG and ibit and automatically turns them into cached HTTP streams with a debrid service like RealDebrid, AllDebrid or Premiumize, for high speed 4k streaming and no P2P uploading (!). For more info see https://www.deflix.tv",
 	Version:     version,
 
 	ResourceItems: []stremio.ResourceItem{
 		{
 			Name:  "stream",
-			Types: []string{"movie"},
+			Types: []string{"movie", "series"},
 			// Shouldn't be required as long as they're defined globally in the manifest, but some Stremio clients send stream requests for non-IMDb IDs, so maybe setting this here as well helps
 			IDprefixes: []string{"tt"},
 		},
 	},
-	Types: []string{"movie"},
+	Types: []string{"movie", "series"},
 	// An empty slice is required for serializing to a JSON that Stremio expects
 	Catalogs: []stremio.CatalogItem{},
 
@@ -199,8 +199,9 @@ func main() {
 
 	// Prepare addon creation
 
-	streamHandler := createStreamHandler(config, searchClient, rdClient, adClient, pmClient, redirectCache, logger)
-	streamHandlers := map[string]stremio.StreamHandler{"movie": streamHandler}
+	movieStreamHandler := createStreamHandler(config, searchClient, rdClient, adClient, pmClient, redirectCache, false, logger)
+	tvShowStreamHandler := createStreamHandler(config, searchClient, rdClient, adClient, pmClient, redirectCache, true, logger)
+	streamHandlers := map[string]stremio.StreamHandler{"movie": movieStreamHandler, "series": tvShowStreamHandler}
 
 	var httpFS http.FileSystem
 	if config.WebConfigurePath == "" {
@@ -273,7 +274,8 @@ func main() {
 		// We already have a metaFetcher Client
 		MetaClient:      metaFetcher,
 		ConfigureHTMLfs: httpFS,
-		StreamIDregex:   "tt\\d{7,8}",
+		// Regular IMDb IDs or for TV shows (IMDbID:season:episode)
+		StreamIDregex: "(tt\\d{7,8}|tt\\d{7,8}:\\d:\\d)",
 	}
 
 	// Create addon

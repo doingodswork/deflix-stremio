@@ -59,10 +59,10 @@ func NewLeetxClient(opts LeetxClientOptions, cache Cache, metaGetter MetaGetter,
 	}
 }
 
-// Find scrapes 1337x to find torrents for the given IMDb ID.
+// FindMovie scrapes 1337x to find torrents for the given IMDb ID.
 // It uses the Stremio Cinemeta remote addon to get a movie name for a given IMDb ID, so it can search 1337x with the name.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c *leetxClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
+func (c *leetxClient) FindMovie(ctx context.Context, imdbID string) ([]Result, error) {
 	zapFieldID := zap.String("imdbID", imdbID)
 	zapFieldTorrentSite := zap.String("torrentSite", "1337x")
 
@@ -244,6 +244,14 @@ func (c *leetxClient) Find(ctx context.Context, imdbID string) ([]Result, error)
 	}
 
 	return results, nil
+}
+
+// FindTVShow scrapes 1337x to find torrents for the given IMDb ID + season + episode.
+// It uses the Stremio Cinemeta remote addon to get a TV show name for a given IMDb ID, so it can search 1337x with the name.
+// If no error occured, but there are just no torrents for the TV show yet, an empty result and *no* error are returned.
+func (c *leetxClient) FindTVShow(ctx context.Context, imdbID string, season, episode int) ([]Result, error) {
+	// TODO: Implement
+	return nil, nil
 }
 
 func (c *leetxClient) IsSlow() bool {

@@ -84,9 +84,9 @@ func NewTPBclient(opts TPBclientOptions, cache Cache, metaGetter MetaGetter, log
 	}, nil
 }
 
-// Find cals the TPB API to find torrents for the given IMDb ID.
+// FindMovie calls the TPB API to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c *tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
+func (c *tpbClient) FindMovie(ctx context.Context, imdbID string) ([]Result, error) {
 	zapFieldID := zap.String("imdbID", imdbID)
 	zapFieldTorrentSite := zap.String("torrentSite", "TPB")
 
@@ -183,6 +183,13 @@ func (c *tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 	}
 
 	return results, nil
+}
+
+// FindTVShow calls the TPB API to find torrents for the given IMDb ID + season + episode.
+// If no error occured, but there are just no torrents for the TV show yet, an empty result and *no* error are returned.
+func (c *tpbClient) FindTVShow(ctx context.Context, imdbID string, season, episode int) ([]Result, error) {
+	// TODO: Implement
+	return nil, nil
 }
 
 func (c *tpbClient) IsSlow() bool {

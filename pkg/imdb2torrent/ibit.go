@@ -64,9 +64,9 @@ func NewIbitClient(opts IbitClientOptions, cache Cache, logger *zap.Logger, logF
 	}
 }
 
-// Find scrapes ibit to find torrents for the given IMDb ID.
+// FindMovie scrapes ibit to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c *ibitClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
+func (c *ibitClient) FindMovie(ctx context.Context, imdbID string) ([]Result, error) {
 	// Lock for all requests to ibit, because of rate limiting
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -241,6 +241,13 @@ func (c *ibitClient) Find(ctx context.Context, imdbID string) ([]Result, error) 
 	}
 
 	return results, nil
+}
+
+// FindTVShow scrapes ibit to find torrents for the given IMDb ID + season + episode.
+// If no error occured, but there are just no torrents for the TV show yet, an empty result and *no* error are returned.
+func (c *ibitClient) FindTVShow(ctx context.Context, imdbID string, season, episode int) ([]Result, error) {
+	// TODO: Implement
+	return nil, nil
 }
 
 func (c *ibitClient) IsSlow() bool {

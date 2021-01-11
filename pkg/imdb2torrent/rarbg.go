@@ -63,9 +63,9 @@ func NewRARBGclient(opts RARBGclientOptions, cache Cache, logger *zap.Logger, lo
 	}
 }
 
-// Find uses RARBG' API to find torrents for the given IMDb ID.
+// FindMovie uses RARBG's API to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c *rarbgClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
+func (c *rarbgClient) FindMovie(ctx context.Context, imdbID string) ([]Result, error) {
 	zapFieldID := zap.String("imdbID", imdbID)
 	zapFieldTorrentSite := zap.String("torrentSite", "RARBG")
 
@@ -168,6 +168,13 @@ func (c *rarbgClient) Find(ctx context.Context, imdbID string) ([]Result, error)
 	}
 
 	return results, nil
+}
+
+// FindTVShow uses RARBG's API to find torrents for the given IMDb ID + season + episode.
+// If no error occured, but there are just no torrents for the TV show yet, an empty result and *no* error are returned.
+func (c *rarbgClient) FindTVShow(ctx context.Context, imdbID string, season, episode int) ([]Result, error) {
+	// TODO: Implement
+	return nil, nil
 }
 
 func (c *rarbgClient) IsSlow() bool {
