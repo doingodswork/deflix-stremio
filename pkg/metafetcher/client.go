@@ -87,7 +87,7 @@ func (c *Client) GetMovie(ctx context.Context, imdbID string) (cinemeta.Meta, er
 }
 
 // GetTVShow implements stremio.MetaFetcher.
-func (c *Client) GetTVShow(ctx context.Context, imdbID string, season int, episode int) (cinemeta.Meta, error) {
+func (c *Client) GetTVShow(ctx context.Context, imdbID string, season, episode int) (cinemeta.Meta, error) {
 	// TODO: Add support for this when using imdb2meta, not necessarily *in* imdb2meta.
 	if c.cinemetaClient != nil {
 		return c.cinemetaClient.GetTVShow(ctx, imdbID, season, episode)
@@ -95,10 +95,8 @@ func (c *Client) GetTVShow(ctx context.Context, imdbID string, season int, episo
 	return cinemeta.Meta{}, nil
 }
 
-// GetMeta implements imdb2torrent.MetaGetter.
-func (c *Client) GetMeta(ctx context.Context, imdbID string) (imdb2torrent.Meta, error) {
-	// deflix-stremio currently only supports movies, so no need to call both.
-	// TODO: Update this as soon as we support TV shows.
+// GetMovieSimple implements imdb2torrent.MetaGetter.
+func (c *Client) GetMovieSimple(ctx context.Context, imdbID string) (imdb2torrent.Meta, error) {
 	movieMeta, err := c.GetMovie(ctx, imdbID)
 	if err != nil {
 		return imdb2torrent.Meta{}, err
@@ -110,6 +108,27 @@ func (c *Client) GetMeta(ctx context.Context, imdbID string) (imdb2torrent.Meta,
 	}
 	return imdb2torrent.Meta{
 		Title: movieMeta.Name,
+		Year:  year,
+	}, nil
+}
+
+// GetTVShowSimple implements imdb2torrent.MetaGetter.
+func (c *Client) GetTVShowSimple(ctx context.Context, imdbID string, season, episode int) (imdb2torrent.Meta, error) {
+	showMeta, err := c.GetTVShow(ctx, imdbID, season, episode)
+	if err != nil {
+		return imdb2torrent.Meta{}, err
+	}
+	var year int
+	if len(showMeta.ReleaseInfo) > 4 {
+		showMeta.ReleaseInfo = showMeta.ReleaseInfo[:4]
+	}
+	year, err = strconv.Atoi(showMeta.ReleaseInfo)
+	if err != nil {
+		c.logger.Error("Couldn't convert showMeta.ReleaseInfo to int", zap.Error(err), zap.String("releaseInfo", showMeta.ReleaseInfo))
+		return imdb2torrent.Meta{}, err
+	}
+	return imdb2torrent.Meta{
+		Title: showMeta.Name,
 		Year:  year,
 	}, nil
 }

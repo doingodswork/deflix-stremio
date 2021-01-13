@@ -82,7 +82,7 @@ func (c *leetxClient) FindMovie(ctx context.Context, imdbID string) ([]Result, e
 	}
 
 	// Get movie name
-	meta, err := c.metaGetter.GetMeta(ctx, imdbID)
+	meta, err := c.metaGetter.GetMovieSimple(ctx, imdbID)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't get movie name via Cinemeta for IMDb ID %v: %v", imdbID, err)
 	}

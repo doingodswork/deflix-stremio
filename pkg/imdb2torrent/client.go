@@ -23,7 +23,8 @@ type Meta struct {
 }
 
 type MetaGetter interface {
-	GetMeta(ctx context.Context, imdbID string) (Meta, error)
+	GetMovieSimple(ctx context.Context, imdbID string) (Meta, error)
+	GetTVShowSimple(ctx context.Context, imdbID string, season, episode int) (Meta, error)
 }
 
 type MagnetSearcher interface {
@@ -211,4 +212,21 @@ func createMagnetURL(ctx context.Context, infoHash, title string, trackers []str
 		magnetURL += "&tr" + tracker
 	}
 	return magnetURL
+}
+
+func createTVShowSearch(ctx context.Context, metaGetter MetaGetter, imdbID string, season, episode int) (string, error) {
+	id := imdbID + ":" + strconv.Itoa(season) + ":" + strconv.Itoa(episode)
+	meta, err := metaGetter.GetTVShowSimple(ctx, imdbID, season, episode)
+	if err != nil {
+		return "", fmt.Errorf("Couldn't get TV show title via Cinemeta for ID %v: %v", id, err)
+	}
+	seasonString := strconv.Itoa(season)
+	episodeString := strconv.Itoa(episode)
+	if season < 10 {
+		seasonString = "0" + seasonString
+	}
+	if episode < 10 {
+		episodeString = "0" + episodeString
+	}
+	return fmt.Sprintf("%v S%vE%v", meta.Title, seasonString, episodeString), nil
 }

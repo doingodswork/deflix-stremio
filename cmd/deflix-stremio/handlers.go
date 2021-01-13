@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -174,6 +175,8 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdCli
 }
 
 func createStreamItem(ctx context.Context, config config, encodedUserData string, redirectID, quality string, torrents []imdb2torrent.Result) stremio.StreamItem {
+	// Path escaping required for TV shows, which contain ":"
+	redirectID = url.PathEscape(redirectID)
 	stream := stremio.StreamItem{
 		URL: config.BaseURL + "/" + encodedUserData + "/redirect/" + redirectID,
 		// Stremio docs recommend to use the stream quality as title.
