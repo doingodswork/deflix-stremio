@@ -148,10 +148,8 @@ func (c *ytsClient) FindMovie(ctx context.Context, imdbID string) ([]Result, err
 	return results, nil
 }
 
-// FindTVShow uses YTS' API to find torrents for the given IMDb ID + season + episode.
-// If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
+// FindTVShow doesn't do anything. YTS doesn't have TV shows.
 func (c *ytsClient) FindTVShow(ctx context.Context, imdbID string, season, episode int) ([]Result, error) {
-	// TODO: Implement
 	return nil, nil
 }
 
