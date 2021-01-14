@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -66,11 +67,35 @@ func NewRARBGclient(opts RARBGclientOptions, cache Cache, logger *zap.Logger, lo
 // FindMovie uses RARBG's API to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
 func (c *rarbgClient) FindMovie(ctx context.Context, imdbID string) ([]Result, error) {
-	zapFieldID := zap.String("imdbID", imdbID)
+	escapedQuery := "search_imdb=" + imdbID
+	return c.find(ctx, imdbID, escapedQuery)
+}
+
+// FindTVShow uses RARBG's API to find torrents for the given IMDb ID + season + episode.
+// If no error occured, but there are just no torrents for the TV show yet, an empty result and *no* error are returned.
+func (c *rarbgClient) FindTVShow(ctx context.Context, imdbID string, season, episode int) ([]Result, error) {
+	seasonString := strconv.Itoa(season)
+	episodeString := strconv.Itoa(episode)
+	id := imdbID + ":" + seasonString + ":" + episodeString
+	// RARBG / torrentapi supports TV show search via IMDBb ID, even (and only) via the show's IMDb,
+	// AND allows us to additionally filter by name, so we can filter for the season + episode here! Nice!
+	if season < 10 {
+		seasonString = "0" + seasonString
+	}
+	if episode < 10 {
+		episodeString = "0" + episodeString
+	}
+	escapedQuery := "search_imdb=" + imdbID + "&search_string=S" + seasonString + "E" + episodeString
+	return c.find(ctx, id, escapedQuery)
+}
+
+// Query must be URL-escaped already.
+func (c *rarbgClient) find(ctx context.Context, id, escapedQuery string) ([]Result, error) {
+	zapFieldID := zap.String("id", id)
 	zapFieldTorrentSite := zap.String("torrentSite", "RARBG")
 
 	// Check cache first
-	cacheKey := imdbID + "-RARBG"
+	cacheKey := id + "-RARBG"
 	torrentList, created, found, err := c.cache.Get(cacheKey)
 	if err != nil {
 		c.logger.Error("Couldn't get torrent results from cache", zap.Error(err), zapFieldID, zapFieldTorrentSite)
@@ -100,7 +125,7 @@ func (c *rarbgClient) FindMovie(ctx context.Context, imdbID string) ([]Result, e
 		c.lastRequest = time.Now()
 	}()
 
-	url := c.baseURL + "/pubapi_v2.php?app_id=deflix&mode=search&sort=seeders&ranked=0&token=" + c.token + "&search_imdb=" + imdbID
+	url := c.baseURL + "/pubapi_v2.php?app_id=deflix&mode=search&sort=seeders&ranked=0&token=" + c.token + "&" + escapedQuery
 	res, err := c.httpClient.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't GET %v: %v", url, err)
@@ -168,13 +193,6 @@ func (c *rarbgClient) FindMovie(ctx context.Context, imdbID string) ([]Result, e
 	}
 
 	return results, nil
-}
-
-// FindTVShow uses RARBG's API to find torrents for the given IMDb ID + season + episode.
-// If no error occured, but there are just no torrents for the TV show yet, an empty result and *no* error are returned.
-func (c *rarbgClient) FindTVShow(ctx context.Context, imdbID string, season, episode int) ([]Result, error) {
-	// TODO: Implement
-	return nil, nil
 }
 
 func (c *rarbgClient) IsSlow() bool {
