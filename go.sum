@@ -66,8 +66,8 @@ github.com/davecgh/go-spew v1.1.0 h1:ZDRjVQ15GmhC3fiQ8ni8+OwkZQO4DARzQgrnXU1Liz8
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/deflix-tv/go-stremio v0.8.1-0.20210113202234-8a2b5079240b h1:Hq+wPsTzLBFAdEVF5PAoMAwe5muzCW4R7o77aR0HfAQ=
-github.com/deflix-tv/go-stremio v0.8.1-0.20210113202234-8a2b5079240b/go.mod h1:sdZ2g1ZDVlHRD/xYA+iyzhuiNyKmjCJhUHeJxE/duJ4=
+github.com/deflix-tv/go-stremio v0.8.1-0.20210114194700-4a3ca2b78738 h1:sXmwtyVdCXNzMIbFKW6zyOcH3eBqk/MFVBc8Aj5sQBA=
+github.com/deflix-tv/go-stremio v0.8.1-0.20210114194700-4a3ca2b78738/go.mod h1:sdZ2g1ZDVlHRD/xYA+iyzhuiNyKmjCJhUHeJxE/duJ4=
 github.com/deflix-tv/imdb2meta v0.2.1 h1:4HylKDdHUC5oyKRM+06pvJC5tTcgpeX7RTzrFBvEvng=
 github.com/deflix-tv/imdb2meta v0.2.1/go.mod h1:De2c77MYdZj64dQedsSqrKocmii9YFFQQLPs0p3AK4w=
 github.com/dgraph-io/badger/v2 v2.2007.2 h1:EjjK0KqwaFMlPin1ajhP943VPENHJdEz1KLIegjaI3k=
