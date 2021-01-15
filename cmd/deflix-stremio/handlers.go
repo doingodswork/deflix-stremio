@@ -48,10 +48,12 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdCli
 			season, err = strconv.Atoi(idParts[1])
 			if err != nil {
 				logger.Info("Couldn't convert season to int", zap.String("id", id))
+				return nil, stremio.BadRequest
 			}
 			episode, err = strconv.Atoi(idParts[2])
 			if err != nil {
 				logger.Info("Couldn't convert episode to int", zap.String("id", id))
+				return nil, stremio.BadRequest
 			}
 		} else {
 			imdbID = id
