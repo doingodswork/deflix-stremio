@@ -23,13 +23,17 @@ type Meta struct {
 }
 
 type MetaGetter interface {
-	GetMeta(ctx context.Context, imdbID string) (Meta, error)
+	GetMovieSimple(ctx context.Context, imdbID string) (Meta, error)
+	GetTVShowSimple(ctx context.Context, imdbID string, season, episode int) (Meta, error)
 }
 
 type MagnetSearcher interface {
-	Find(ctx context.Context, imdbID string) ([]Result, error)
+	FindMovie(ctx context.Context, imdbID string) ([]Result, error)
+	FindTVShow(ctx context.Context, imdbID string, season, episode int) ([]Result, error)
 	IsSlow() bool
 }
+
+type findFunc func(context.Context, MagnetSearcher) ([]Result, error)
 
 type Client struct {
 	timeout     time.Duration
@@ -45,12 +49,31 @@ func NewClient(siteClients map[string]MagnetSearcher, timeout time.Duration, log
 	}
 }
 
-// FindMagnets tries to find magnet URLs for the given IMDb ID.
+// FindMovie tries to find magnet URLs for the movie identified by the given IMDb ID.
 // It only returns 720p, 1080p, 1080p 10bit, 2160p and 2160p 10bit videos.
 // It caches results once they're found.
 // It can return an empty slice and no error if no actual error occurred (for example if torrents where found but no >=720p videos).
-func (c *Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, error) {
-	zapFieldID := zap.String("imdbID", imdbID)
+func (c *Client) FindMovie(ctx context.Context, imdbID string) ([]Result, error) {
+	find := func(ctx context.Context, siteClient MagnetSearcher) ([]Result, error) {
+		return siteClient.FindMovie(ctx, imdbID)
+	}
+	return c.find(ctx, imdbID, find)
+}
+
+// FindTVShow tries to find magnet URLs for the TV show identified by the given IMDb ID + season + episode.
+// It only returns 720p, 1080p, 1080p 10bit, 2160p and 2160p 10bit videos.
+// It caches results once they're found.
+// It can return an empty slice and no error if no actual error occurred (for example if torrents where found but no >=720p videos).
+func (c *Client) FindTVShow(ctx context.Context, imdbID string, season, episode int) ([]Result, error) {
+	find := func(ctx context.Context, siteClient MagnetSearcher) ([]Result, error) {
+		return siteClient.FindTVShow(ctx, imdbID, season, episode)
+	}
+	id := imdbID + ":" + strconv.Itoa(season) + ":" + strconv.Itoa(episode)
+	return c.find(ctx, id, find)
+}
+
+func (c *Client) find(ctx context.Context, id string, find findFunc) ([]Result, error) {
+	zapFieldID := zap.String("id", id)
 
 	clientCount := len(c.siteClients)
 	resChan := make(chan []Result, clientCount)
@@ -78,7 +101,7 @@ func (c *Client) FindMagnets(ctx context.Context, imdbID string) ([]Result, erro
 			siteErrChan := make(chan error)
 			go func() {
 				siteStart := time.Now()
-				results, err := siteClient.Find(ctx, imdbID)
+				results, err := find(ctx, siteClient)
 				if err != nil {
 					c.logger.Warn("Couldn't find torrents", zap.Error(err), zapFieldID, zapFieldTorrentSite)
 					siteErrChan <- err
@@ -189,4 +212,21 @@ func createMagnetURL(ctx context.Context, infoHash, title string, trackers []str
 		magnetURL += "&tr" + tracker
 	}
 	return magnetURL
+}
+
+func createTVShowSearch(ctx context.Context, metaGetter MetaGetter, imdbID string, season, episode int) (string, error) {
+	id := imdbID + ":" + strconv.Itoa(season) + ":" + strconv.Itoa(episode)
+	meta, err := metaGetter.GetTVShowSimple(ctx, imdbID, season, episode)
+	if err != nil {
+		return "", fmt.Errorf("Couldn't get TV show title via Cinemeta for ID %v: %v", id, err)
+	}
+	seasonString := strconv.Itoa(season)
+	episodeString := strconv.Itoa(episode)
+	if season < 10 {
+		seasonString = "0" + seasonString
+	}
+	if episode < 10 {
+		episodeString = "0" + episodeString
+	}
+	return fmt.Sprintf("%v S%vE%v", meta.Title, seasonString, episodeString), nil
 }

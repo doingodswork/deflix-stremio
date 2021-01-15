@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -84,14 +86,45 @@ func NewTPBclient(opts TPBclientOptions, cache Cache, metaGetter MetaGetter, log
 	}, nil
 }
 
-// Find cals the TPB API to find torrents for the given IMDb ID.
+// FindMovie calls the TPB API to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
-func (c *tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
-	zapFieldID := zap.String("imdbID", imdbID)
+func (c *tpbClient) FindMovie(ctx context.Context, imdbID string) ([]Result, error) {
+	meta, err := c.metaGetter.GetMovieSimple(ctx, imdbID)
+	if err != nil {
+		return nil, fmt.Errorf("Couldn't get movie title via Cinemeta for IMDb ID %v: %v", imdbID, err)
+	}
+	// Note: It seems that apibay.org has a "cat=" query parameter, but using the category 207 for "HD Movies" doesn't work (torrents for category 201 ("Movies") are returned as well).
+	escapedQuery := imdbID
+	return c.find(ctx, imdbID, meta.Title, escapedQuery)
+}
+
+// FindTVShow calls the TPB API to find torrents for the given IMDb ID + season + episode.
+// If no error occured, but there are just no torrents for the TV show yet, an empty result and *no* error are returned.
+func (c *tpbClient) FindTVShow(ctx context.Context, imdbID string, season, episode int) ([]Result, error) {
+	id := imdbID + ":" + strconv.Itoa(season) + ":" + strconv.Itoa(episode)
+	meta, err := c.metaGetter.GetTVShowSimple(ctx, imdbID, season, episode)
+	if err != nil {
+		return nil, fmt.Errorf("Couldn't get TV show title via Cinemeta for ID %v: %v", id, err)
+	}
+	// TPB supports TV show search via IMDb ID, but 1. it requires the ID of the particular episode, which doesn't match what Stremio sends us,
+	// and 2. in some quick tests the search results were much better (more results without sacrifice in quality) with title + season + episode.
+	query, err := createTVShowSearch(ctx, c.metaGetter, imdbID, season, episode)
+	if err != nil {
+		return nil, err
+	}
+	queryEscaped := url.QueryEscape(query)
+	// Category 205 is for "TV shows", 208 is for "HD - TV shows" and this indeed works (different from HD movies)
+	queryEscaped += "&cat=208"
+	return c.find(ctx, id, meta.Title, queryEscaped)
+}
+
+// Query must be URL-escaped already.
+func (c *tpbClient) find(ctx context.Context, id, title, escapedQuery string) ([]Result, error) {
+	zapFieldID := zap.String("id", id)
 	zapFieldTorrentSite := zap.String("torrentSite", "TPB")
 
 	// Check cache first
-	cacheKey := imdbID + "-TPB"
+	cacheKey := id + "-TPB"
 	torrentList, created, found, err := c.cache.Get(cacheKey)
 	if err != nil {
 		c.logger.Error("Couldn't get torrent results from cache", zap.Error(err), zapFieldID, zapFieldTorrentSite)
@@ -105,8 +138,7 @@ func (c *tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 		return torrentList, nil
 	}
 
-	// Note: It seems that apibay.org has a "cat=" query parameter, but using the category 207 for "HD Movies" doesn't work (torrents for category 201 ("Movies") are returned as well).
-	reqUrl := c.baseURL + "/q.php?q=" + imdbID
+	reqUrl := c.baseURL + "/q.php?q=" + escapedQuery
 	res, err := c.httpClient.Get(reqUrl)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't GET %v: %v", reqUrl, err)
@@ -125,12 +157,6 @@ func (c *tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 	if len(torrents) == 0 {
 		// Nil slice is ok, because it can be checked with len()
 		return nil, nil
-	}
-
-	// Get movie name
-	meta, err := c.metaGetter.GetMeta(ctx, imdbID)
-	if err != nil {
-		return nil, fmt.Errorf("Couldn't get movie name via Cinemeta for IMDb ID %v: %v", imdbID, err)
 	}
 
 	var results []Result
@@ -163,12 +189,12 @@ func (c *tpbClient) Find(ctx context.Context, imdbID string) ([]Result, error) {
 			c.logger.Error("InfoHash isn't 40 characters long", zapFieldID, zapFieldTorrentSite)
 			continue
 		}
-		magnetURL := createMagnetURL(ctx, infoHash, meta.Title, trackersTPB)
+		magnetURL := createMagnetURL(ctx, infoHash, title, trackersTPB)
 		if c.logFoundTorrents {
-			c.logger.Debug("Found torrent", zap.String("title", meta.Title), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnetURL), zapFieldID, zapFieldTorrentSite)
+			c.logger.Debug("Found torrent", zap.String("title", title), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnetURL), zapFieldID, zapFieldTorrentSite)
 		}
 		result := Result{
-			Title:     meta.Title,
+			Title:     title,
 			Quality:   quality,
 			InfoHash:  infoHash,
 			MagnetURL: magnetURL,

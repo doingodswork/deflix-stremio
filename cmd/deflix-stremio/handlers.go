@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,9 +32,39 @@ type goCacher interface {
 	Get(string) (interface{}, bool)
 }
 
-func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdClient *realdebrid.Client, adClient *alldebrid.Client, pmClient *premiumize.Client, redirectCache goCacher, logger *zap.Logger) stremio.StreamHandler {
+func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdClient *realdebrid.Client, adClient *alldebrid.Client, pmClient *premiumize.Client, redirectCache goCacher, isTVShow bool, logger *zap.Logger) stremio.StreamHandler {
 	return func(ctx context.Context, id string, userDataIface interface{}) ([]stremio.StreamItem, error) {
-		torrents, err := searchClient.FindMagnets(ctx, id)
+		var imdbID string
+		var season int
+		var episode int
+		var err error
+		if isTVShow {
+			idParts := strings.Split(id, ":")
+			if len(idParts) != 3 {
+				logger.Info("Stream handler for TV shows called without exactly 3 ID parts", zap.String("id", id))
+				return nil, stremio.BadRequest
+			}
+			imdbID = idParts[0]
+			season, err = strconv.Atoi(idParts[1])
+			if err != nil {
+				logger.Info("Couldn't convert season to int", zap.String("id", id))
+				return nil, stremio.BadRequest
+			}
+			episode, err = strconv.Atoi(idParts[2])
+			if err != nil {
+				logger.Info("Couldn't convert episode to int", zap.String("id", id))
+				return nil, stremio.BadRequest
+			}
+		} else {
+			imdbID = id
+		}
+
+		var torrents []imdb2torrent.Result
+		if isTVShow {
+			torrents, err = searchClient.FindTVShow(ctx, imdbID, season, episode)
+		} else {
+			torrents, err = searchClient.FindMovie(ctx, imdbID)
+		}
 		if err != nil {
 			logger.Warn("Couldn't find magnets", zap.Error(err))
 			return nil, fmt.Errorf("Couldn't find magnets: %w", err)
@@ -85,7 +116,7 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdCli
 
 		// Note: The torrents slice is guaranteed to not be empty at this point, because it already contained non-duplicate info hashes and then only unavailable ones were filtered and then a `len(availableInfoHashes) == 0` was done.
 
-		// Separate all torrent results into a 720p, 1080p, 1080p 10bit, 2160p and 2160p 10bit list, so we can offer the user one stream for each quality now (or maybe just for one quality if there's no torrent for the other), cache the torrents for each apiToken-imdbID-quality combination and later (at the redirect endpoint) go through the respective torrent list to turn it into a streamable video URL via RealDebrid.
+		// Separate all torrent results into a 720p, 1080p, 1080p 10bit, 2160p and 2160p 10bit list, so we can offer the user one stream for each quality now (or maybe just for one quality if there's no torrent for the other), cache the torrents for each apiToken-ID-quality combination and later (at the redirect endpoint) go through the respective torrent list to turn it into a streamable video URL via RealDebrid.
 		var torrents720p []imdb2torrent.Result
 		var torrents1080p []imdb2torrent.Result
 		var torrents1080p10bit []imdb2torrent.Result
@@ -146,6 +177,8 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdCli
 }
 
 func createStreamItem(ctx context.Context, config config, encodedUserData string, redirectID, quality string, torrents []imdb2torrent.Result) stremio.StreamItem {
+	// Path escaping required for TV shows, which contain ":"
+	redirectID = url.PathEscape(redirectID)
 	stream := stremio.StreamItem{
 		URL: config.BaseURL + "/" + encodedUserData + "/redirect/" + redirectID,
 		// Stremio docs recommend to use the stream quality as title.
@@ -299,7 +332,7 @@ func createStatusHandler(magnetSearchers map[string]imdb2torrent.MagnetSearcher,
 					return
 				}
 				startSearch := time.Now()
-				results, err := goClient.Find(c.Context(), imdbID)
+				results, err := goClient.FindMovie(c.Context(), imdbID)
 				lock.Lock()
 				defer lock.Unlock()
 				res += "\t\t" + `"` + goName + `": {` + "\n"
