@@ -3,7 +3,7 @@ Deflix Stremio addon
 
 [Deflix](https://www.deflix.tv) addon for [Stremio](https://stremio.com)
 
-Finds movies from many different sources and automatically turns them into cached HTTP streams with a debrid service like [RealDebrid](https://real-debrid.com), [AllDebrid](https://alldebrid.com) or [Premiumize](https://www.premiumize.me), for high speed 4k streaming and **no P2P uploading**.
+Finds movies and TV shows from many different sources and automatically turns them into cached HTTP streams with a debrid service like [RealDebrid](https://real-debrid.com), [AllDebrid](https://alldebrid.com) or [Premiumize](https://www.premiumize.me), for high speed 4k streaming and **no P2P uploading**.
 
 Contents
 --------
@@ -23,7 +23,7 @@ Features
   - [x] [AllDebrid](https://alldebrid.com)
   - [x] [Premiumize](https://www.premiumize.me)
   - [ ] Others can be added, please let me know which one you want to see next
-- Finds movies from many different sources
+- Finds movies and TV shows from many different sources
   - [x] YTS
   - [x] The Pirate Bay
   - [x] 1337x
@@ -38,7 +38,7 @@ Features
   - 2160p 10bit
 - Configurable via the ⚙ button in Stremio
 
-Other *upcoming* features: Support for TV shows, more sources, grouping by bitrate, more custom options (language filter, show *all single torrents* instead of grouped by quality) and more
+Other *upcoming* features: Support for more sources, grouping by bitrate, more custom options (language filter, show *all single torrents* instead of grouped by quality) and more
 
 Install
 -------
@@ -47,10 +47,12 @@ This addon is a remote addon, so it's an HTTP web service and Stremio just sends
 
 Here's the official Deflix website, that guides you through the installation: <https://www.deflix.tv/stremio>
 
+> Note: This repository contains all the latest features and fixes. Some of them might not be publicly deployed yet. If you want to use the version of this repository, run the addon locally.
+
 Run locally
 -----------
 
-Alternatively you can also run the addon locally and use that in Stremio. The addon is written in Go and compiles to a single executable file without dependencies, so it's really easy to run on your machine.
+Alternatively to using the publicly deployed version you can also run the addon locally and use that in Stremio. The addon is written in Go and compiles to a single executable file without dependencies, so it's really easy to run on your machine.
 
 You can use one of the precompiled binaries from GitHub:
 
@@ -157,7 +159,7 @@ If you want to configure deflix-stremio via environment variables, you can use t
 
 If you *run* this web service on your local laptop or server, i.e. if you *self-host* this, you should know the following:
 
-Deflix doesn't download or upload any torrents, but it *does* send HTTP requests to YTS, The Pirate Bay, 1337x, RARBG and ibit, which *might* be illegal in some countries. Streaming movies from RealDebrid, AllDebrid or Premiumize *might* also be illegal in some countries.
+Deflix doesn't download or upload any torrents, but it *does* send HTTP requests to YTS, The Pirate Bay, 1337x, RARBG and ibit, which *might* be illegal in some countries. Streaming movies and TV shows from RealDebrid, AllDebrid or Premiumize *might* also be illegal in some countries.
 
 > To encrypt your traffic so that your ISP can't see where those HTTP requests are sent and to not expose your real IP address to RealDebrid, AllDebrid or Premiumize you can use a VPN.
 
