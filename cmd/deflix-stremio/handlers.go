@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"strconv"
 	"strings"
@@ -171,6 +173,7 @@ func createRedirectHandler(redirectCache, streamCache goCacher, rdClient *realde
 	return func(c *fiber.Ctx) error {
 		logger.Debug("redirectHandler called", zap.String("request", fmt.Sprintf("%+v", c.Request())))
 
+		udString := c.Params("userData")
 		redirectID := c.Params("id", "")
 		if redirectID == "" {
 			return c.SendStatus(fiber.StatusNotFound)
@@ -188,11 +191,15 @@ func createRedirectHandler(redirectCache, streamCache goCacher, rdClient *realde
 		defer redirectLock[redirectID].Unlock()
 
 		// Check stream cache first.
-		// Here we don't get the data that's passed from the stream handler to this redirect handler, but instead the the RealDebrid HTTP stream URL, which is cached after it was converted in a previous call.
+		// Here we don't get the data that's passed from the stream handler to this redirect handler, but instead the the RD / AD / PM HTTP stream URL, which is cached after it was converted in a previous call.
 		// This cache is important, because for a single click on a stream in Stremio there are multiple requests to this endpoint in a short timeframe.
 		// This cache is also useful for when a user resumes his stream via Stremio after closing it. In this case the same RealDebrid HTTP stream must be delivered (or even if it would work with another one, using the same one would be beneficial).
-		// TODO: We don't know how long RealDebrid HTTP stream URLs are valid though! If it's shorter, we can shorten this as well. Also see similar TODO comment in main.go file.
-		if streamURLiface, found := streamCache.Get(redirectID); found {
+		// Because the actual stream URLs are cached here, it MUST be user-specific! No need to use the full userData string though - we just hash it and use that as "user identifier".
+		// TODO: Regarding stream resuming: We don't know how long RD / AD / PM HTTP stream URLs are valid. If it's shorter, we can shorten this as well. Also see similar TODO comment in main.go file.
+		userHash := sha256.Sum256([]byte(udString))
+		userHashEncoded := base64.RawURLEncoding.EncodeToString(userHash[:])
+		streamCacheID := userHashEncoded + "-" + redirectID
+		if streamURLiface, found := streamCache.Get(streamCacheID); found {
 			logger.Debug("Hit stream cache", zapFieldRedirectID)
 			if streamURLitem, ok := streamURLiface.(cacheItem); !ok {
 				logger.Error("Stream cache item couldn't be cast into cacheItem", zap.String("cacheItemType", fmt.Sprintf("%T", streamURLiface)), zapFieldRedirectID)
@@ -222,7 +229,6 @@ func createRedirectHandler(redirectCache, streamCache goCacher, rdClient *realde
 		}
 		// Parse userData.
 		// No need to check if decoding worked, because the token middleware does that already.
-		udString := c.Params("userData")
 		userData, _ := decodeUserData(udString, logger)
 		var streamURL string
 		var err error
@@ -250,7 +256,7 @@ func createRedirectHandler(redirectCache, streamCache goCacher, rdClient *realde
 			Value:   streamURL,
 			Created: time.Now(),
 		}
-		streamCache.Set(redirectID, streamURLitem, streamExpiration)
+		streamCache.Set(streamCacheID, streamURLitem, streamExpiration)
 
 		if streamURL == "" {
 			return c.SendStatus(fiber.StatusNotFound)
