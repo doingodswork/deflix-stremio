@@ -87,8 +87,26 @@ func (c *Client) GetMovie(ctx context.Context, imdbID string) (cinemeta.Meta, er
 }
 
 // GetTVShow implements stremio.MetaFetcher.
+// Note that if the context has a timeout and it times out during the initial imdb2meta gRPC request,
+// the Cinemeta HTTP request will fail immediately.
+// TODO: Do both requests in parallel?
 func (c *Client) GetTVShow(ctx context.Context, imdbID string, season, episode int) (cinemeta.Meta, error) {
-	// TODO: Add support for this when using imdb2meta, not necessarily *in* imdb2meta.
+	// We only need to know the title of the TV show in general, so the match for the IMDb ID we get passed is fine.
+	if c.imdb2metaClient != nil {
+		request := &pb.MetaRequest{
+			Id: imdbID,
+		}
+		res, err := c.imdb2metaClient.Get(ctx, request)
+		if err == nil {
+			// No need to fill all data *for our purposes in deflix-stremio*
+			return cinemeta.Meta{
+				ID:          res.GetId(),
+				Name:        res.GetPrimaryTitle(),
+				ReleaseInfo: strconv.Itoa(int(res.GetStartYear())),
+			}, nil
+		}
+		c.logger.Error("Couldn't get TV show from imdb2meta gRPC server. Falling back to Cinemeta.", zap.Error(err), zap.String("imdbID", imdbID))
+	}
 	if c.cinemetaClient != nil {
 		return c.cinemetaClient.GetTVShow(ctx, imdbID, season, episode)
 	}
