@@ -85,6 +85,7 @@ func NewClient(opts ClientOptions, apiKeyCache, availabilityCache debrid.Cache, 
 		availabilityCache: availabilityCache,
 		cacheAge:          opts.CacheAge,
 		extraHeaders:      extraHeaderMap,
+		forwardOriginIP:   opts.ForwardOriginIP,
 		logger:            logger,
 	}, nil
 }
