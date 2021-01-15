@@ -50,13 +50,17 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdCli
 		for _, torrent := range torrents {
 			infoHashes = append(infoHashes, torrent.InfoHash)
 		}
+		var debridID string
 		var availableInfoHashes []string
 		keyOrToken := ctx.Value("deflix_keyOrToken").(string)
 		if userData.RDtoken != "" || userData.RDoauth2 != "" {
+			debridID = "rd"
 			availableInfoHashes = rdClient.CheckInstantAvailability(ctx, keyOrToken, infoHashes...)
 		} else if userData.ADkey != "" {
+			debridID = "ad"
 			availableInfoHashes = adClient.CheckInstantAvailability(ctx, keyOrToken, infoHashes...)
 		} else {
+			debridID = "pm"
 			availableInfoHashes = pmClient.CheckInstantAvailability(ctx, keyOrToken, infoHashes...)
 		}
 		if len(availableInfoHashes) == 0 {
@@ -101,37 +105,37 @@ func createStreamHandler(config config, searchClient *imdb2torrent.Client, rdCli
 			}
 		}
 
-		// Cache results to make this data available in the redirect handler. It will pick the first torrent from the list and convert it via RD, or pick the next if the previous didn't work.
-		// There's no need to cache this for a specific user.
+		// Cache results to make this data available in the redirect handler. It will pick the first torrent from the list and convert it via RD / AD / PM, or pick the next if the previous didn't work.
+		// There's no need to cache this for a specific user, but it MUST be cached per debrid service - otherwise during concurrent requests, when a RD user goes to the redirect endpoint it could fetch torrents from the cache which are only available on AD / PM leading to a worse experience for the RD user.
 		// This cache *must* be a cache where items aren't evicted when the cache is full, because otherwise if the cache is full and two users fetch available streams, then the second one could lead to the first cache item being evicted before the first user clicks on the stream, leading to an error inside the redirect handler after he clicks on the stream.
-		redirectCache.Set(id+"-720p", torrents720p, redirectExpiration)
-		redirectCache.Set(id+"-1080p", torrents1080p, redirectExpiration)
-		redirectCache.Set(id+"-1080p.10bit", torrents1080p10bit, redirectExpiration)
-		redirectCache.Set(id+"-2160p", torrents2160p, redirectExpiration)
-		redirectCache.Set(id+"-2160p.10bit", torrents2160p10bit, redirectExpiration)
+		redirectCache.Set(id+"-"+debridID+"-720p", torrents720p, redirectExpiration)
+		redirectCache.Set(id+"-"+debridID+"-1080p", torrents1080p, redirectExpiration)
+		redirectCache.Set(id+"-"+debridID+"-1080p.10bit", torrents1080p10bit, redirectExpiration)
+		redirectCache.Set(id+"-"+debridID+"-2160p", torrents2160p, redirectExpiration)
+		redirectCache.Set(id+"-"+debridID+"-2160p.10bit", torrents2160p10bit, redirectExpiration)
 
 		// We already respond with several URLs (one for each quality, as long as we have torrents for the different qualities), but they point to our server for now.
 		// Only when the user clicks on a stream and arrives at our redirect endpoint, we go through the list of torrents for the selected quality and try to convert them into a streamable video URL via RealDebrid.
 		// There it should usually work for the first torrent we try, because we already checked the "instant availability" on RealDebrid here. If the "instant availability" info is stale (because we cached it), the next torrent will be used.
 		var streams []stremio.StreamItem
 		if len(torrents720p) > 0 {
-			stream := createStreamItem(ctx, config, udString, id+"-720p", "720p", torrents720p)
+			stream := createStreamItem(ctx, config, udString, id+"-"+debridID+"-720p", "720p", torrents720p)
 			streams = append(streams, stream)
 		}
 		if len(torrents1080p) > 0 {
-			stream := createStreamItem(ctx, config, udString, id+"-1080p", "1080p", torrents1080p)
+			stream := createStreamItem(ctx, config, udString, id+"-"+debridID+"-1080p", "1080p", torrents1080p)
 			streams = append(streams, stream)
 		}
 		if len(torrents1080p10bit) > 0 {
-			stream := createStreamItem(ctx, config, udString, id+"-1080p.10bit", "1080p 10bit", torrents1080p10bit)
+			stream := createStreamItem(ctx, config, udString, id+"-"+debridID+"-1080p.10bit", "1080p 10bit", torrents1080p10bit)
 			streams = append(streams, stream)
 		}
 		if len(torrents2160p) > 0 {
-			stream := createStreamItem(ctx, config, udString, id+"-2160p", "2160p", torrents2160p)
+			stream := createStreamItem(ctx, config, udString, id+"-"+debridID+"-2160p", "2160p", torrents2160p)
 			streams = append(streams, stream)
 		}
 		if len(torrents2160p10bit) > 0 {
-			stream := createStreamItem(ctx, config, udString, id+"-2160p.10bit", "2160p 10bit", torrents2160p10bit)
+			stream := createStreamItem(ctx, config, udString, id+"-"+debridID+"-2160p.10bit", "2160p 10bit", torrents2160p10bit)
 			streams = append(streams, stream)
 		}
 
@@ -173,14 +177,6 @@ func createRedirectHandler(redirectCache, streamCache goCacher, rdClient *realde
 		}
 		zapFieldRedirectID := zap.String("redirectID", redirectID)
 
-		idParts := strings.Split(redirectID, "-")
-		// "<imdbID>-<quality>", where quality might contain a ".10bit" suffix
-		if len(idParts) != 2 {
-			return c.SendStatus(fiber.StatusBadRequest)
-		}
-		imdbID := idParts[0]
-		quality := idParts[1]
-
 		// Before we look into the cache, we need to set a lock so that concurrent calls to this endpoint (including the redirectID) don't unnecessarily lead to the full sharade of RD requests again, only because the first handling of the request wasn't fast enough to fill the cache.
 		// The lock objects are created in the stream handler. But if the service was restarted the map is empty. So we need to create lock objects in that case for the users arriving at the redirect handler without having been at the stream handler after a service restart.
 		redirectLockMapLock.Lock()
@@ -213,9 +209,9 @@ func createRedirectHandler(redirectCache, streamCache goCacher, rdClient *realde
 		}
 
 		// Here we get the data from the cache that the stream handler filled.
-		torrentsIface, found := redirectCache.Get(imdbID + "-" + quality)
+		torrentsIface, found := redirectCache.Get(redirectID)
 		if !found {
-			logger.Warn(fmt.Sprintf("No torrents cache item found for %v, did 24h pass?", imdbID+"-"+quality), zapFieldRedirectID)
+			logger.Warn("No torrents cache item found, did 24h pass?", zapFieldRedirectID)
 			// TODO: Just run the same stuff the stream handler does! This way we can drastically reduce the required cache time for the redirect cache, and the scraping doesn't really take long! Take care of concurrent requests - maybe lock!
 			return c.SendStatus(fiber.StatusNotFound)
 		}
