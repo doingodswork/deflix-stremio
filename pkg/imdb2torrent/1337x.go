@@ -63,11 +63,48 @@ func NewLeetxClient(opts LeetxClientOptions, cache Cache, metaGetter MetaGetter,
 // It uses the Stremio Cinemeta remote addon to get a movie name for a given IMDb ID, so it can search 1337x with the name.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
 func (c *leetxClient) FindMovie(ctx context.Context, imdbID string) ([]Result, error) {
-	zapFieldID := zap.String("imdbID", imdbID)
+	// Get movie name
+	meta, err := c.metaGetter.GetMovieSimple(ctx, imdbID)
+	if err != nil {
+		return nil, fmt.Errorf("Couldn't get movie name via Cinemeta for IMDb ID %v: %v", imdbID, err)
+	}
+	movieSearch := meta.Title
+	if meta.Year != 0 {
+		movieSearch += " " + strconv.Itoa(meta.Year)
+	}
+	movieSearch = url.PathEscape(movieSearch)
+
+	urlPath := "category-search/" + movieSearch + "/Movies/1/"
+
+	return c.find(ctx, imdbID, urlPath, meta.Title, false)
+}
+
+// FindTVShow scrapes 1337x to find torrents for the given IMDb ID + season + episode.
+// It uses the Stremio Cinemeta remote addon to get a TV show name for a given IMDb ID, so it can search 1337x with the name.
+// If no error occured, but there are just no torrents for the TV show yet, an empty result and *no* error are returned.
+func (c *leetxClient) FindTVShow(ctx context.Context, imdbID string, season, episode int) ([]Result, error) {
+	id := imdbID + ":" + strconv.Itoa(season) + ":" + strconv.Itoa(episode)
+	meta, err := c.metaGetter.GetTVShowSimple(ctx, imdbID, season, episode)
+	if err != nil {
+		return nil, fmt.Errorf("Couldn't get TV show title via Cinemeta for ID %v: %v", id, err)
+	}
+	tvShowSearch, err := createTVShowSearch(ctx, c.metaGetter, imdbID, season, episode)
+	if err != nil {
+		return nil, err
+	}
+	tvShowSearch = url.PathEscape(tvShowSearch)
+
+	urlPath := "category-search/" + tvShowSearch + "/TV/1/"
+
+	return c.find(ctx, id, urlPath, meta.Title, true)
+}
+
+func (c *leetxClient) find(ctx context.Context, id, urlPath, title string, isTVShow bool) ([]Result, error) {
+	zapFieldID := zap.String("id", id)
 	zapFieldTorrentSite := zap.String("torrentSite", "1337x")
 
 	// Check cache first
-	cacheKey := imdbID + "-1337x"
+	cacheKey := id + "-1337x"
 	torrentList, created, found, err := c.cache.Get(cacheKey)
 	if err != nil {
 		c.logger.Error("Couldn't get torrent results from cache", zap.Error(err), zapFieldID, zapFieldTorrentSite)
@@ -81,56 +118,52 @@ func (c *leetxClient) FindMovie(ctx context.Context, imdbID string) ([]Result, e
 		return torrentList, nil
 	}
 
-	// Get movie name
-	meta, err := c.metaGetter.GetMovieSimple(ctx, imdbID)
-	if err != nil {
-		return nil, fmt.Errorf("Couldn't get movie name via Cinemeta for IMDb ID %v: %v", imdbID, err)
-	}
-	movieSearch := meta.Title
-	if meta.Year != 0 {
-		movieSearch += " " + strconv.Itoa(meta.Year)
-	}
-	// Use this for general searching in URL "https://1337x.to/search/foo+bar/1/"
-	//movieSearch = strings.Replace(movieSearch, " ", "+", -1)
-	// Use this for *movie* searching in URL "https://1337x.to/category-search/foo%20bar/Movies/1/"
-	movieSearch = url.QueryEscape(movieSearch)
-
 	// Search on 1337x
 
-	reqUrl := c.baseURL + "/category-search/" + movieSearch + "/Movies/1/"
-	doc, err := c.getDoc(ctx, reqUrl)
+	reqUrl := c.baseURL + "/" + urlPath
+	origDoc, err := c.getDoc(ctx, reqUrl)
 	if err != nil {
 		return nil, err
 	}
-	// Pick the first element, it's the most likely one to belong to the correct movie
-	torrentPath, ok := doc.Find(".table-list tbody td a").Next().Attr("href")
+	// Pick the first element, it's the most likely one to belong to the correct movie / TV show
+	torrentPath, ok := origDoc.Find(".table-list tbody td a").Next().Attr("href")
 	if !ok {
 		return nil, fmt.Errorf("Couldn't find search result")
 	}
 
-	// Go via a single search result to the general movie page
-
-	reqUrl = c.baseURL + torrentPath
-	doc, err = c.getDoc(ctx, reqUrl)
-	if err != nil {
-		return nil, err
+	// Try to go via the first search result to the general movie page. This guarantees that all torrents found on that page are definitive matches for the movie.
+	// But this only works for movies, not for TV shows.
+	// For movies, if we don't find the general movie page, we can always go back to the original search result page as well.
+	// TODO: For TV shows we could try to go via the episode page.
+	var docToSearch *goquery.Document
+	if isTVShow {
+		reqUrl = c.baseURL + torrentPath
+		firstTorrentDoc, err := c.getDoc(ctx, reqUrl)
+		if err != nil {
+			c.logger.Warn("Couldn't get HTML doc for first torrent result", zap.Error(err), zapFieldID, zapFieldTorrentSite)
+			docToSearch = origDoc
+		} else {
+			// Find the general movie page URL
+			movieInfoURL, ok := firstTorrentDoc.Find(".content-row h3 a").Attr("href")
+			// Only if this was found, we try to go through the torrent pages for the movie page
+			if ok && movieInfoURL != "" {
+				reqUrl = c.baseURL + movieInfoURL
+				docToSearch, err = c.getDoc(ctx, reqUrl)
+				if err != nil {
+					// Only log, but continue - we can always use the results from the original search result page
+					c.logger.Warn("Couldn't get HTML doc for general movie page", zap.Error(err), zapFieldID, zapFieldTorrentSite)
+					docToSearch = origDoc
+				}
+			} else {
+				docToSearch = origDoc
+			}
+		}
+	} else {
+		docToSearch = origDoc
 	}
-	// Find the general movie page URL
-	movieInfoURL, ok := doc.Find(".content-row h3 a").Attr("href")
-	if !ok {
-		return nil, fmt.Errorf("Couldn't find search result")
-	}
-
-	// Go through torrent pages for the movie
-
-	reqUrl = c.baseURL + movieInfoURL
-	doc, err = c.getDoc(ctx, reqUrl)
-	if err != nil {
-		return nil, err
-	}
-	var torrentPageURLs []string
 	// Go through elements
-	doc.Find(".table-list tbody tr").Each(func(i int, s *goquery.Selection) {
+	var torrentPageURLs []string
+	docToSearch.Find(".table-list tbody tr").Each(func(i int, s *goquery.Selection) {
 		linkText := s.Find("a").Next().Text()
 		if strings.Contains(linkText, "720p") || strings.Contains(linkText, "1080p") || strings.Contains(linkText, "2160p") {
 			torrentLink, ok := s.Find("a").Next().Attr("href")
@@ -159,7 +192,7 @@ func (c *leetxClient) FindMovie(ctx context.Context, imdbID string) ([]Result, e
 		}
 
 		go func(goTorrentPageURL string) {
-			doc, err = c.getDoc(ctx, goTorrentPageURL)
+			doc, err := c.getDoc(ctx, goTorrentPageURL)
 			if err != nil {
 				resultChan <- Result{}
 				return
@@ -215,13 +248,13 @@ func (c *leetxClient) FindMovie(ctx context.Context, imdbID string) ([]Result, e
 			}
 
 			result := Result{
-				Title:     meta.Title,
+				Title:     title,
 				Quality:   quality,
 				InfoHash:  infoHash,
 				MagnetURL: magnet,
 			}
 			if c.logFoundTorrents {
-				c.logger.Debug("Found torrent", zap.String("title", meta.Title), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnet), zapFieldID, zapFieldTorrentSite)
+				c.logger.Debug("Found torrent", zap.String("title", title), zap.String("quality", quality), zap.String("infoHash", infoHash), zap.String("magnet", magnet), zapFieldID, zapFieldTorrentSite)
 			}
 
 			resultChan <- result
@@ -244,14 +277,6 @@ func (c *leetxClient) FindMovie(ctx context.Context, imdbID string) ([]Result, e
 	}
 
 	return results, nil
-}
-
-// FindTVShow scrapes 1337x to find torrents for the given IMDb ID + season + episode.
-// It uses the Stremio Cinemeta remote addon to get a TV show name for a given IMDb ID, so it can search 1337x with the name.
-// If no error occured, but there are just no torrents for the TV show yet, an empty result and *no* error are returned.
-func (c *leetxClient) FindTVShow(ctx context.Context, imdbID string, season, episode int) ([]Result, error) {
-	// TODO: Implement
-	return nil, nil
 }
 
 func (c *leetxClient) IsSlow() bool {
