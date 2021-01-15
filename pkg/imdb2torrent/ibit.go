@@ -243,10 +243,8 @@ func (c *ibitClient) FindMovie(ctx context.Context, imdbID string) ([]Result, er
 	return results, nil
 }
 
-// FindTVShow scrapes ibit to find torrents for the given IMDb ID + season + episode.
-// If no error occured, but there are just no torrents for the TV show yet, an empty result and *no* error are returned.
+// FindTVShow doesn't do anything. ibit's search for TV show episode is too bad.
 func (c *ibitClient) FindTVShow(ctx context.Context, imdbID string, season, episode int) ([]Result, error) {
-	// TODO: Implement
 	return nil, nil
 }
 
