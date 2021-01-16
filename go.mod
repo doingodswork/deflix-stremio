@@ -4,7 +4,7 @@ go 1.15
 
 require (
 	github.com/PuerkitoBio/goquery v1.6.1
-	github.com/deflix-tv/go-stremio v0.8.1-0.20210114194700-4a3ca2b78738
+	github.com/deflix-tv/go-stremio v0.9.0
 	github.com/deflix-tv/imdb2meta v0.2.1
 	github.com/dgraph-io/badger/v2 v2.2007.2
 	github.com/go-redis/redis/v8 v8.4.8
