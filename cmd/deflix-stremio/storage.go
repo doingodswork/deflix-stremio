@@ -17,8 +17,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/deflix-tv/go-stremio/pkg/cinemeta"
+	"github.com/deflix-tv/imdb2torrent"
 	"github.com/doingodswork/deflix-stremio/pkg/debrid"
-	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
 )
 
 func registerTypes() {

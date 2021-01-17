@@ -12,7 +12,7 @@ import (
 	"github.com/deflix-tv/go-stremio"
 	"github.com/deflix-tv/go-stremio/pkg/cinemeta"
 	"github.com/deflix-tv/imdb2meta/pb"
-	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
+	"github.com/deflix-tv/imdb2torrent"
 )
 
 var _ stremio.MetaFetcher = (*Client)(nil)

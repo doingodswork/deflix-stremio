@@ -16,10 +16,10 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/deflix-tv/go-stremio"
+	"github.com/deflix-tv/imdb2torrent"
 	"github.com/doingodswork/deflix-stremio/pkg/debrid/alldebrid"
 	"github.com/doingodswork/deflix-stremio/pkg/debrid/premiumize"
 	"github.com/doingodswork/deflix-stremio/pkg/debrid/realdebrid"
-	"github.com/doingodswork/deflix-stremio/pkg/imdb2torrent"
 )
 
 const (
