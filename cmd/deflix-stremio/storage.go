@@ -16,9 +16,9 @@ import (
 	gocache "github.com/patrickmn/go-cache"
 	"go.uber.org/zap"
 
+	"github.com/deflix-tv/go-debrid"
 	"github.com/deflix-tv/go-stremio/pkg/cinemeta"
 	"github.com/deflix-tv/imdb2torrent"
-	"github.com/doingodswork/deflix-stremio/pkg/debrid"
 )
 
 func registerTypes() {

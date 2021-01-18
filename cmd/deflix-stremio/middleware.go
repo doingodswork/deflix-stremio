@@ -11,9 +11,9 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 
-	"github.com/doingodswork/deflix-stremio/pkg/debrid/alldebrid"
-	"github.com/doingodswork/deflix-stremio/pkg/debrid/premiumize"
-	"github.com/doingodswork/deflix-stremio/pkg/debrid/realdebrid"
+	"github.com/deflix-tv/go-debrid/alldebrid"
+	"github.com/deflix-tv/go-debrid/premiumize"
+	"github.com/deflix-tv/go-debrid/realdebrid"
 )
 
 // createAuthMiddleware creates a middleware that checks the validity of RealDebrid, AllDebrid and Premiumize API tokens/keys as well as Premiumize OAuth2 data.
