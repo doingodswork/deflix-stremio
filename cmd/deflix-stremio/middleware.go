@@ -5,7 +5,13 @@ import (
 	"crypto/cipher"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"go.uber.org/zap"
@@ -18,6 +24,10 @@ import (
 
 // createAuthMiddleware creates a middleware that checks the validity of RealDebrid, AllDebrid and Premiumize API tokens/keys as well as Premiumize OAuth2 data.
 func createAuthMiddleware(rdClient *realdebrid.Client, adClient *alldebrid.Client, pmClient *premiumize.Client, useOAUTH2 bool, confRD, confPM oauth2.Config, aesKey []byte, logger *zap.Logger) fiber.Handler {
+	httpClient := &http.Client{
+		Timeout: 2 * time.Second,
+	}
+
 	return func(c *fiber.Ctx) error {
 		rCtx := c.Context()
 		udString := c.Params("userData", "")
@@ -36,7 +46,7 @@ func createAuthMiddleware(rdClient *realdebrid.Client, adClient *alldebrid.Clien
 		// Note: Even when useOAUTH2 is true, some Stremio clients might still use the API key from the past.
 		if useOAUTH2 && (userData.RDoauth2 != "" || userData.PMoauth2 != "") {
 			if userData.RDoauth2 != "" {
-				accessToken, err, fiberErr := getAccessTokenForOAuth2data(c, confRD, aesKey, userData.RDoauth2, logger)
+				accessToken, err, fiberErr := getAccessTokenForOAuth2data(c, confRD, aesKey, userData.RDoauth2, true, httpClient, logger)
 				if err != nil {
 					logger.Warn("Couldn't get access token for OAUTH2 data", zap.Error(err))
 					// HTTP responses are already handled
@@ -48,7 +58,7 @@ func createAuthMiddleware(rdClient *realdebrid.Client, adClient *alldebrid.Clien
 				}
 				c.Locals("deflix_keyOrToken", accessToken)
 			} else if userData.PMoauth2 != "" {
-				accessToken, err, fiberErr := getAccessTokenForOAuth2data(c, confPM, aesKey, userData.PMoauth2, logger)
+				accessToken, err, fiberErr := getAccessTokenForOAuth2data(c, confPM, aesKey, userData.PMoauth2, false, nil, logger)
 				if err != nil {
 					logger.Warn("Couldn't get access token for OAUTH2 data", zap.Error(err))
 					// HTTP responses are already handled
@@ -98,7 +108,7 @@ func createAuthMiddleware(rdClient *realdebrid.Client, adClient *alldebrid.Clien
 // getAccessTokenForOAuth2data is a convenience function that decrypts the OAUTH2 data and returns a valid (potentially refreshed) access token,
 // while taking care of Fiber responses in error cases.
 // The first error return value is the error that occurred inside this function. The second is from sending the response via Fiber.
-func getAccessTokenForOAuth2data(c *fiber.Ctx, conf oauth2.Config, aesKey []byte, oauth2data string, logger *zap.Logger) (string, error, error) {
+func getAccessTokenForOAuth2data(c *fiber.Ctx, conf oauth2.Config, aesKey []byte, oauth2data string, rdWorkaround bool, httpClient *http.Client, logger *zap.Logger) (string, error, error) {
 	ciphertext, err := base64.RawURLEncoding.DecodeString(oauth2data)
 	if err != nil {
 		// It's most likely a client-side encoding error
@@ -128,12 +138,58 @@ func getAccessTokenForOAuth2data(c *fiber.Ctx, conf oauth2.Config, aesKey []byte
 		// How likely is it that if the previous decoding worked, that it's now the client's fault vs ours?
 		return "", err, c.SendStatus(fiber.StatusBadRequest)
 	}
-	tokenSource := conf.TokenSource(c.Context(), token)
-	// The token source automatically refreshes the token with the refresh token
-	validToken, err := tokenSource.Token()
-	if err != nil {
-		return "", err, c.SendStatus(fiber.StatusForbidden)
+	// This is a workaround for RD, as they don't seem to implement the OAuth2 flow the way the Go OAuth2 package expects
+	// (for example they require grant_type: "http://oauth.net/grant_type/device/1.0", instead of "refresh_token")
+	var accessToken string
+	if rdWorkaround {
+		// Example call from RD docs:
+		// curl -X POST "https://api.real-debrid.com/oauth/v2/token" -d "client_id=ABCDEFGHIJKLM&client_secret=abcdefghsecret0123456789&code=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&grant_type=http://oauth.net/grant_type/device/1.0"
+		data := url.Values{}
+		data.Add("client_id", conf.ClientID)
+		data.Add("client_secret", conf.ClientSecret)
+		data.Add("code", token.RefreshToken)
+		data.Add("grant_type", "http://oauth.net/grant_type/device/1.0")
+		req, err := http.NewRequest("POST", conf.Endpoint.TokenURL, strings.NewReader(data.Encode()))
+		if err != nil {
+			logger.Error("Couldn't create request object for RD token refresh", zap.Error(err))
+			return "", err, c.SendStatus(fiber.StatusInternalServerError)
+		}
+		req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationForm)
+		res, err := httpClient.Do(req)
+		if err != nil {
+			logger.Warn("Error during request to RD token refresh", zap.Error(err))
+			return "", err, c.SendStatus(fiber.StatusInternalServerError)
+		}
+		defer res.Body.Close()
+		// RD API usually always responds with 200 and a JSON object (even for bad requests / invalid accounts etc),
+		// with the actual potential error codes are then inside the JSON body,
+		// but in case of the OAuth2 refresh token request this is different.
+		// So we have to treat non-OK responses as errors from the client side, not from us.
+		if res.StatusCode != fiber.StatusOK {
+			var errBody []byte
+			errBody, _ = ioutil.ReadAll(res.Body)
+			logger.Info("RD token refresh response != OK", zap.Int("status", res.StatusCode), zap.ByteString("body", errBody))
+			return "", errors.New("RD response != OK"), c.SendStatus(fiber.StatusForbidden)
+		}
+		tokenJSON, err = ioutil.ReadAll(res.Body)
+		if err != nil {
+			logger.Warn("Couldn't read response body from RD token refresh", zap.Error(err))
+			return "", err, c.SendStatus(fiber.StatusInternalServerError)
+		}
+		if err = json.Unmarshal(tokenJSON, token); err != nil {
+			logger.Warn("Couldn't unmarshal RD response body into OAuth2 token", zap.Error(err), zap.ByteString("body", tokenJSON))
+			return "", err, c.SendStatus(fiber.StatusInternalServerError)
+		}
+		accessToken = token.AccessToken
+	} else {
+		tokenSource := conf.TokenSource(c.Context(), token)
+		// The token source automatically refreshes the token with the refresh token
+		validToken, err := tokenSource.Token()
+		if err != nil {
+			return "", err, c.SendStatus(fiber.StatusForbidden)
+		}
+		accessToken = validToken.AccessToken
 	}
 
-	return validToken.AccessToken, nil, nil
+	return accessToken, nil, nil
 }
