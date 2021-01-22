@@ -8,7 +8,7 @@ require (
 	github.com/deflix-tv/imdb2meta v0.2.1
 	github.com/deflix-tv/imdb2torrent v0.1.0
 	github.com/dgraph-io/badger/v2 v2.2007.2
-	github.com/go-redis/redis/v8 v8.4.8
+	github.com/go-redis/redis/v8 v8.4.10
 	github.com/gofiber/fiber/v2 v2.3.3
 	github.com/google/go-cmp v0.5.4
 	github.com/markbates/pkger v0.17.1
