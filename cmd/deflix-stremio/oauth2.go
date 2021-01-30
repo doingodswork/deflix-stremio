@@ -149,7 +149,14 @@ func createOAUTH2installHandler(confRD, confPM oauth2.Config, aesKey []byte, log
 			logger.Error("Couldn't encode user data with OAuth2 data", zap.Error(err))
 			return c.SendStatus(fiber.StatusInternalServerError)
 		}
-		c.Set(fiber.HeaderLocation, "/configure#"+userDataEncoded)
+		// If a redirect URL is set in a cookie, it could be from www.deflix.tv or from a promo page and we must redirect there instead of to our "/configure#..." page.
+		redirectURL := "/configure#" + userDataEncoded
+		if c.Cookies("deflix_oauth2redirect") != "" {
+			redirectURL = c.Cookies("deflix_oauth2redirect")
+			redirectURL += "?data=" + userDataEncoded
+		}
+
+		c.Set(fiber.HeaderLocation, redirectURL)
 		return c.SendStatus(http.StatusTemporaryRedirect)
 	}
 }
