@@ -61,6 +61,8 @@ func createOAUTH2initHandler(confRD, confPM oauth2.Config, isHTTPS bool, logger 
 			HTTPOnly: true,
 			// We need the cookie to be sent upon redirect from RealDebrid or Premiumize to deflix-stremio.
 			SameSite: "lax",
+			// The cookie shouldn't be set forever
+			MaxAge: 1 * 60 * 60, // One hour in seconds
 		}
 		c.Cookie(statusCookie)
 		c.Set(fiber.HeaderLocation, redirectURL)
