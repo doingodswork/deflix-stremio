@@ -12,6 +12,7 @@
 
 nav{
     --color-secondary: #0f0;
+    margin-bottom: 30px;
 }
 
 #addons div {
@@ -20,4 +21,18 @@ nav{
 
 #comparison table td {
     text-align: var(--justify-normal);
+}
+
+header img {
+    margin-top: 100px;
+}
+
+.promo-banner{
+    width: 100%;
+    background-color: var(--color);
+    box-shadow: 0px 5px 6px rgba(0, 0, 0, 0.5);
+}
+
+.promo-banner h3{
+    margin: 10px 0;
 }
