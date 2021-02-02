@@ -69,8 +69,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/deflix-tv/go-debrid v0.1.0 h1:n2GAXg+6TwXHsWQXS7e42mAIypKDX7qn3dPuYbJ2+OQ=
 github.com/deflix-tv/go-debrid v0.1.0/go.mod h1:eMWPybRj4qXeA+U2CAQGfo1Lz0PMrpdHeq/EXYR5gKk=
-github.com/deflix-tv/go-stremio v0.9.1 h1:5snkX9BHyjcy4Tb5PN3o9ecmYEslLcfn9S7jvxGTZOo=
-github.com/deflix-tv/go-stremio v0.9.1/go.mod h1:sdZ2g1ZDVlHRD/xYA+iyzhuiNyKmjCJhUHeJxE/duJ4=
+github.com/deflix-tv/go-stremio v0.9.2-0.20210202204625-e3e7a578d4d7 h1:PrM8LUTbKIkTa4S7jne1UWbP0DqoseZnDG0KKpMHEiE=
+github.com/deflix-tv/go-stremio v0.9.2-0.20210202204625-e3e7a578d4d7/go.mod h1:Xks3xHHR29jZG6JbUw9SuH4+D/7Q1B4+/5l7+coTuD8=
 github.com/deflix-tv/imdb2meta v0.2.1 h1:4HylKDdHUC5oyKRM+06pvJC5tTcgpeX7RTzrFBvEvng=
 github.com/deflix-tv/imdb2meta v0.2.1/go.mod h1:De2c77MYdZj64dQedsSqrKocmii9YFFQQLPs0p3AK4w=
 github.com/deflix-tv/imdb2torrent v0.1.0 h1:yRbw8H/VzBPPJzCGBEYqzMOLlQl/SpcZdrDxCMycw5E=
@@ -105,8 +105,6 @@ github.com/gofiber/adaptor/v2 v2.1.1 h1:b6cPil5xyNzbzB7tjYsf69x/JoMH7r52YgZjQ08H
 github.com/gofiber/adaptor/v2 v2.1.1/go.mod h1:jdHkqsqdWzEc0qMB+5svsWL5kdZmaDN2H0C3Hxl8y7c=
 github.com/gofiber/fiber/v2 v2.2.0/go.mod h1:Slpou87elSO9qom9nwIo/IoQJ2qfRuMAQ/qQ9F0o4b0=
 github.com/gofiber/fiber/v2 v2.2.2/go.mod h1:Aso7/M+EQOinVkWp4LUYjdlTpKTBoCk2Qo4djnMsyHE=
-github.com/gofiber/fiber/v2 v2.3.2 h1:8ecrfzlfTUsboMybK6TQIfPoObmPR1hEoKU7Ni1pElg=
-github.com/gofiber/fiber/v2 v2.3.2/go.mod h1:f8BRRIMjMdRyt2qmJ/0Sea3j3rwwfufPrh9WNBRiVZ0=
 github.com/gofiber/fiber/v2 v2.3.3 h1:nsjc9TfCl+ojXgEAu+uAT1Le7iQtZJ+Gfb/ox6+BM4w=
 github.com/gofiber/fiber/v2 v2.3.3/go.mod h1:f8BRRIMjMdRyt2qmJ/0Sea3j3rwwfufPrh9WNBRiVZ0=
 github.com/gofiber/utils v0.1.2 h1:1SH2YEz4RlNS0tJlMJ0bGwO0JkqPqvq6TbHK9tXZKtk=
