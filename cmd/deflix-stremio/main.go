@@ -275,7 +275,7 @@ func main() {
 		MetaClient:      metaFetcher,
 		ConfigureHTMLfs: httpFS,
 		// Regular IMDb IDs or for TV shows (IMDbID:season:episode)
-		StreamIDregex: "(tt\\d{7,8}|tt\\d{7,8}:\\d:\\d)",
+		StreamIDregex: `^tt\d{7,8}(:\d+:\d+)?$`,
 	}
 
 	// Create addon
