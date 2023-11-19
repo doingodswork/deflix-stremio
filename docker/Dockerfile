@@ -10,6 +10,7 @@ COPY go.mod go.sum ./
 RUN go mod download -x
 
 COPY . .
+RUN chmod +x scripts/build.sh
 RUN scripts/build.sh linux
 
 FROM gcr.io/distroless/static
